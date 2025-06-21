@@ -29,16 +29,6 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     onSave(savedQuestionnaire);
   };
 
-  const handleActiveToggle = (checked: boolean) => {
-    console.log('handleActiveToggle called with:', checked);
-    if (savedTest) {
-      const updatedTest = { ...savedTest, isActive: checked };
-      console.log('Updating test active status to:', checked);
-      setSavedTest(updatedTest);
-      onSave(updatedTest);
-    }
-  };
-
   const handleDone = () => {
     console.log('handleDone called - closing dialog');
     onCancel();
@@ -52,7 +42,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     return (
       <TestSummaryCard
         savedTest={savedTest}
-        onActiveToggle={handleActiveToggle}
+        onActiveToggle={() => {}} // Empty function since we're not using it here anymore
         onDone={handleDone}
       />
     );
