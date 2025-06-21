@@ -1,10 +1,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, Users, FileText } from 'lucide-react';
+import { CheckCircle, Clock, Users, FileText, Play, Edit, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Questionnaire } from '@/types/SaveTestDialog';
 
@@ -21,13 +19,21 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
     questionCount: savedTest.questions.length
   });
 
-  const handleActiveToggle = (checked: boolean) => {
-    console.log('TestSummaryCard handleActiveToggle called with:', checked);
-    onActiveToggle(checked);
+  const handleActivate = () => {
+    console.log('TestSummaryCard handleActivate called');
+    onActiveToggle(true);
     
     toast({
-      title: checked ? "Test Activated" : "Test Deactivated",
-      description: checked ? "Test is now visible to participants" : "Test is no longer visible to participants",
+      title: "Test Activated",
+      description: "Test is now visible to participants",
+    });
+  };
+
+  const handleEdit = () => {
+    // This would typically open an edit dialog or navigate to edit page
+    toast({
+      title: "Edit Feature",
+      description: "Edit functionality would be implemented here",
     });
   };
 
@@ -68,16 +74,33 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-6 p-4 bg-slate-50 rounded-lg">
-          <div>
-            <Label htmlFor="active-toggle" className="font-medium font-poppins">Make Test Active</Label>
-            <p className="text-sm text-slate-600 font-inter">Allow participants to take this test</p>
-          </div>
-          <Switch
-            id="active-toggle"
-            checked={savedTest.isActive || false}
-            onCheckedChange={handleActiveToggle}
-          />
+        <div className="flex space-x-2 mb-4">
+          {!savedTest.isActive ? (
+            <Button 
+              onClick={handleActivate} 
+              className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-poppins"
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Activate
+            </Button>
+          ) : (
+            <Button 
+              disabled
+              className="flex-1 bg-green-100 text-green-800 border-green-200 rounded-lg font-poppins cursor-not-allowed"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Active
+            </Button>
+          )}
+          
+          <Button 
+            onClick={handleEdit} 
+            variant="outline"
+            className="flex-1 border-slate-300 bg-white text-slate-700 hover:bg-slate-50 rounded-lg font-poppins"
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
         </div>
 
         <Button 
