@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -59,8 +58,19 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
 
-  // Safely handle questionnaire data
-  const safeQuestionnaire = questionnaire || { id: '', questions: [] };
+  // Safely handle questionnaire data with proper fallback
+  const safeQuestionnaire: Questionnaire = questionnaire || {
+    id: '',
+    title: '',
+    description: '',
+    questions: [],
+    createdAt: new Date().toISOString(),
+    isActive: false,
+    testName: '',
+    difficulty: 'easy',
+    isSaved: false,
+    timeframe: undefined
+  };
   
   // Check if guest has already submitted this test - only if we have valid data
   const guestHasSubmitted = isGuest && safeQuestionnaire.id && ResponseService.getResponsesByQuestionnaire(safeQuestionnaire.id)
