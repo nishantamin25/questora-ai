@@ -1,11 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, LogOut, Settings, Upload, Send, Paperclip, X, BarChart3, MessageSquare } from 'lucide-react';
-import AdminConfig from '@/components/AdminConfig';
+import { Bot, LogOut, Upload, Zap, Paperclip, X, BarChart3, MessageSquare } from 'lucide-react';
 import AdminAnalytics from '@/components/AdminAnalytics';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
@@ -23,7 +23,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
@@ -193,17 +192,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
       {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800 px-4 py-3">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-4 py-3 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="bg-white p-2 rounded-lg">
-              <Bot className="h-6 w-6 text-black" />
+            <div className="bg-gradient-to-r from-violet-600 to-purple-600 p-2 rounded-lg shadow-lg">
+              <Bot className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Questora AI</h1>
-              <p className="text-sm text-gray-400">Welcome, {user.username} ({user.role})</p>
+              <h1 className="text-xl font-bold text-slate-900 font-poppins">Questora AI</h1>
+              <p className="text-sm text-slate-600 font-inter">Welcome, {user.username} ({user.role})</p>
             </div>
           </div>
           
@@ -214,7 +213,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowResponses(!showResponses)}
-                  className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
+                  className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
                 >
                   <MessageSquare className="h-4 w-4" />
                   <span>Responses</span>
@@ -223,19 +222,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowAnalytics(!showAnalytics)}
-                  className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
+                  className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
                 >
                   <BarChart3 className="h-4 w-4" />
                   <span>Analytics</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowConfig(!showConfig)}
-                  className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Config</span>
                 </Button>
               </>
             )}
@@ -243,7 +233,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               variant="outline"
               size="sm"
               onClick={onLogout}
-              className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
+              className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-red-300 hover:text-red-600 font-poppins rounded-lg"
             >
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
@@ -281,24 +271,24 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
             {/* Input Area - Only for Admin */}
             {user.role === 'admin' && !showGenerateDialog && (
-              <Card className="mb-6 bg-gray-900 border-gray-800">
-                <CardHeader>
-                  <CardTitle className="text-white">Generate Questionnaire</CardTitle>
+              <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
+                <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
+                  <CardTitle className="text-slate-900 font-poppins">Generate Questionnaire</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 p-6">
                   <div>
-                    <Label htmlFor="prompt" className="text-gray-300">Describe your questionnaire</Label>
+                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">Describe your questionnaire</Label>
                     <div className="relative mt-1">
                       <Textarea
                         id="prompt"
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
                         placeholder="e.g., Create a questionnaire about customer satisfaction for an e-commerce website"
-                        className="min-h-[120px] bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-12"
+                        className="min-h-[120px] bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 pr-12 rounded-lg focus:border-violet-500 focus:ring-violet-500 font-inter"
                       />
                       <div className="absolute bottom-3 right-3 flex items-center space-x-2">
                         <label htmlFor="file-upload" className="cursor-pointer">
-                          <Paperclip className="h-5 w-5 text-gray-400 hover:text-white transition-colors" />
+                          <Paperclip className="h-5 w-5 text-slate-400 hover:text-violet-600 transition-colors" />
                         </label>
                         <input
                           id="file-upload"
@@ -311,14 +301,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     </div>
                     
                     {uploadedFile && (
-                      <div className="mt-2 flex items-center justify-between bg-gray-800 border border-gray-700 rounded-md px-3 py-2">
+                      <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
                         <div className="flex items-center space-x-2">
-                          <Upload className="h-4 w-4 text-green-400" />
-                          <span className="text-sm text-green-400">{uploadedFile.name}</span>
+                          <Upload className="h-4 w-4 text-violet-600" />
+                          <span className="text-sm text-violet-800 font-medium font-inter">{uploadedFile.name}</span>
                         </div>
                         <button
                           onClick={removeFile}
-                          className="text-gray-400 hover:text-white transition-colors"
+                          className="text-slate-400 hover:text-red-500 transition-colors"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -329,17 +319,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <Button
                     onClick={handleGenerateClick}
                     disabled={isGenerating}
-                    className="w-full bg-white text-black hover:bg-gray-200"
+                    className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
                   >
                     {isGenerating ? (
                       <div className="flex items-center space-x-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                         <span>Generating...</span>
                       </div>
                     ) : (
                       <div className="flex items-center space-x-2">
-                        <Send className="h-4 w-4" />
-                        <span>Configure & Generate</span>
+                        <Zap className="h-4 w-4" />
+                        <span>Formulate Questions</span>
                       </div>
                     )}
                   </Button>
@@ -349,13 +339,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
             {/* Access restriction message for guest users */}
             {user.role === 'guest' && (
-              <Card className="mb-6 bg-gray-900 border-gray-800">
+              <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardContent className="p-8 text-center">
-                  <Bot className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-white mb-2">
+                  <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2 font-poppins">
                     Available Tests
                   </h3>
-                  <p className="text-gray-400">
+                  <p className="text-slate-600 font-inter">
                     Click on the answer options below to select your responses, then submit when you've answered all questions.
                   </p>
                 </CardContent>
@@ -375,13 +365,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               ))}
               
               {questionnaires.length === 0 && (
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                   <CardContent className="p-8 text-center">
-                    <Bot className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-white mb-2">
+                    <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2 font-poppins">
                       {user.role === 'admin' ? 'No questionnaires yet' : 'No active tests available'}
                     </h3>
-                    <p className="text-gray-400">
+                    <p className="text-slate-600 font-inter">
                       {user.role === 'admin' 
                         ? "Enter a prompt above to generate your first questionnaire"
                         : "No active tests have been published yet"
@@ -395,39 +385,37 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            {user.role === 'admin' && showConfig && <AdminConfig />}
-            
-            <Card className="bg-gray-900 border-gray-800">
-              <CardHeader>
-                <CardTitle className="text-white">
+            <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
+              <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
+                <CardTitle className="text-slate-900 font-poppins">
                   {user.role === 'admin' ? 'Admin Tips' : 'How to Answer'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
+              <CardContent className="space-y-3 text-sm p-6">
                 {user.role === 'admin' ? (
                   <>
-                    <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-                      <p className="font-semibold text-blue-300">Save tests</p>
-                      <p className="text-blue-400">After generating, click the save button to name your test and set difficulty</p>
+                    <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
+                      <p className="font-semibold text-blue-700 font-poppins">Save tests</p>
+                      <p className="text-blue-600 font-inter">After generating, click the save button to name your test and set difficulty</p>
                     </div>
-                    <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-                      <p className="font-semibold text-green-300">View responses</p>
-                      <p className="text-green-400">Use the Responses tab to see guest submissions and statistics</p>
+                    <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                      <p className="font-semibold text-green-700 font-poppins">View responses</p>
+                      <p className="text-green-600 font-inter">Use the Responses tab to see guest submissions and statistics</p>
                     </div>
-                    <div className="p-3 bg-purple-900/30 border border-purple-700 rounded-lg">
-                      <p className="font-semibold text-purple-300">Manage activation</p>
-                      <p className="text-purple-400">Only active tests are visible to guests</p>
+                    <div className="p-3 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg">
+                      <p className="font-semibold text-purple-700 font-poppins">Manage activation</p>
+                      <p className="text-purple-600 font-inter">Only active tests are visible to guests</p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-                      <p className="font-semibold text-blue-300">Select answers</p>
-                      <p className="text-blue-400">Click on any option to select it. Selected options will be highlighted in blue.</p>
+                    <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
+                      <p className="font-semibold text-blue-700 font-poppins">Select answers</p>
+                      <p className="text-blue-600 font-inter">Click on any option to select it. Selected options will be highlighted in blue.</p>
                     </div>
-                    <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-                      <p className="font-semibold text-green-300">Submit responses</p>
-                      <p className="text-green-400">Answer all questions to enable the submit button at the bottom of each questionnaire.</p>
+                    <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                      <p className="font-semibold text-green-700 font-poppins">Submit responses</p>
+                      <p className="text-green-600 font-inter">Answer all questions to enable the submit button at the bottom of each questionnaire.</p>
                     </div>
                   </>
                 )}
