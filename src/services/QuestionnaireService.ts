@@ -1,3 +1,4 @@
+
 import { ConfigService } from './ConfigService';
 
 interface Question {
@@ -56,7 +57,7 @@ class QuestionnaireServiceClass {
     const questionnaireId = this.generateId();
     
     // Analyze prompt to determine questionnaire type
-    const category = this.categorizePrompt(prompt);
+    const category = this.categorizePrompt(prompt, fileContent);
     const title = this.generateTitle(prompt);
     const description = this.generateDescription(prompt, fileContent);
     
@@ -104,19 +105,21 @@ class QuestionnaireServiceClass {
     localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
   }
 
-  private categorizePrompt(prompt: string): string {
+  private categorizePrompt(prompt: string, fileContent?: string): string {
     const lowerPrompt = prompt.toLowerCase();
+    const lowerFileContent = fileContent?.toLowerCase() || '';
+    const combinedContent = lowerPrompt + ' ' + lowerFileContent;
     
-    if (lowerPrompt.includes('customer') || lowerPrompt.includes('satisfaction') || lowerPrompt.includes('service')) {
+    if (combinedContent.includes('customer') || combinedContent.includes('satisfaction') || combinedContent.includes('service')) {
       return 'customer satisfaction';
     }
-    if (lowerPrompt.includes('employee') || lowerPrompt.includes('staff') || lowerPrompt.includes('workplace')) {
+    if (combinedContent.includes('employee') || combinedContent.includes('staff') || combinedContent.includes('workplace')) {
       return 'employee feedback';
     }
-    if (lowerPrompt.includes('product') || lowerPrompt.includes('feature') || lowerPrompt.includes('usability')) {
+    if (combinedContent.includes('product') || combinedContent.includes('feature') || combinedContent.includes('usability')) {
       return 'product feedback';
     }
-    if (lowerPrompt.includes('event') || lowerPrompt.includes('conference') || lowerPrompt.includes('workshop')) {
+    if (combinedContent.includes('event') || combinedContent.includes('conference') || combinedContent.includes('workshop')) {
       return 'event feedback';
     }
     
@@ -130,7 +133,7 @@ class QuestionnaireServiceClass {
 
   private generateDescription(prompt: string, fileContent?: string): string {
     let description = `This questionnaire was generated based on: "${prompt}"`;
-    if (fileContent) {
+    if (fileContent && fileContent.trim().length > 0) {
       description += ` Additional context was provided from uploaded file content.`;
     }
     return description;
@@ -141,14 +144,19 @@ class QuestionnaireServiceClass {
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
                          this.questionTemplates['customer satisfaction'];
     
-    const numQuestions = Math.min(config.numberOfQuestions, baseQuestions.length);
+    let numQuestions = Math.min(config.numberOfQuestions, baseQuestions.length);
     
-    for (let i = 0; i < numQuestions; i++) {
-      const questionText = this.adaptQuestionToPrompt(baseQuestions[i], prompt);
+    // If we have file content, we might want to generate more specific questions
+    if (fileContent && fileContent.trim().length > 10) {
+      numQuestions = Math.min(numQuestions + 1, baseQuestions.length);
+    }
+    
+    for (let i = 0; i < Math.min(numQuestions, baseQuestions.length); i++) {
+      const questionText = this.adaptQuestionToPrompt(baseQuestions[i], prompt, fileContent);
       const question: Question = {
         id: this.generateId(),
         text: questionText,
-        type: 'multiple-choice' // Force all questions to be multiple-choice with 4 options
+        type: 'multiple-choice'
       };
 
       // Always ensure exactly 4 options for every question
@@ -162,29 +170,64 @@ class QuestionnaireServiceClass {
       questions.push(question);
     }
 
-    // If file content is provided, add a context-specific question
-    if (fileContent && fileContent.length > 10) {
-      questions.push({
-        id: this.generateId(),
-        text: 'Based on the provided context, how would you rate the overall quality?',
-        type: 'multiple-choice',
-        options: ['Poor', 'Fair', 'Good', 'Excellent']
-      });
+    // If file content is provided, add context-specific questions
+    if (fileContent && fileContent.trim().length > 10) {
+      const fileBasedQuestions = this.generateFileBasedQuestions(fileContent, prompt);
+      questions.push(...fileBasedQuestions);
     }
 
     return questions;
   }
 
-  private adaptQuestionToPrompt(baseQuestion: string, prompt: string): string {
-    // Simple adaptation - replace generic terms with prompt-specific terms
-    let adapted = baseQuestion;
+  private generateFileBasedQuestions(fileContent: string, prompt: string): Question[] {
+    const questions: Question[] = [];
     
-    if (prompt.toLowerCase().includes('website')) {
+    // Analyze file content to generate relevant questions
+    const content = fileContent.toLowerCase();
+    
+    if (content.includes('policy') || content.includes('procedure')) {
+      questions.push({
+        id: this.generateId(),
+        text: 'Based on the provided policy document, how clear are the outlined procedures?',
+        type: 'multiple-choice',
+        options: ['Very Unclear', 'Somewhat Unclear', 'Clear', 'Very Clear']
+      });
+    }
+    
+    if (content.includes('training') || content.includes('course') || content.includes('learn')) {
+      questions.push({
+        id: this.generateId(),
+        text: 'How would you rate the comprehensiveness of the training material provided?',
+        type: 'multiple-choice',
+        options: ['Poor', 'Fair', 'Good', 'Excellent']
+      });
+    }
+    
+    // Default file-based question if no specific patterns are found
+    if (questions.length === 0) {
+      questions.push({
+        id: this.generateId(),
+        text: 'Based on the provided document content, how relevant is the information to your needs?',
+        type: 'multiple-choice',
+        options: ['Not Relevant', 'Somewhat Relevant', 'Relevant', 'Very Relevant']
+      });
+    }
+    
+    return questions.slice(0, 2); // Limit to 2 additional questions from file content
+  }
+
+  private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string): string {
+    let adapted = baseQuestion;
+    const combinedContent = prompt.toLowerCase() + ' ' + (fileContent?.toLowerCase() || '');
+    
+    if (combinedContent.includes('website')) {
       adapted = adapted.replace(/product\/service|service|product/gi, 'website');
-    } else if (prompt.toLowerCase().includes('app')) {
+    } else if (combinedContent.includes('app')) {
       adapted = adapted.replace(/product\/service|service|product/gi, 'app');
-    } else if (prompt.toLowerCase().includes('course')) {
+    } else if (combinedContent.includes('course') || combinedContent.includes('training')) {
       adapted = adapted.replace(/product\/service|service|product/gi, 'course');
+    } else if (combinedContent.includes('policy')) {
+      adapted = adapted.replace(/product\/service|service|product/gi, 'policy');
     }
     
     return adapted;

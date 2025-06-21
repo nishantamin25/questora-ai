@@ -46,6 +46,20 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
     const file = e.target.files?.[0];
     if (file) {
+      // Check file extension
+      const allowedExtensions = ['.txt', '.docx', '.doc', '.pdf'];
+      const fileName = file.name.toLowerCase();
+      const isAllowedExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
+      
+      if (!isAllowedExtension) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please upload only .txt, .docx, .doc, or .pdf files",
+          variant: "destructive"
+        });
+        return;
+      }
+
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
         toast({
           title: "Error",
@@ -64,6 +78,32 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   const removeFile = () => {
     setUploadedFile(null);
+  };
+
+  const readFileContent = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        resolve(result);
+      };
+      
+      reader.onerror = (e) => {
+        reject(new Error('Failed to read file'));
+      };
+      
+      // For PDF files, we'll read as text (limited support)
+      // For .docx and .doc, we'll read as text (limited support)
+      // For .txt files, this will work perfectly
+      if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+        reader.readAsText(file);
+      } else {
+        // For other file types, we'll attempt to read as text
+        // Note: This is a simplified approach. In a real app, you'd use specialized libraries
+        reader.readAsText(file);
+      }
+    });
   };
 
   const handleGenerateQuestionnaire = async () => {
@@ -90,7 +130,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     try {
       let fileContent = '';
       if (uploadedFile) {
-        fileContent = await readFileContent(uploadedFile);
+        try {
+          fileContent = await readFileContent(uploadedFile);
+          console.log('File content read successfully:', fileContent.substring(0, 100) + '...');
+        } catch (error) {
+          console.error('Error reading file:', error);
+          toast({
+            title: "Warning",
+            description: "Could not read file content. Generating questionnaire without file context.",
+            variant: "destructive"
+          });
+        }
       }
       
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
@@ -127,15 +177,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     loadQuestionnaires();
   };
 
-  const readFileContent = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.onerror = (e) => reject(e);
-      reader.readAsText(file);
-    });
-  };
-
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -146,7 +187,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <Bot className="h-6 w-6 text-black" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Questionnaire Bot</h1>
+              <h1 className="text-xl font-bold text-white">QuizCraft AI</h1>
               <p className="text-sm text-gray-400">Welcome, {user.username} ({user.role})</p>
             </div>
           </div>
@@ -325,10 +366,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <CardContent className="space-y-3 text-sm">
                 {user.role === 'admin' ? (
                   <>
-                    <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-                      <p className="font-semibold text-blue-300">All questions have 4 options</p>
-                      <p className="text-blue-400">Every question automatically gets exactly 4 multiple choice options</p>
-                    </div>
                     <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
                       <p className="font-semibold text-green-300">Edit after generation</p>
                       <p className="text-green-400">You can edit questions and options after generating questionnaires</p>
