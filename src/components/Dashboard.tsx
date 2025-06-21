@@ -137,7 +137,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setShowGenerateDialog(true);
   };
 
-  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number) => {
+  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number) => {
     setIsGenerating(true);
     setShowGenerateDialog(false);
     
@@ -159,7 +159,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
         prompt,
-        { testName, difficulty, numberOfQuestions },
+        { testName, difficulty, numberOfQuestions, timeframe },
         fileContent
       );
       

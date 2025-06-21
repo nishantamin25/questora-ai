@@ -50,8 +50,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
 
-  // Get test taker count
-  const responses = ResponseService.getResponsesByQuestionnaireId(questionnaire.id);
+  // Get test taker count - fixed method name
+  const responses = ResponseService.getResponsesByQuestionnaire(questionnaire.id);
   const testTakersCount = new Set(responses.map(r => r.username || r.userId)).size;
 
   const getQuestionIcon = (type: string) => {
