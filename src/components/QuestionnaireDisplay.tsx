@@ -1,12 +1,12 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck, ChevronDown, ChevronUp, Eye, EyeOff, Play, Timer } from 'lucide-react';
 import QuestionnaireEditor from '@/components/QuestionnaireEditor';
 import SaveTestDialog from '@/components/SaveTestDialog';
 import { ResponseService } from '@/services/ResponseService';
@@ -50,13 +50,68 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const [testResults, setTestResults] = useState<{ score: number; totalQuestions: number; answers: any[] } | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [hasStartedTest, setHasStartedTest] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
 
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
 
+  // Check if guest has already submitted this test
+  const guestHasSubmitted = isGuest && ResponseService.getResponsesByQuestionnaire(questionnaire.id)
+    .some(response => response.userId === currentUser?.token);
+
+  // Hide the component if guest has submitted
+  if (isGuest && guestHasSubmitted) {
+    return null;
+  }
+
   // Get test taker count - fixed method name
   const responses = ResponseService.getResponsesByQuestionnaire(questionnaire.id);
   const testTakersCount = new Set(responses.map(r => r.username || r.userId)).size;
+
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (timerActive && timeRemaining !== null && timeRemaining > 0) {
+      interval = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev === null || prev <= 1) {
+            setTimerActive(false);
+            // Auto-submit when time runs out
+            handleSubmitResponse();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [timerActive, timeRemaining]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleStartTest = () => {
+    setHasStartedTest(true);
+    setIsExpanded(true);
+    
+    // Initialize timer if timeframe is set
+    if (questionnaire.timeframe) {
+      const totalSeconds = questionnaire.timeframe * 60;
+      setTimeRemaining(totalSeconds);
+      setTimerActive(true);
+    }
+  };
 
   const getQuestionIcon = (type: string) => {
     switch (type) {
@@ -120,7 +175,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   };
 
   const handleAnswerSelect = (questionId: string, optionIndex: number) => {
-    if (!isGuest) return;
+    if (!isGuest || !hasStartedTest) return;
     setAnswers(prev => ({
       ...prev,
       [questionId]: optionIndex
@@ -128,7 +183,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   };
 
   const handleSubmitResponse = async () => {
-    if (!isGuest || !currentUser) return;
+    if (!isGuest || !currentUser || !hasStartedTest) return;
+
+    // Stop timer
+    setTimerActive(false);
 
     // Check if all questions are answered
     const unansweredQuestions = questionnaire.questions.filter(q => !(q.id in answers));
@@ -250,8 +308,18 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               )}
             </div>
             
+            {/* Timer Display for Guests */}
+            {isGuest && hasStartedTest && timeRemaining !== null && (
+              <div className="flex items-center space-x-2 mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <Timer className="h-4 w-4 text-blue-600" />
+                <span className={`font-mono font-bold ${timeRemaining <= 300 ? 'text-red-600' : 'text-blue-600'}`}>
+                  Time Remaining: {formatTime(timeRemaining)}
+                </span>
+              </div>
+            )}
+            
             {/* Compact Test Statistics */}
-            {questionnaire.isSaved && (
+            {questionnaire.isSaved && !isGuest && (
               <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
                 <div className="flex items-center space-x-1">
                   <Users className="h-4 w-4 text-slate-600" />
@@ -333,21 +401,34 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               </div>
             )}
             
-            {/* Expand/Collapse Button */}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="text-slate-600 hover:text-slate-800"
-            >
-              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
+            {/* Expand/Collapse Button - only for admins */}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-slate-600 hover:text-slate-800"
+              >
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            )}
+            
+            {/* Start Test Button for Guests */}
+            {isGuest && !hasStartedTest && !isSubmitted && (
+              <Button
+                onClick={handleStartTest}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 rounded-lg font-poppins px-6"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Start Test
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
       
       {/* Expandable Content */}
-      {isExpanded && (
+      {(isExpanded || (isGuest && hasStartedTest)) && (
         <CardContent className="p-6">
           <p className="text-sm text-slate-700 mb-4 font-inter">{questionnaire.description}</p>
           
@@ -405,7 +486,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                     
                     {question.options && question.options.length > 0 && (
                       <div className="mt-3">
-                        {isGuest && !isSubmitted ? (
+                        {isGuest && hasStartedTest && !isSubmitted ? (
                           <RadioGroup
                             value={answers[question.id]?.toString()}
                             onValueChange={(value) => handleAnswerSelect(question.id, parseInt(value))}
@@ -486,12 +567,12 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           <div className="mt-6 p-4 bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-xl">
             <p className="text-sm text-slate-800 font-inter">
               <strong>Total Questions:</strong> {questionnaire.questions.length}
-              {isGuest && !isSubmitted && (
+              {isGuest && hasStartedTest && !isSubmitted && (
                 <span className="ml-4">
                   <strong>Answered:</strong> {Object.keys(answers).length}/{questionnaire.questions.length}
                 </span>
               )}
-              {questionnaire.timeframe && (
+              {questionnaire.timeframe && !isGuest && (
                 <span className="ml-4">
                   <strong>Time Limit:</strong> {questionnaire.timeframe} minutes
                 </span>
@@ -499,8 +580,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             </p>
           </div>
 
-          {/* Submit Button for Guests - only show if not yet submitted */}
-          {isGuest && !isSubmitted && (
+          {/* Submit Button for Guests - only show if test has started and not yet submitted */}
+          {isGuest && hasStartedTest && !isSubmitted && (
             <div className="mt-6">
               <Button
                 onClick={handleSubmitResponse}
