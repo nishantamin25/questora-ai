@@ -1,8 +1,8 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck } from 'lucide-react';
@@ -189,6 +189,26 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
   const isSubmitReady = questionnaire.questions.every(q => q.id in answers);
 
+  const handleToggleActive = (checked: boolean) => {
+    console.log('Toggle active status:', checked);
+    
+    const updatedQuestionnaire = {
+      ...questionnaire,
+      isActive: checked
+    };
+    
+    if (onUpdate) {
+      onUpdate(updatedQuestionnaire);
+    }
+    
+    toast({
+      title: checked ? "Test Activated" : "Test Deactivated",
+      description: checked 
+        ? "Test is now visible to participants" 
+        : "Test is no longer visible to participants",
+    });
+  };
+
   if (isEditing) {
     return (
       <QuestionnaireEditor
@@ -252,32 +272,48 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               {new Date(questionnaire.createdAt).toLocaleString()}
             </div>
             {isAdmin && (
-              <div className="flex space-x-1">
-                {!questionnaire.isSaved && (
+              <div className="flex items-center space-x-2">
+                {/* Active/Inactive Toggle - only show for saved tests */}
+                {questionnaire.isSaved && (
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-xs text-slate-600 font-inter">
+                      {questionnaire.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <Switch
+                      checked={questionnaire.isActive || false}
+                      onCheckedChange={handleToggleActive}
+                      className="scale-75"
+                    />
+                  </div>
+                )}
+                
+                <div className="flex space-x-1">
+                  {!questionnaire.isSaved && (
+                    <Button
+                      size="sm"
+                      onClick={() => setShowSaveDialog(true)}
+                      className="bg-violet-600 text-white hover:bg-violet-700 rounded-lg font-poppins"
+                    >
+                      <Save className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     size="sm"
-                    onClick={() => setShowSaveDialog(true)}
-                    className="bg-violet-600 text-white hover:bg-violet-700 rounded-lg font-poppins"
+                    variant="outline"
+                    onClick={() => setIsEditing(true)}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins"
                   >
-                    <Save className="h-4 w-4" />
+                    <Edit3 className="h-4 w-4" />
                   </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsEditing(true)}
-                  className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins"
-                >
-                  <Edit3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleDelete}
-                  className="rounded-lg"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleDelete}
+                    className="rounded-lg"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </div>
