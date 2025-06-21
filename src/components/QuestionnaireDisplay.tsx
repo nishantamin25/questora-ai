@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -61,13 +60,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     switch (type) {
       case 'radio':
       case 'multiple-choice':
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
+        return <CheckCircle className="h-4 w-4 text-slate-600" />;
       case 'text':
-        return <MessageSquare className="h-4 w-4 text-emerald-500" />;
+        return <MessageSquare className="h-4 w-4 text-slate-600" />;
       case 'rating':
-        return <Star className="h-4 w-4 text-amber-500" />;
+        return <Star className="h-4 w-4 text-slate-600" />;
       default:
-        return <FileText className="h-4 w-4 text-slate-500" />;
+        return <FileText className="h-4 w-4 text-slate-600" />;
     }
   };
 
@@ -89,7 +88,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       return <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-poppins">Unsaved</Badge>;
     }
     if (!questionnaire.isActive) {
-      return <Badge className="bg-slate-100 text-slate-600 border-slate-200 font-poppins">Inactive</Badge>;
+      return <Badge className="bg-slate-200 text-slate-700 border-slate-300 font-poppins">Inactive</Badge>;
     }
     return <Badge className="bg-green-100 text-green-800 border-green-200 font-poppins">Active</Badge>;
   };
@@ -232,12 +231,12 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   }
 
   return (
-    <Card className="animate-fade-in bg-white border border-slate-200 shadow-lg rounded-xl">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-slate-200 rounded-t-xl">
+    <Card className="animate-fade-in bg-slate-50 border border-slate-300 shadow-lg rounded-xl">
+      <CardHeader className="bg-gradient-to-r from-slate-100 to-slate-200 border-b border-slate-300 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-3 flex-wrap">
-              <CardTitle className="text-xl text-slate-900 font-poppins">
+              <CardTitle className="text-xl text-slate-800 font-poppins">
                 {questionnaire.testName || questionnaire.title}
               </CardTitle>
               {getStatusBadge()}
@@ -250,22 +249,22 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             
             {/* Compact Test Statistics */}
             {questionnaire.isSaved && (
-              <div className="flex items-center space-x-6 mt-3 text-sm text-slate-600">
+              <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
                 <div className="flex items-center space-x-1">
-                  <Users className="h-4 w-4 text-blue-500" />
+                  <Users className="h-4 w-4 text-slate-600" />
                   <span className="font-inter font-medium">{testTakersCount}</span>
-                  <span className="font-inter text-slate-500">participants</span>
+                  <span className="font-inter text-slate-600">participants</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                  <FileCheck className="h-4 w-4 text-emerald-500" />
+                  <FileCheck className="h-4 w-4 text-slate-600" />
                   <span className="font-inter font-medium">{questionnaire.questions.length}</span>
-                  <span className="font-inter text-slate-500">questions</span>
+                  <span className="font-inter text-slate-600">questions</span>
                 </div>
                 {questionnaire.timeframe && (
                   <div className="flex items-center space-x-1">
-                    <Clock className="h-4 w-4 text-cyan-500" />
+                    <Clock className="h-4 w-4 text-slate-600" />
                     <span className="font-inter font-medium">{questionnaire.timeframe}</span>
-                    <span className="font-inter text-slate-500">minutes</span>
+                    <span className="font-inter text-slate-600">minutes</span>
                   </div>
                 )}
               </div>
@@ -276,8 +275,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               <div className="flex items-center space-x-2">
                 {/* Active/Inactive Toggle - only show for saved tests */}
                 {questionnaire.isSaved && (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 rounded-lg">
-                    <span className="text-xs text-slate-600 font-inter">
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-300 rounded-lg">
+                    <span className="text-xs text-slate-700 font-inter">
                       {questionnaire.isActive ? 'Active' : 'Inactive'}
                     </span>
                     <Switch
@@ -293,7 +292,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                     <Button
                       size="sm"
                       onClick={() => setShowSaveDialog(true)}
-                      className="bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-poppins"
+                      className="bg-slate-600 text-white hover:bg-slate-700 rounded-lg font-poppins"
                     >
                       <Save className="h-4 w-4" />
                     </Button>
@@ -302,7 +301,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                     size="sm"
                     variant="outline"
                     onClick={() => setIsEditing(true)}
-                    className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins"
+                    className="border-slate-400 text-slate-700 hover:bg-slate-100 rounded-lg font-poppins"
                   >
                     <Edit3 className="h-4 w-4" />
                   </Button>
@@ -323,7 +322,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               size="sm"
               variant="ghost"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="text-slate-500 hover:text-slate-700"
+              className="text-slate-600 hover:text-slate-800"
             >
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
@@ -334,25 +333,25 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       {/* Expandable Content */}
       {isExpanded && (
         <CardContent className="p-6">
-          <p className="text-sm text-slate-600 mb-4 font-inter">{questionnaire.description}</p>
+          <p className="text-sm text-slate-700 mb-4 font-inter">{questionnaire.description}</p>
           
           {showResults && testResults && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+            <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
               <div className="flex items-center space-x-3">
                 <Trophy className="h-8 w-8 text-amber-600" />
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 font-poppins">Test Completed!</h3>
-                  <p className="text-slate-700 font-inter">
+                  <p className="text-slate-800 font-inter">
                     Your Score: <span className="font-bold text-emerald-700">{testResults.score}/{testResults.totalQuestions}</span>
                     {testResults.totalQuestions > 0 && (
-                      <span className="ml-2 text-sm text-slate-600">
+                      <span className="ml-2 text-sm text-slate-700">
                         ({Math.round((testResults.score / testResults.totalQuestions) * 100)}%)
                       </span>
                     )}
                   </p>
                 </div>
               </div>
-              <Button onClick={resetTest} className="mt-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-poppins">
+              <Button onClick={resetTest} className="mt-3 bg-slate-600 text-white hover:bg-slate-700 rounded-lg font-poppins">
                 Take Test Again
               </Button>
             </div>
@@ -360,9 +359,9 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
           <div className="space-y-6">
             {questionnaire.questions.map((question, index) => (
-              <div key={question.id} className="border border-slate-200 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-blue-50">
+              <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-100 to-slate-200">
                 <div className="flex items-start space-x-4">
-                  <div className="bg-blue-100 p-2 rounded-full mt-1 border border-blue-200">
+                  <div className="bg-slate-200 p-2 rounded-full mt-1 border border-slate-300">
                     {getQuestionIcon(question.type)}
                   </div>
                   <div className="flex-1">
@@ -386,11 +385,11 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                   <RadioGroupItem 
                                     value={optionIndex.toString()} 
                                     id={`${question.id}-${optionIndex}`}
-                                    className="border-blue-400 text-blue-600"
+                                    className="border-slate-500 text-slate-700"
                                   />
                                   <Label 
                                     htmlFor={`${question.id}-${optionIndex}`}
-                                    className="text-slate-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-blue-200 font-inter"
+                                    className="text-slate-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-slate-400 font-inter"
                                   >
                                     {String.fromCharCode(65 + optionIndex)}. {option}
                                   </Label>
@@ -400,7 +399,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                           </RadioGroup>
                         ) : (
                           <div>
-                            {!isGuest && <p className="text-xs text-slate-500 mb-3 font-inter">Options:</p>}
+                            {!isGuest && <p className="text-xs text-slate-600 mb-3 font-inter">Options:</p>}
                             <div className="grid grid-cols-1 gap-2">
                               {question.options.map((option, optionIndex) => {
                                 let optionStyle = "px-4 py-3 rounded-lg text-sm border font-inter";
@@ -417,10 +416,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                   } else if (isCorrect) {
                                     optionStyle += " bg-emerald-50 border-emerald-200 text-emerald-700";
                                   } else {
-                                    optionStyle += " bg-slate-100 border-slate-200 text-slate-700";
+                                    optionStyle += " bg-slate-200 border-slate-300 text-slate-700";
                                   }
                                 } else {
-                                  optionStyle += " bg-white border-slate-200 text-slate-700";
+                                  optionStyle += " bg-white border-slate-300 text-slate-800";
                                 }
 
                                 return (
@@ -430,7 +429,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                       <span className="ml-2 text-emerald-600 font-medium">(Correct)</span>
                                     )}
                                     {isAdmin && question.correctAnswer === optionIndex && !showResults && (
-                                      <span className="ml-2 text-blue-600 font-medium">(Correct Answer)</span>
+                                      <span className="ml-2 text-slate-700 font-medium">(Correct Answer)</span>
                                     )}
                                   </div>
                                 );
@@ -446,8 +445,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             ))}
           </div>
           
-          <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl">
-            <p className="text-sm text-slate-700 font-inter">
+          <div className="mt-6 p-4 bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-xl">
+            <p className="text-sm text-slate-800 font-inter">
               <strong>Total Questions:</strong> {questionnaire.questions.length}
               {isGuest && !showResults && (
                 <span className="ml-4">
@@ -468,7 +467,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               <Button
                 onClick={handleSubmitResponse}
                 disabled={!isSubmitReady || isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 py-3 rounded-xl font-poppins"
+                className="w-full bg-gradient-to-r from-slate-600 to-slate-700 text-white hover:from-slate-700 hover:to-slate-800 disabled:opacity-50 py-3 rounded-xl font-poppins"
               >
                 {isSubmitting ? (
                   <div className="flex items-center space-x-2">
