@@ -49,6 +49,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const [showResults, setShowResults] = useState(false);
   const [testResults, setTestResults] = useState<{ score: number; totalQuestions: number; answers: any[] } | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
@@ -166,10 +167,11 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
       ResponseService.saveResponse(response);
 
-      setShowResults(true);
+      // For guests, just show that it was submitted without revealing results
+      setIsSubmitted(true);
       toast({
         title: "Response Submitted",
-        description: `You scored ${results.score}/${results.totalQuestions}!`,
+        description: "Your response has been submitted successfully!",
       });
 
     } catch (error) {
@@ -349,7 +351,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
         <CardContent className="p-6">
           <p className="text-sm text-slate-700 mb-4 font-inter">{questionnaire.description}</p>
           
-          {showResults && testResults && (
+          {/* Admin Results Display - only for admins */}
+          {isAdmin && showResults && testResults && (
             <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
               <div className="flex items-center space-x-3">
                 <Trophy className="h-8 w-8 text-amber-600" />
@@ -371,6 +374,21 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             </div>
           )}
 
+          {/* Guest Submission Confirmation - simple message for guests */}
+          {isGuest && isSubmitted && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 rounded-xl">
+              <div className="flex items-center space-x-3">
+                <CheckCircle className="h-8 w-8 text-blue-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 font-poppins">Response Submitted!</h3>
+                  <p className="text-slate-800 font-inter">
+                    Thank you for completing the test. Your responses have been recorded.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-6">
             {questionnaire.questions.map((question, index) => (
               <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-100 to-slate-200">
@@ -387,11 +405,11 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                     
                     {question.options && question.options.length > 0 && (
                       <div className="mt-3">
-                        {isGuest && !showResults ? (
+                        {isGuest && !isSubmitted ? (
                           <RadioGroup
                             value={answers[question.id]?.toString()}
                             onValueChange={(value) => handleAnswerSelect(question.id, parseInt(value))}
-                            disabled={showResults}
+                            disabled={isSubmitted}
                           >
                             <div className="grid grid-cols-1 gap-3">
                               {question.options.map((option, optionIndex) => (
@@ -418,7 +436,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                               {question.options.map((option, optionIndex) => {
                                 let optionStyle = "px-4 py-3 rounded-lg text-sm border font-inter";
                                 
-                                if (showResults && testResults) {
+                                // Only show colored results for admins, not guests
+                                if (isAdmin && showResults && testResults) {
                                   const userAnswer = testResults.answers.find(a => a.questionId === question.id);
                                   const isSelected = userAnswer?.selectedOptionIndex === optionIndex;
                                   const isCorrect = question.correctAnswer === optionIndex;
@@ -433,13 +452,18 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                     optionStyle += " bg-slate-200 border-slate-300 text-slate-700";
                                   }
                                 } else {
-                                  optionStyle += " bg-white border-slate-300 text-slate-800";
+                                  // For guests or when not showing results, just use neutral styling
+                                  if (isGuest && isSubmitted && answers[question.id] === optionIndex) {
+                                    optionStyle += " bg-blue-50 border-blue-200 text-blue-800"; // Just highlight selected option for guests
+                                  } else {
+                                    optionStyle += " bg-white border-slate-300 text-slate-800";
+                                  }
                                 }
 
                                 return (
                                   <div key={optionIndex} className={optionStyle}>
                                     {String.fromCharCode(65 + optionIndex)}. {option}
-                                    {showResults && question.correctAnswer === optionIndex && (
+                                    {isAdmin && showResults && question.correctAnswer === optionIndex && (
                                       <span className="ml-2 text-emerald-600 font-medium">(Correct)</span>
                                     )}
                                     {isAdmin && question.correctAnswer === optionIndex && !showResults && (
@@ -462,7 +486,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           <div className="mt-6 p-4 bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-xl">
             <p className="text-sm text-slate-800 font-inter">
               <strong>Total Questions:</strong> {questionnaire.questions.length}
-              {isGuest && !showResults && (
+              {isGuest && !isSubmitted && (
                 <span className="ml-4">
                   <strong>Answered:</strong> {Object.keys(answers).length}/{questionnaire.questions.length}
                 </span>
@@ -475,8 +499,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             </p>
           </div>
 
-          {/* Submit Button for Guests */}
-          {isGuest && !showResults && (
+          {/* Submit Button for Guests - only show if not yet submitted */}
+          {isGuest && !isSubmitted && (
             <div className="mt-6">
               <Button
                 onClick={handleSubmitResponse}
