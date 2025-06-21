@@ -1,7 +1,10 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save } from 'lucide-react';
 import QuestionnaireEditor from '@/components/QuestionnaireEditor';
 import SaveTestDialog from '@/components/SaveTestDialog';
@@ -46,6 +49,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
   const getQuestionIcon = (type: string) => {
     switch (type) {
+      case 'radio':
       case 'multiple-choice':
         return <CheckCircle className="h-4 w-4" />;
       case 'text':
@@ -59,6 +63,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
   const getQuestionTypeColor = (type: string) => {
     switch (type) {
+      case 'radio':
       case 'multiple-choice':
         return 'bg-blue-600 text-blue-100';
       case 'text':
@@ -83,6 +88,16 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       default:
         return 'bg-gray-600 text-gray-100';
     }
+  };
+
+  const getStatusBadge = () => {
+    if (!questionnaire.isSaved) {
+      return <Badge variant="secondary" className="bg-yellow-600 text-yellow-100">Unsaved</Badge>;
+    }
+    if (!questionnaire.isActive) {
+      return <Badge variant="secondary" className="bg-gray-600 text-gray-300">Inactive</Badge>;
+    }
+    return <Badge variant="default" className="bg-green-600 text-white">Active</Badge>;
   };
 
   const handleSave = (updatedQuestionnaire: Questionnaire) => {
@@ -200,25 +215,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               <CardTitle className="text-lg text-white">
                 {questionnaire.testName || questionnaire.title}
               </CardTitle>
-              {questionnaire.isSaved && (
-                <Badge 
-                  variant={questionnaire.isActive ? "default" : "secondary"}
-                  className={questionnaire.isActive ? "bg-green-600 text-white" : "bg-gray-600 text-gray-300"}
-                >
-                  {questionnaire.isActive ? "Active" : "Inactive"}
-                </Badge>
-              )}
-              {questionnaire.difficulty && (
+              {getStatusBadge()}
+              {isAdmin && questionnaire.difficulty && (
                 <Badge 
                   variant="secondary" 
                   className={getDifficultyColor(questionnaire.difficulty)}
                 >
                   {questionnaire.difficulty.charAt(0).toUpperCase() + questionnaire.difficulty.slice(1)}
-                </Badge>
-              )}
-              {!questionnaire.isSaved && (
-                <Badge variant="secondary" className="bg-yellow-600 text-yellow-100">
-                  Unsaved
                 </Badge>
               )}
             </div>
@@ -277,32 +280,50 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                       variant="secondary" 
                       className={`ml-2 ${getQuestionTypeColor(question.type)}`}
                     >
-                      {question.type.replace('-', ' ')}
+                      {question.type === 'radio' ? 'single choice' : question.type.replace('-', ' ')}
                     </Badge>
                   </div>
                   
                   {question.options && question.options.length > 0 && (
                     <div className="mt-2">
-                      {!isGuest && (
-                        <p className="text-xs text-gray-400 mb-2">Options:</p>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {question.options.map((option, optionIndex) => (
-                          <div 
-                            key={optionIndex}
-                            className={`px-3 py-2 rounded text-sm transition-colors cursor-pointer ${
-                              isGuest 
-                                ? answers[question.id] === optionIndex
-                                  ? 'bg-blue-600 text-white border-2 border-blue-400'
-                                  : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border-2 border-transparent'
-                                : 'bg-gray-700 text-gray-200'
-                            }`}
-                            onClick={() => handleAnswerSelect(question.id, optionIndex)}
-                          >
-                            {String.fromCharCode(65 + optionIndex)}. {option}
+                      {isGuest ? (
+                        <RadioGroup
+                          value={answers[question.id]?.toString()}
+                          onValueChange={(value) => handleAnswerSelect(question.id, parseInt(value))}
+                        >
+                          <div className="grid grid-cols-1 gap-3">
+                            {question.options.map((option, optionIndex) => (
+                              <div key={optionIndex} className="flex items-center space-x-2">
+                                <RadioGroupItem 
+                                  value={optionIndex.toString()} 
+                                  id={`${question.id}-${optionIndex}`}
+                                  className="border-gray-500 text-blue-500"
+                                />
+                                <Label 
+                                  htmlFor={`${question.id}-${optionIndex}`}
+                                  className="text-gray-200 cursor-pointer flex-1 p-2 rounded hover:bg-gray-700 transition-colors"
+                                >
+                                  {String.fromCharCode(65 + optionIndex)}. {option}
+                                </Label>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </RadioGroup>
+                      ) : (
+                        <div>
+                          <p className="text-xs text-gray-400 mb-2">Options:</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {question.options.map((option, optionIndex) => (
+                              <div 
+                                key={optionIndex}
+                                className="px-3 py-2 rounded text-sm bg-gray-700 text-gray-200"
+                              >
+                                {String.fromCharCode(65 + optionIndex)}. {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

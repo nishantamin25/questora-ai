@@ -9,6 +9,7 @@ import AdminConfig from '@/components/AdminConfig';
 import AdminAnalytics from '@/components/AdminAnalytics';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
+import GenerateTestDialog from '@/components/GenerateTestDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { toast } from '@/hooks/use-toast';
 
@@ -25,6 +26,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [showConfig, setShowConfig] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
 
   useEffect(() => {
     loadQuestionnaires();
@@ -113,7 +115,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     });
   };
 
-  const handleGenerateQuestionnaire = async () => {
+  const handleGenerateClick = () => {
     if (user.role !== 'admin') {
       toast({
         title: "Access Denied",
@@ -132,7 +134,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       return;
     }
 
+    setShowGenerateDialog(true);
+  };
+
+  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number) => {
     setIsGenerating(true);
+    setShowGenerateDialog(false);
     
     try {
       let fileContent = '';
@@ -152,6 +159,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
         prompt,
+        { testName, difficulty, numberOfQuestions },
         fileContent
       );
       
@@ -194,7 +202,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <Bot className="h-6 w-6 text-black" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">QuizCraft AI</h1>
+              <h1 className="text-xl font-bold text-white">Questora AI</h1>
               <p className="text-sm text-gray-400">Welcome, {user.username} ({user.role})</p>
             </div>
           </div>
@@ -262,8 +270,20 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </div>
             )}
 
+            {/* Generation Dialog */}
+            {showGenerateDialog && (
+              <div className="mb-6">
+                <GenerateTestDialog
+                  prompt={prompt}
+                  uploadedFile={uploadedFile}
+                  onGenerate={handleGenerateQuestionnaire}
+                  onCancel={() => setShowGenerateDialog(false)}
+                />
+              </div>
+            )}
+
             {/* Input Area - Only for Admin */}
-            {user.role === 'admin' && (
+            {user.role === 'admin' && !showGenerateDialog && (
               <Card className="mb-6 bg-gray-900 border-gray-800">
                 <CardHeader>
                   <CardTitle className="text-white">Generate Questionnaire</CardTitle>
@@ -310,7 +330,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </div>
                   
                   <Button
-                    onClick={handleGenerateQuestionnaire}
+                    onClick={handleGenerateClick}
                     disabled={isGenerating}
                     className="w-full bg-white text-black hover:bg-gray-200"
                   >
@@ -322,7 +342,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     ) : (
                       <div className="flex items-center space-x-2">
                         <Send className="h-4 w-4" />
-                        <span>Generate Questionnaire</span>
+                        <span>Configure & Generate</span>
                       </div>
                     )}
                   </Button>

@@ -1,3 +1,4 @@
+
 import { ConfigService } from './ConfigService';
 
 interface Question {
@@ -19,6 +20,12 @@ interface Questionnaire {
   isSaved?: boolean;
 }
 
+interface GenerateQuestionnaireOptions {
+  testName: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  numberOfQuestions: number;
+}
+
 class QuestionnaireServiceClass {
   private questionTemplates = {
     'customer satisfaction': [
@@ -26,48 +33,67 @@ class QuestionnaireServiceClass {
       'How likely are you to recommend us to a friend or colleague?',
       'How would you rate the quality of our customer service?',
       'What aspect of our service did you find most valuable?',
-      'How can we improve your experience with us?'
+      'How can we improve your experience with us?',
+      'How would you rate the value for money of our service?',
+      'How satisfied are you with the response time to your inquiries?',
+      'How easy was it to find the information you needed?',
+      'How professional was our staff during your interaction?',
+      'How likely are you to use our services again?'
     ],
     'employee feedback': [
       'How satisfied are you with your current role?',
       'Do you feel valued and appreciated at work?',
       'How would you rate the communication from management?',
       'What motivates you most in your current position?',
-      'What suggestions do you have for improving our workplace?'
+      'What suggestions do you have for improving our workplace?',
+      'How satisfied are you with your work-life balance?',
+      'How would you rate the training and development opportunities?',
+      'How comfortable do you feel expressing your opinions at work?',
+      'How satisfied are you with the recognition you receive?',
+      'How likely are you to recommend this company as a place to work?'
     ],
     'product feedback': [
       'How easy was it to use our product?',
       'Which features do you find most useful?',
       'What problems does our product solve for you?',
       'How does our product compare to alternatives?',
-      'What additional features would you like to see?'
+      'What additional features would you like to see?',
+      'How would you rate the product design and interface?',
+      'How satisfied are you with the product performance?',
+      'How likely are you to upgrade to a newer version?',
+      'How would you rate the product documentation?',
+      'What is the biggest challenge you face when using our product?'
     ],
     'event feedback': [
       'How would you rate the overall event experience?',
       'Was the event content relevant to your needs?',
       'How was the quality of the speakers/presentations?',
       'Would you attend similar events in the future?',
-      'What could we do to improve future events?'
+      'What could we do to improve future events?',
+      'How satisfied were you with the event venue and facilities?',
+      'How would you rate the event organization and logistics?',
+      'How useful was the networking opportunity provided?',
+      'How satisfied were you with the event duration?',
+      'What was the most valuable part of the event for you?'
     ]
   };
 
-  async generateQuestionnaire(prompt: string, fileContent?: string): Promise<Questionnaire> {
+  async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Promise<Questionnaire> {
     // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    const config = ConfigService.getConfig();
     const questionnaireId = this.generateId();
     
     // Analyze prompt to determine questionnaire type
     const category = this.categorizePrompt(prompt, fileContent);
-    const title = this.generateTitle(prompt);
+    const title = options.testName;
     const description = this.generateDescription(prompt, fileContent);
     
     // Generate questions based on prompt and configuration
     const questions = this.generateQuestions(
       prompt, 
       category, 
-      config, 
+      options.numberOfQuestions,
       fileContent
     );
 
@@ -78,6 +104,8 @@ class QuestionnaireServiceClass {
       questions,
       createdAt: new Date().toISOString(),
       isActive: false,
+      testName: options.testName,
+      difficulty: options.difficulty,
       isSaved: false
     };
 
@@ -130,11 +158,6 @@ class QuestionnaireServiceClass {
     return 'general';
   }
 
-  private generateTitle(prompt: string): string {
-    const words = prompt.split(' ').slice(0, 6);
-    return words.join(' ').replace(/^./, str => str.toUpperCase()) + ' Questionnaire';
-  }
-
   private generateDescription(prompt: string, fileContent?: string): string {
     let description = `This questionnaire was generated based on: "${prompt}"`;
     if (fileContent && fileContent.trim().length > 0) {
@@ -143,27 +166,30 @@ class QuestionnaireServiceClass {
     return description;
   }
 
-  private generateQuestions(prompt: string, category: string, config: any, fileContent?: string): Question[] {
+  private generateQuestions(prompt: string, category: string, numberOfQuestions: number, fileContent?: string): Question[] {
     const questions: Question[] = [];
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
                          this.questionTemplates['customer satisfaction'];
     
-    let numQuestions = Math.min(config.numberOfQuestions, baseQuestions.length);
+    // Calculate how many questions to take from base questions vs file-based questions
+    let baseQuestionCount = numberOfQuestions;
+    let fileBasedQuestions: Question[] = [];
     
-    // If we have file content, we might want to generate more specific questions
     if (fileContent && fileContent.trim().length > 10) {
-      numQuestions = Math.min(numQuestions + 1, baseQuestions.length);
+      fileBasedQuestions = this.generateFileBasedQuestions(fileContent, prompt);
+      baseQuestionCount = Math.max(numberOfQuestions - fileBasedQuestions.length, Math.floor(numberOfQuestions * 0.7));
     }
     
-    for (let i = 0; i < Math.min(numQuestions, baseQuestions.length); i++) {
-      const questionText = this.adaptQuestionToPrompt(baseQuestions[i], prompt, fileContent);
+    // Generate base questions
+    const shuffledBaseQuestions = [...baseQuestions].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < Math.min(baseQuestionCount, shuffledBaseQuestions.length); i++) {
+      const questionText = this.adaptQuestionToPrompt(shuffledBaseQuestions[i], prompt, fileContent);
       const question: Question = {
         id: this.generateId(),
         text: questionText,
-        type: 'multiple-choice'
+        type: 'radio'
       };
 
-      // Always ensure exactly 4 options for every question
       question.options = [
         'Strongly Disagree',
         'Disagree', 
@@ -174,13 +200,29 @@ class QuestionnaireServiceClass {
       questions.push(question);
     }
 
-    // If file content is provided, add context-specific questions
-    if (fileContent && fileContent.trim().length > 10) {
-      const fileBasedQuestions = this.generateFileBasedQuestions(fileContent, prompt);
-      questions.push(...fileBasedQuestions);
+    // Add file-based questions if available
+    questions.push(...fileBasedQuestions.slice(0, numberOfQuestions - questions.length));
+
+    // If we still need more questions, generate generic ones
+    while (questions.length < numberOfQuestions) {
+      const genericQuestions = [
+        'How would you rate your overall experience?',
+        'What improvements would you suggest?',
+        'How likely are you to participate again?',
+        'How clear were the instructions provided?',
+        'How satisfied are you with the support received?'
+      ];
+      
+      const randomGeneric = genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
+      questions.push({
+        id: this.generateId(),
+        text: this.adaptQuestionToPrompt(randomGeneric, prompt, fileContent),
+        type: 'radio',
+        options: ['Poor', 'Fair', 'Good', 'Excellent']
+      });
     }
 
-    return questions;
+    return questions.slice(0, numberOfQuestions);
   }
 
   private generateFileBasedQuestions(fileContent: string, prompt: string): Question[] {
@@ -193,7 +235,7 @@ class QuestionnaireServiceClass {
       questions.push({
         id: this.generateId(),
         text: 'Based on the provided policy document, how clear are the outlined procedures?',
-        type: 'multiple-choice',
+        type: 'radio',
         options: ['Very Unclear', 'Somewhat Unclear', 'Clear', 'Very Clear']
       });
     }
@@ -202,7 +244,7 @@ class QuestionnaireServiceClass {
       questions.push({
         id: this.generateId(),
         text: 'How would you rate the comprehensiveness of the training material provided?',
-        type: 'multiple-choice',
+        type: 'radio',
         options: ['Poor', 'Fair', 'Good', 'Excellent']
       });
     }
@@ -212,12 +254,12 @@ class QuestionnaireServiceClass {
       questions.push({
         id: this.generateId(),
         text: 'Based on the provided document content, how relevant is the information to your needs?',
-        type: 'multiple-choice',
+        type: 'radio',
         options: ['Not Relevant', 'Somewhat Relevant', 'Relevant', 'Very Relevant']
       });
     }
     
-    return questions.slice(0, 2); // Limit to 2 additional questions from file content
+    return questions.slice(0, 3); // Limit to 3 additional questions from file content
   }
 
   private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string): string {
