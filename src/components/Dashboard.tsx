@@ -271,16 +271,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             )}
 
             {/* Generation Dialog */}
-            {showGenerateDialog && (
-              <div className="mb-6">
-                <GenerateTestDialog
-                  prompt={prompt}
-                  uploadedFile={uploadedFile}
-                  onGenerate={handleGenerateQuestionnaire}
-                  onCancel={() => setShowGenerateDialog(false)}
-                />
-              </div>
-            )}
+            <GenerateTestDialog
+              open={showGenerateDialog}
+              prompt={prompt}
+              uploadedFile={uploadedFile}
+              onGenerate={handleGenerateQuestionnaire}
+              onCancel={() => setShowGenerateDialog(false)}
+            />
 
             {/* Input Area - Only for Admin */}
             {user.role === 'admin' && !showGenerateDialog && (
