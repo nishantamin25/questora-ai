@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, X, CheckCircle, Power } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Save, X, CheckCircle, Clock, Users, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -69,78 +71,83 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     });
   };
 
-  const handleMakeActive = () => {
+  const handleActiveToggle = (checked: boolean) => {
     if (savedTest) {
-      const updatedTest = { ...savedTest, isActive: !savedTest.isActive };
+      const updatedTest = { ...savedTest, isActive: checked };
       setSavedTest(updatedTest);
+      setIsActive(checked);
       onSave(updatedTest);
       
       toast({
-        title: savedTest.isActive ? "Test Deactivated" : "Test Activated",
-        description: savedTest.isActive ? "Test is no longer visible to guests" : "Test is now visible to guests",
+        title: checked ? "Test Activated" : "Test Deactivated",
+        description: checked ? "Test is now visible to guests" : "Test is no longer visible to guests",
       });
     }
   };
 
   if (showSummary && savedTest) {
     return (
-      <Card className="bg-white border border-slate-200 shadow-lg rounded-xl">
+      <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
         <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200 rounded-t-xl">
           <CardTitle className="text-slate-900 flex items-center space-x-2 font-poppins">
             <CheckCircle className="h-5 w-5 text-green-600" />
             <span>Test Saved Successfully</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 p-6">
-          <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-slate-900 font-poppins">{savedTest.testName}</h3>
+        <CardContent className="p-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-slate-900 font-poppins">{savedTest.testName}</h3>
               {savedTest.isActive && (
-                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
                   active
-                </span>
+                </Badge>
               )}
             </div>
-            <p className="text-sm text-slate-600 mb-4 font-inter">Test your general knowledge across various topics</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-violet-600 font-poppins">0</p>
-                <p className="text-sm text-slate-600 font-inter">participants</p>
+            
+            <p className="text-slate-600 mb-6 font-inter">Test your general knowledge across various topics</p>
+            
+            <div className="flex items-center justify-between text-sm text-slate-600">
+              <div className="flex items-center space-x-1">
+                <FileText className="h-4 w-4" />
+                <span>{savedTest.questions.length} questions</span>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-violet-600 font-poppins">{savedTest.questions.length}</p>
-                <p className="text-sm text-slate-600 font-inter">questions</p>
+              <div className="flex items-center space-x-1">
+                <Clock className="h-4 w-4" />
+                <span>{savedTest.timeframe} minutes</span>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-violet-600 font-poppins">{savedTest.timeframe}</p>
-                <p className="text-sm text-slate-600 font-inter">minutes</p>
+              <div className="flex items-center space-x-1">
+                <Users className="h-4 w-4" />
+                <span>0 participants</span>
               </div>
             </div>
           </div>
 
-          <div className="flex space-x-2 pt-4">
-            <Button 
-              onClick={handleMakeActive} 
-              className={`flex-1 rounded-lg font-poppins ${
-                savedTest.isActive 
-                  ? 'bg-red-500 hover:bg-red-600 text-white' 
-                  : 'bg-green-500 hover:bg-green-600 text-white'
-              }`}
-            >
-              <Power className="h-4 w-4 mr-2" />
-              {savedTest.isActive ? 'Deactivate Test' : 'Make Active'}
-            </Button>
-            <Button onClick={onCancel} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-lg font-poppins px-8">
-              Done
-            </Button>
+          <div className="flex items-center justify-between mb-6 p-4 bg-slate-50 rounded-lg">
+            <div>
+              <Label htmlFor="active-toggle" className="font-medium font-poppins">Make Test Active</Label>
+              <p className="text-sm text-slate-600 font-inter">Allow guests to take this test</p>
+            </div>
+            <Switch
+              id="active-toggle"
+              checked={savedTest.isActive}
+              onCheckedChange={handleActiveToggle}
+            />
           </div>
+
+          <Button 
+            onClick={onCancel} 
+            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-lg font-poppins"
+          >
+            Done
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="bg-white border border-slate-200 shadow-lg rounded-xl">
+    <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
       <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
         <CardTitle className="text-slate-900 flex items-center space-x-2 font-poppins">
           <Save className="h-5 w-5 text-violet-600" />
