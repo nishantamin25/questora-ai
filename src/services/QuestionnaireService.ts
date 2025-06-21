@@ -1,4 +1,3 @@
-
 import { ConfigService } from './ConfigService';
 
 interface Question {
@@ -14,6 +13,7 @@ interface Questionnaire {
   description: string;
   questions: Question[];
   createdAt: string;
+  isActive?: boolean;
 }
 
 class QuestionnaireServiceClass {
@@ -68,13 +68,40 @@ class QuestionnaireServiceClass {
       fileContent
     );
 
-    return {
+    const questionnaire: Questionnaire = {
       id: questionnaireId,
       title,
       description,
       questions,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isActive: false
     };
+
+    // Save to localStorage
+    this.saveQuestionnaire(questionnaire);
+
+    return questionnaire;
+  }
+
+  saveQuestionnaire(questionnaire: Questionnaire): void {
+    const existingQuestionnaires = this.getAllQuestionnaires();
+    const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
+    updatedQuestionnaires.unshift(questionnaire);
+    localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+  }
+
+  getAllQuestionnaires(): Questionnaire[] {
+    const stored = localStorage.getItem('questionnaires');
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return [];
+  }
+
+  deleteQuestionnaire(questionnaireId: string): void {
+    const questionnaires = this.getAllQuestionnaires();
+    const updatedQuestionnaires = questionnaires.filter(q => q.id !== questionnaireId);
+    localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
   }
 
   private categorizePrompt(prompt: string): string {
@@ -121,20 +148,16 @@ class QuestionnaireServiceClass {
       const question: Question = {
         id: this.generateId(),
         text: questionText,
-        type: config.defaultQuestionType
+        type: 'multiple-choice' // Force all questions to be multiple-choice with 4 options
       };
 
-      // Add options for multiple choice questions
-      if (config.defaultQuestionType === 'multiple-choice') {
-        question.options = config.multipleChoiceOptions
-          .split(',')
-          .map((option: string) => option.trim())
-          .filter((option: string) => option.length > 0);
-      } else if (config.defaultQuestionType === 'rating') {
-        question.options = ['1', '2', '3', '4', '5'];
-      } else if (config.defaultQuestionType === 'yes-no') {
-        question.options = ['Yes', 'No'];
-      }
+      // Always ensure exactly 4 options for every question
+      question.options = [
+        'Strongly Disagree',
+        'Disagree', 
+        'Agree',
+        'Strongly Agree'
+      ];
 
       questions.push(question);
     }
@@ -143,8 +166,9 @@ class QuestionnaireServiceClass {
     if (fileContent && fileContent.length > 10) {
       questions.push({
         id: this.generateId(),
-        text: 'Based on the provided context, what additional feedback would you like to share?',
-        type: 'text'
+        text: 'Based on the provided context, how would you rate the overall quality?',
+        type: 'multiple-choice',
+        options: ['Poor', 'Fair', 'Good', 'Excellent']
       });
     }
 
