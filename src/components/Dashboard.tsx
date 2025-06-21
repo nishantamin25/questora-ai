@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,13 +31,20 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   }, []);
 
   const loadQuestionnaires = () => {
-    if (user.role === 'admin') {
-      const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
-      setQuestionnaires(allQuestionnaires);
-    } else {
-      // For guests, only show active and saved questionnaires
-      const activeQuestionnaires = QuestionnaireService.getActiveQuestionnaires();
-      setQuestionnaires(activeQuestionnaires);
+    try {
+      if (user.role === 'admin') {
+        const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
+        console.log('Admin questionnaires loaded:', allQuestionnaires);
+        setQuestionnaires(Array.isArray(allQuestionnaires) ? allQuestionnaires : []);
+      } else {
+        // For guests, only show active and saved questionnaires
+        const activeQuestionnaires = QuestionnaireService.getActiveQuestionnaires();
+        console.log('Guest questionnaires loaded:', activeQuestionnaires);
+        setQuestionnaires(Array.isArray(activeQuestionnaires) ? activeQuestionnaires : []);
+      }
+    } catch (error) {
+      console.error('Error loading questionnaires:', error);
+      setQuestionnaires([]);
     }
   };
 
@@ -182,14 +188,36 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   };
 
   const handleUpdateQuestionnaire = (updatedQuestionnaire: any) => {
-    QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
-    loadQuestionnaires();
+    try {
+      QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
+      loadQuestionnaires();
+    } catch (error) {
+      console.error('Error updating questionnaire:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update questionnaire",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDeleteQuestionnaire = (questionnaireId: string) => {
-    QuestionnaireService.deleteQuestionnaire(questionnaireId);
-    loadQuestionnaires();
+    try {
+      QuestionnaireService.deleteQuestionnaire(questionnaireId);
+      loadQuestionnaires();
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete questionnaire",
+        variant: "destructive"
+      });
+    }
   };
+
+  // Ensure we have valid data before rendering
+  const validQuestionnaires = questionnaires.filter(q => q && typeof q === 'object');
+  console.log('Rendering questionnaires:', validQuestionnaires);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
@@ -354,17 +382,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
             {/* Questionnaires */}
             <div className="space-y-4">
-              {questionnaires.map((questionnaire, index) => (
-                <QuestionnaireDisplay 
-                  key={questionnaire.id || index} 
-                  questionnaire={questionnaire}
-                  isAdmin={user.role === 'admin'}
-                  onUpdate={handleUpdateQuestionnaire}
-                  onDelete={handleDeleteQuestionnaire}
-                />
-              ))}
+              {validQuestionnaires.map((questionnaire, index) => {
+                // Ensure we have a valid questionnaire object with required properties
+                if (!questionnaire || typeof questionnaire !== 'object') {
+                  console.warn('Invalid questionnaire at index', index, questionnaire);
+                  return null;
+                }
+
+                const questionnaireId = questionnaire.id || `questionnaire-${index}`;
+                console.log('Rendering questionnaire:', questionnaireId, questionnaire);
+                
+                return (
+                  <QuestionnaireDisplay 
+                    key={questionnaireId} 
+                    questionnaire={questionnaire}
+                    isAdmin={user.role === 'admin'}
+                    onUpdate={handleUpdateQuestionnaire}
+                    onDelete={handleDeleteQuestionnaire}
+                  />
+                );
+              })}
               
-              {questionnaires.length === 0 && (
+              {validQuestionnaires.length === 0 && (
                 <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                   <CardContent className="p-8 text-center">
                     <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
