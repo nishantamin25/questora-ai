@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ interface QuestionnaireDisplayProps {
 }
 
 const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDelete }: QuestionnaireDisplayProps) => {
+  // Always call all hooks at the top level, regardless of conditions
   const [isEditing, setIsEditing] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [answers, setAnswers] = useState<{ [questionId: string]: number }>({});
@@ -53,23 +55,22 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [timerActive, setTimerActive] = useState(false);
 
+  // Get current user and calculate derived state
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
 
-  // Check if guest has already submitted this test
-  const guestHasSubmitted = isGuest && ResponseService.getResponsesByQuestionnaire(questionnaire.id)
+  // Safely handle questionnaire data
+  const safeQuestionnaire = questionnaire || { id: '', questions: [] };
+  
+  // Check if guest has already submitted this test - only if we have valid data
+  const guestHasSubmitted = isGuest && safeQuestionnaire.id && ResponseService.getResponsesByQuestionnaire(safeQuestionnaire.id)
     .some(response => response.userId === currentUser?.token);
 
-  // Hide the component if guest has submitted
-  if (isGuest && guestHasSubmitted) {
-    return null;
-  }
-
-  // Get test taker count - fixed method name
-  const responses = ResponseService.getResponsesByQuestionnaire(questionnaire.id);
+  // Get test taker count - only if we have valid questionnaire id
+  const responses = safeQuestionnaire.id ? ResponseService.getResponsesByQuestionnaire(safeQuestionnaire.id) : [];
   const testTakersCount = new Set(responses.map(r => r.username || r.userId)).size;
 
-  // Timer effect
+  // Timer effect - always called but only active when conditions are met
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
@@ -94,6 +95,23 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     };
   }, [timerActive, timeRemaining]);
 
+  // Early return after all hooks are called
+  if (isGuest && guestHasSubmitted) {
+    return null;
+  }
+
+  // Validate questionnaire data
+  if (!safeQuestionnaire.id || !Array.isArray(safeQuestionnaire.questions)) {
+    console.warn('Invalid questionnaire data:', questionnaire);
+    return (
+      <Card className="animate-fade-in bg-red-50 border border-red-200 shadow-lg rounded-xl">
+        <CardContent className="p-6 text-center">
+          <p className="text-red-600 font-inter">Invalid questionnaire data</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -105,8 +123,8 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     setIsExpanded(true);
     
     // Initialize timer if timeframe is set
-    if (questionnaire.timeframe) {
-      const totalSeconds = questionnaire.timeframe * 60;
+    if (safeQuestionnaire.timeframe) {
+      const totalSeconds = safeQuestionnaire.timeframe * 60;
       setTimeRemaining(totalSeconds);
       setTimerActive(true);
     }
@@ -140,10 +158,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   };
 
   const getStatusBadge = () => {
-    if (!questionnaire.isSaved) {
+    if (!safeQuestionnaire.isSaved) {
       return <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-poppins">Unsaved</Badge>;
     }
-    if (!questionnaire.isActive) {
+    if (!safeQuestionnaire.isActive) {
       return <Badge className="bg-slate-200 text-slate-700 border-slate-300 font-poppins">Inactive</Badge>;
     }
     return <Badge className="bg-green-100 text-green-800 border-green-200 font-poppins">Active</Badge>;
@@ -165,7 +183,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
   const handleDelete = () => {
     if (onDelete && window.confirm('Are you sure you want to delete this questionnaire?')) {
-      onDelete(questionnaire.id);
+      onDelete(safeQuestionnaire.id);
       toast({
         title: "Success",
         description: "Questionnaire deleted successfully",
@@ -188,11 +206,11 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     setTimerActive(false);
 
     // Check if all questions are answered
-    const unansweredQuestions = questionnaire.questions.filter(q => !(q.id in answers));
+    const unansweredQuestions = safeQuestionnaire.questions.filter(q => !(q.id in answers));
     if (unansweredQuestions.length > 0) {
       toast({
         title: "Incomplete Response",
-        description: `Please answer all ${questionnaire.questions.length} questions before submitting.`,
+        description: `Please answer all ${safeQuestionnaire.questions.length} questions before submitting.`,
         variant: "destructive"
       });
       return;
@@ -207,13 +225,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
         selectedOptionIndex: selectedIndex
       }));
 
-      const results = ResponseService.calculateScore(userAnswers, questionnaire);
+      const results = ResponseService.calculateScore(userAnswers, safeQuestionnaire);
       setTestResults(results);
 
       const response = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-        questionnaireId: questionnaire.id,
-        questionnaireTitle: questionnaire.testName || questionnaire.title,
+        questionnaireId: safeQuestionnaire.id,
+        questionnaireTitle: safeQuestionnaire.testName || safeQuestionnaire.title,
         userId: currentUser.token,
         username: currentUser.username,
         answers: results.answers,
@@ -248,13 +266,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     setTestResults(null);
   };
 
-  const isSubmitReady = questionnaire.questions.every(q => q.id in answers);
+  const isSubmitReady = safeQuestionnaire.questions.every(q => q.id in answers);
 
   const handleToggleActive = (checked: boolean) => {
     console.log('Toggle active status:', checked);
     
     const updatedQuestionnaire = {
-      ...questionnaire,
+      ...safeQuestionnaire,
       isActive: checked
     };
     
@@ -273,7 +291,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   if (isEditing) {
     return (
       <QuestionnaireEditor
-        questionnaire={questionnaire}
+        questionnaire={safeQuestionnaire}
         onSave={handleSave}
         onCancel={() => setIsEditing(false)}
       />
@@ -283,7 +301,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   if (showSaveDialog) {
     return (
       <SaveTestDialog
-        questionnaire={questionnaire}
+        questionnaire={safeQuestionnaire}
         onSave={handleTestSave}
         onCancel={() => setShowSaveDialog(false)}
       />
@@ -297,12 +315,12 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           <div className="flex-1">
             <div className="flex items-center space-x-3 flex-wrap">
               <CardTitle className="text-xl text-slate-800 font-poppins">
-                {questionnaire.testName || questionnaire.title}
+                {safeQuestionnaire.testName || safeQuestionnaire.title}
               </CardTitle>
               {getStatusBadge()}
-              {isAdmin && questionnaire.difficulty && (
-                <Badge className={getDifficultyColor(questionnaire.difficulty) + " font-poppins"}>
-                  {questionnaire.difficulty.charAt(0).toUpperCase() + questionnaire.difficulty.slice(1)}
+              {isAdmin && safeQuestionnaire.difficulty && (
+                <Badge className={getDifficultyColor(safeQuestionnaire.difficulty) + " font-poppins"}>
+                  {safeQuestionnaire.difficulty.charAt(0).toUpperCase() + safeQuestionnaire.difficulty.slice(1)}
                 </Badge>
               )}
             </div>
@@ -322,13 +340,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
                 <div className="flex items-center space-x-1">
                   <FileCheck className="h-4 w-4 text-slate-600" />
-                  <span className="font-inter font-medium">{questionnaire.questions.length}</span>
+                  <span className="font-inter font-medium">{safeQuestionnaire.questions.length}</span>
                   <span className="font-inter text-slate-600">questions</span>
                 </div>
-                {questionnaire.timeframe && (
+                {safeQuestionnaire.timeframe && (
                   <div className="flex items-center space-x-1">
                     <Clock className="h-4 w-4 text-slate-600" />
-                    <span className="font-inter font-medium">{questionnaire.timeframe}</span>
+                    <span className="font-inter font-medium">{safeQuestionnaire.timeframe}</span>
                     <span className="font-inter text-slate-600">minutes</span>
                   </div>
                 )}
@@ -336,7 +354,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             )}
             
             {/* Compact Test Statistics for Admin */}
-            {questionnaire.isSaved && !isGuest && (
+            {safeQuestionnaire.isSaved && !isGuest && (
               <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
                 <div className="flex items-center space-x-1">
                   <Users className="h-4 w-4 text-slate-600" />
@@ -345,13 +363,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                 </div>
                 <div className="flex items-center space-x-1">
                   <FileCheck className="h-4 w-4 text-slate-600" />
-                  <span className="font-inter font-medium">{questionnaire.questions.length}</span>
+                  <span className="font-inter font-medium">{safeQuestionnaire.questions.length}</span>
                   <span className="font-inter text-slate-600">questions</span>
                 </div>
-                {questionnaire.timeframe && (
+                {safeQuestionnaire.timeframe && (
                   <div className="flex items-center space-x-1">
                     <Clock className="h-4 w-4 text-slate-600" />
-                    <span className="font-inter font-medium">{questionnaire.timeframe}</span>
+                    <span className="font-inter font-medium">{safeQuestionnaire.timeframe}</span>
                     <span className="font-inter text-slate-600">minutes</span>
                   </div>
                 )}
@@ -362,25 +380,25 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             {isAdmin && (
               <div className="flex items-center space-x-2">
                 {/* Enhanced Active/Inactive Toggle - only show for saved tests */}
-                {questionnaire.isSaved && (
+                {safeQuestionnaire.isSaved && (
                   <div className="flex items-center space-x-3 px-4 py-2 bg-white border border-slate-300 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                     <div className="flex items-center space-x-2">
-                      {questionnaire.isActive ? (
+                      {safeQuestionnaire.isActive ? (
                         <Eye className="h-4 w-4 text-emerald-600" />
                       ) : (
                         <EyeOff className="h-4 w-4 text-slate-500" />
                       )}
                       <span className={`text-sm font-medium font-inter transition-colors duration-200 ${
-                        questionnaire.isActive 
+                        safeQuestionnaire.isActive 
                           ? 'text-emerald-700' 
                           : 'text-slate-600'
                       }`}>
-                        {questionnaire.isActive ? 'Active' : 'Inactive'}
+                        {safeQuestionnaire.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                     <div className="relative">
                       <Switch
-                        checked={questionnaire.isActive || false}
+                        checked={safeQuestionnaire.isActive || false}
                         onCheckedChange={handleToggleActive}
                         className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-300 transition-colors duration-200"
                       />
@@ -389,7 +407,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                 )}
                 
                 <div className="flex space-x-1">
-                  {!questionnaire.isSaved && (
+                  {!safeQuestionnaire.isSaved && (
                     <Button
                       size="sm"
                       onClick={() => setShowSaveDialog(true)}
@@ -447,7 +465,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       {/* Expandable Content */}
       {(isExpanded || (isGuest && hasStartedTest)) && (
         <CardContent className="p-6">
-          <p className="text-sm text-slate-700 mb-4 font-inter">{questionnaire.description}</p>
+          <p className="text-sm text-slate-700 mb-4 font-inter">{safeQuestionnaire.description}</p>
           
           {/* Admin Results Display - only for admins */}
           {isAdmin && showResults && testResults && (
@@ -488,7 +506,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           )}
 
           <div className="space-y-6">
-            {questionnaire.questions.map((question, index) => (
+            {safeQuestionnaire.questions.map((question, index) => (
               <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-100 to-slate-200">
                 <div className="flex items-start space-x-4">
                   <div className="bg-slate-200 p-2 rounded-full mt-1 border border-slate-300">
@@ -583,15 +601,15 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           
           <div className="mt-6 p-4 bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-xl">
             <p className="text-sm text-slate-800 font-inter">
-              <strong>Total Questions:</strong> {questionnaire.questions.length}
+              <strong>Total Questions:</strong> {safeQuestionnaire.questions.length}
               {isGuest && hasStartedTest && !isSubmitted && (
                 <span className="ml-4">
-                  <strong>Answered:</strong> {Object.keys(answers).length}/{questionnaire.questions.length}
+                  <strong>Answered:</strong> {Object.keys(answers).length}/{safeQuestionnaire.questions.length}
                 </span>
               )}
-              {questionnaire.timeframe && !isGuest && (
+              {safeQuestionnaire.timeframe && !isGuest && (
                 <span className="ml-4">
-                  <strong>Time Limit:</strong> {questionnaire.timeframe} minutes
+                  <strong>Time Limit:</strong> {safeQuestionnaire.timeframe} minutes
                 </span>
               )}
             </p>
