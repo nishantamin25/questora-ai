@@ -10,8 +10,11 @@ interface QuestionnaireResponse {
     questionText: string;
     selectedOption: string;
     selectedOptionIndex: number;
+    isCorrect?: boolean;
   }>;
   submittedAt: string;
+  score?: number;
+  totalQuestions?: number;
 }
 
 class ResponseServiceClass {
@@ -34,13 +37,47 @@ class ResponseServiceClass {
     return allResponses.filter(response => response.questionnaireId === questionnaireId);
   }
 
+  calculateScore(userAnswers: Array<{questionId: string; selectedOptionIndex: number}>, questionnaire: any): { score: number; totalQuestions: number; answers: Array<any> } {
+    let correctCount = 0;
+    const totalQuestions = questionnaire.questions.length;
+    
+    const answersWithCorrectness = userAnswers.map(userAnswer => {
+      const question = questionnaire.questions.find((q: any) => q.id === userAnswer.questionId);
+      const isCorrect = question?.correctAnswer !== undefined && 
+                       question.correctAnswer === userAnswer.selectedOptionIndex;
+      
+      if (isCorrect) {
+        correctCount++;
+      }
+      
+      return {
+        ...userAnswer,
+        questionText: question?.text || '',
+        selectedOption: question?.options?.[userAnswer.selectedOptionIndex] || '',
+        isCorrect
+      };
+    });
+
+    return {
+      score: correctCount,
+      totalQuestions,
+      answers: answersWithCorrectness
+    };
+  }
+
   getResponseStats(questionnaireId: string) {
     const responses = this.getResponsesByQuestionnaire(questionnaireId);
     const totalResponses = responses.length;
     
     if (totalResponses === 0) {
-      return { totalResponses: 0, questionStats: [] };
+      return { totalResponses: 0, questionStats: [], averageScore: 0 };
     }
+
+    // Calculate average score
+    const responsesWithScores = responses.filter(r => r.score !== undefined);
+    const averageScore = responsesWithScores.length > 0 
+      ? responsesWithScores.reduce((sum, r) => sum + (r.score || 0), 0) / responsesWithScores.length
+      : 0;
 
     // Get the first response to determine question structure
     const firstResponse = responses[0];
@@ -64,7 +101,8 @@ class ResponseServiceClass {
 
     return {
       totalResponses,
-      questionStats
+      questionStats,
+      averageScore
     };
   }
 

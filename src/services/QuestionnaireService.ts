@@ -1,4 +1,3 @@
-
 import { ConfigService } from './ConfigService';
 
 interface Question {
@@ -6,6 +5,7 @@ interface Question {
   text: string;
   type: string;
   options?: string[];
+  correctAnswer?: number; // Index of the correct answer
 }
 
 interface Questionnaire {
