@@ -22,10 +22,21 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username || !password || !role) {
+    // Different validation based on role
+    if (!username || !role) {
       toast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Admin requires password, guest does not
+    if (role === 'admin' && !password) {
+      toast({
+        title: "Error",
+        description: "Password is required for admin login",
         variant: "destructive"
       });
       return;
@@ -42,11 +53,19 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         });
         onLogin(user);
       } else {
-        toast({
-          title: "Error",
-          description: "Invalid credentials",
-          variant: "destructive"
-        });
+        if (role === 'admin') {
+          toast({
+            title: "Error",
+            description: "Invalid admin credentials",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Please enter a valid name",
+            variant: "destructive"
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -76,30 +95,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
               <Label htmlFor="role">Role</Label>
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger className="mt-1">
@@ -111,6 +106,34 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label htmlFor="username">
+                {role === 'guest' ? 'Your Name' : 'Username'}
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={role === 'guest' ? 'Enter your name' : 'Enter your username'}
+                className="mt-1"
+              />
+            </div>
+            
+            {role === 'admin' && (
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="mt-1"
+                />
+              </div>
+            )}
             
             <Button 
               type="submit" 
@@ -124,7 +147,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
             <p className="font-semibold mb-2">Demo Credentials:</p>
             <p><strong>Admin:</strong> admin / admin123</p>
-            <p><strong>Guest:</strong> guest / guest123</p>
+            <p><strong>Guest:</strong> Just enter your name</p>
           </div>
         </CardContent>
       </Card>
