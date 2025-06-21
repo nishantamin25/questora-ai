@@ -1,13 +1,13 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, LogOut, Settings, Upload, Send, Paperclip, X, BarChart3 } from 'lucide-react';
+import { Bot, LogOut, Settings, Upload, Send, Paperclip, X, BarChart3, MessageSquare } from 'lucide-react';
 import AdminConfig from '@/components/AdminConfig';
 import AdminAnalytics from '@/components/AdminAnalytics';
+import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { toast } from '@/hooks/use-toast';
@@ -24,6 +24,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showResponses, setShowResponses] = useState(false);
 
   useEffect(() => {
     loadQuestionnaires();
@@ -198,6 +199,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setShowResponses(!showResponses)}
+                  className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Responses</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowAnalytics(!showAnalytics)}
                   className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
                 >
@@ -232,6 +242,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2">
+            {/* Admin Response Management */}
+            {user.role === 'admin' && showResponses && (
+              <div className="mb-6">
+                <ResponseManagement />
+              </div>
+            )}
+
             {/* Admin Analytics */}
             {user.role === 'admin' && showAnalytics && (
               <div className="mb-6">
@@ -316,7 +333,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     Guest Access
                   </h3>
                   <p className="text-gray-400">
-                    Only admin users can create, edit, and delete questionnaires. You can view existing questionnaires below.
+                    Welcome! Click on the answer options below to select your responses, then submit when you've answered all questions.
                   </p>
                 </CardContent>
               </Card>
@@ -360,15 +377,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader>
                 <CardTitle className="text-white">
-                  {user.role === 'admin' ? 'Admin Tips' : 'Guest Info'}
+                  {user.role === 'admin' ? 'Admin Tips' : 'How to Answer'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 {user.role === 'admin' ? (
                   <>
                     <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-                      <p className="font-semibold text-green-300">Edit after generation</p>
-                      <p className="text-green-400">You can edit questions and options after generating questionnaires</p>
+                      <p className="font-semibold text-green-300">View responses</p>
+                      <p className="text-green-400">Use the Responses tab to see guest submissions and statistics</p>
                     </div>
                     <div className="p-3 bg-purple-900/30 border border-purple-700 rounded-lg">
                       <p className="font-semibold text-purple-300">Manage activation</p>
@@ -377,13 +394,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   </>
                 ) : (
                   <>
-                    <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded-lg">
-                      <p className="font-semibold text-yellow-300">Guest Mode</p>
-                      <p className="text-yellow-400">You can view questionnaires but cannot create or edit them</p>
-                    </div>
                     <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-                      <p className="font-semibold text-blue-300">Admin Features</p>
-                      <p className="text-blue-400">Contact an admin to create new questionnaires or make changes</p>
+                      <p className="font-semibold text-blue-300">Select answers</p>
+                      <p className="text-blue-400">Click on any option to select it. Selected options will be highlighted in blue.</p>
+                    </div>
+                    <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                      <p className="font-semibold text-green-300">Submit responses</p>
+                      <p className="text-green-400">Answer all questions to enable the submit button at the bottom of each questionnaire.</p>
                     </div>
                   </>
                 )}
