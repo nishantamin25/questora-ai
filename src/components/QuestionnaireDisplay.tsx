@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -318,7 +317,25 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               </div>
             )}
             
-            {/* Compact Test Statistics */}
+            {/* Test Info for Guests - show before starting test */}
+            {isGuest && !hasStartedTest && !isSubmitted && (
+              <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
+                <div className="flex items-center space-x-1">
+                  <FileCheck className="h-4 w-4 text-slate-600" />
+                  <span className="font-inter font-medium">{questionnaire.questions.length}</span>
+                  <span className="font-inter text-slate-600">questions</span>
+                </div>
+                {questionnaire.timeframe && (
+                  <div className="flex items-center space-x-1">
+                    <Clock className="h-4 w-4 text-slate-600" />
+                    <span className="font-inter font-medium">{questionnaire.timeframe}</span>
+                    <span className="font-inter text-slate-600">minutes</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Compact Test Statistics for Admin */}
             {questionnaire.isSaved && !isGuest && (
               <div className="flex items-center space-x-6 mt-3 text-sm text-slate-700">
                 <div className="flex items-center space-x-1">
