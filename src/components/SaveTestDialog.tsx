@@ -39,11 +39,10 @@ interface SaveTestDialogProps {
 const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps) => {
   const [testName, setTestName] = useState(questionnaire.testName || '');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>(questionnaire.difficulty || 'medium');
-  const [isActive, setIsActive] = useState(questionnaire.isActive || false);
   const [showSummary, setShowSummary] = useState(false);
   const [savedTest, setSavedTest] = useState<Questionnaire | null>(null);
 
-  console.log('SaveTestDialog render:', { showSummary, savedTest, testName, isActive });
+  console.log('SaveTestDialog render:', { showSummary, savedTest: !!savedTest, testName });
 
   const handleSave = () => {
     console.log('handleSave called with testName:', testName);
@@ -66,9 +65,11 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
       timeframe: questionnaire.timeframe || 15 // Default timeframe if not set
     };
 
-    console.log('Setting savedTest:', savedQuestionnaire);
+    console.log('Setting savedTest and showSummary to true');
     setSavedTest(savedQuestionnaire);
     setShowSummary(true);
+    
+    // Call onSave callback
     onSave(savedQuestionnaire);
     
     toast({
@@ -82,7 +83,6 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     if (savedTest) {
       const updatedTest = { ...savedTest, isActive: checked };
       setSavedTest(updatedTest);
-      setIsActive(checked);
       onSave(updatedTest);
       
       toast({
@@ -92,8 +92,14 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     }
   };
 
+  const handleDone = () => {
+    console.log('handleDone called');
+    onCancel();
+  };
+
   console.log('About to render, showSummary:', showSummary, 'savedTest exists:', !!savedTest);
 
+  // Show summary view after saving
   if (showSummary && savedTest) {
     console.log('Rendering summary view for test:', savedTest.testName);
     return (
@@ -140,13 +146,13 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
             </div>
             <Switch
               id="active-toggle"
-              checked={savedTest.isActive}
+              checked={savedTest.isActive || false}
               onCheckedChange={handleActiveToggle}
             />
           </div>
 
           <Button 
-            onClick={onCancel} 
+            onClick={handleDone} 
             className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-lg font-poppins"
           >
             Done
@@ -156,6 +162,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     );
   }
 
+  // Show initial save form
   console.log('Rendering initial save form');
   return (
     <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
