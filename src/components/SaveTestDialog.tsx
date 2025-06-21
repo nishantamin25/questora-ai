@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, X, CheckCircle } from 'lucide-react';
+import { Save, X, CheckCircle, Toggle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -55,7 +55,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
       ...questionnaire,
       testName: testName.trim(),
       difficulty,
-      isActive,
+      isActive: false, // Initially inactive when saved
       isSaved: true
     };
 
@@ -69,6 +69,19 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     });
   };
 
+  const handleMakeActive = () => {
+    if (savedTest) {
+      const updatedTest = { ...savedTest, isActive: !savedTest.isActive };
+      setSavedTest(updatedTest);
+      onSave(updatedTest);
+      
+      toast({
+        title: savedTest.isActive ? "Test Deactivated" : "Test Activated",
+        description: savedTest.isActive ? "Test is no longer visible to guests" : "Test is now visible to guests",
+      });
+    }
+  };
+
   if (showSummary && savedTest) {
     return (
       <Card className="bg-white border border-slate-200 shadow-lg rounded-xl">
@@ -80,24 +93,43 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
         </CardHeader>
         <CardContent className="space-y-4 p-6">
           <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-4">
-            <h3 className="text-lg font-semibold text-slate-900 mb-3 font-poppins">{savedTest.testName}</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-slate-900 font-poppins">{savedTest.testName}</h3>
+              {savedTest.isActive && (
+                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                  active
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-600 mb-4 font-inter">Test your general knowledge across various topics</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-violet-600 font-poppins">0</p>
-                <p className="text-sm text-slate-600 font-inter">Participants</p>
+                <p className="text-sm text-slate-600 font-inter">participants</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-violet-600 font-poppins">{savedTest.questions.length}</p>
-                <p className="text-sm text-slate-600 font-inter">Questions</p>
+                <p className="text-sm text-slate-600 font-inter">questions</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-violet-600 font-poppins">{savedTest.timeframe}</p>
-                <p className="text-sm text-slate-600 font-inter">Minutes</p>
+                <p className="text-sm text-slate-600 font-inter">minutes</p>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-center pt-4">
+          <div className="flex space-x-2 pt-4">
+            <Button 
+              onClick={handleMakeActive} 
+              className={`flex-1 rounded-lg font-poppins ${
+                savedTest.isActive 
+                  ? 'bg-red-500 hover:bg-red-600 text-white' 
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              <Toggle className="h-4 w-4 mr-2" />
+              {savedTest.isActive ? 'Deactivate Test' : 'Make Active'}
+            </Button>
             <Button onClick={onCancel} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-lg font-poppins px-8">
               Done
             </Button>
@@ -139,19 +171,6 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
               <SelectItem value="hard">🔴 Hard</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="isActive"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-            className="w-4 h-4 text-violet-600 bg-white border-slate-300 rounded focus:ring-violet-500 focus:ring-2"
-          />
-          <Label htmlFor="isActive" className="text-slate-700 font-inter">
-            Make test active (visible to guests)
-          </Label>
         </div>
 
         <div className="flex space-x-2 pt-4">
