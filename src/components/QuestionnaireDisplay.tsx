@@ -254,7 +254,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                 <div className="flex items-center space-x-1">
                   <Users className="h-4 w-4 text-violet-500" />
                   <span className="font-inter font-medium">{testTakersCount}</span>
-                  <span className="font-inter text-slate-500">test takers</span>
+                  <span className="font-inter text-slate-500">participants</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <FileCheck className="h-4 w-4 text-green-500" />
