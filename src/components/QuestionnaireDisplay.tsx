@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -272,9 +271,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <div className="text-xs text-slate-500 font-inter">
-              {new Date(questionnaire.createdAt).toLocaleString()}
-            </div>
             {isAdmin && (
               <div className="flex items-center space-x-2">
                 {/* Active/Inactive Toggle - only show for saved tests */}
