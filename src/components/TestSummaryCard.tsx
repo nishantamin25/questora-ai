@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, Users, FileText, Play, Edit, Check } from 'lucide-react';
+import { CheckCircle, Clock, Users, FileText, Edit } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Questionnaire } from '@/types/SaveTestDialog';
 
@@ -18,16 +18,6 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
     isActive: savedTest.isActive,
     questionCount: savedTest.questions.length
   });
-
-  const handleActivate = () => {
-    console.log('TestSummaryCard handleActivate called');
-    onActiveToggle(true);
-    
-    toast({
-      title: "Test Activated",
-      description: "Test is now visible to participants",
-    });
-  };
 
   const handleEdit = () => {
     // This would typically open an edit dialog or navigate to edit page
@@ -75,24 +65,6 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
         </div>
 
         <div className="flex space-x-2 mb-4">
-          {!savedTest.isActive ? (
-            <Button 
-              onClick={handleActivate} 
-              className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-poppins"
-            >
-              <Play className="h-4 w-4 mr-2" />
-              Activate
-            </Button>
-          ) : (
-            <Button 
-              disabled
-              className="flex-1 bg-green-100 text-green-800 border-green-200 rounded-lg font-poppins cursor-not-allowed"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Active
-            </Button>
-          )}
-          
           <Button 
             onClick={handleEdit} 
             variant="outline"
