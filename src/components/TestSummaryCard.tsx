@@ -15,13 +15,19 @@ interface TestSummaryCardProps {
 }
 
 const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardProps) => {
+  console.log('TestSummaryCard rendering with savedTest:', {
+    testName: savedTest.testName,
+    isActive: savedTest.isActive,
+    questionCount: savedTest.questions.length
+  });
+
   const handleActiveToggle = (checked: boolean) => {
-    console.log('handleActiveToggle called with:', checked);
+    console.log('TestSummaryCard handleActiveToggle called with:', checked);
     onActiveToggle(checked);
     
     toast({
       title: checked ? "Test Activated" : "Test Deactivated",
-      description: checked ? "Test is now visible to guests" : "Test is no longer visible to guests",
+      description: checked ? "Test is now visible to participants" : "Test is no longer visible to participants",
     });
   };
 
@@ -65,7 +71,7 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
         <div className="flex items-center justify-between mb-6 p-4 bg-slate-50 rounded-lg">
           <div>
             <Label htmlFor="active-toggle" className="font-medium font-poppins">Make Test Active</Label>
-            <p className="text-sm text-slate-600 font-inter">Allow guests to take this test</p>
+            <p className="text-sm text-slate-600 font-inter">Allow participants to take this test</p>
           </div>
           <Switch
             id="active-toggle"
