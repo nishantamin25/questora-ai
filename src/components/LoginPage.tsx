@@ -88,9 +88,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold text-gray-900">
-            Questionnaire Bot
+            Questora AI
           </CardTitle>
-          <p className="text-gray-600">AI-powered questionnaire generation</p>
+          <p className="text-gray-600">Intelligent questionnaire creation made simple</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
