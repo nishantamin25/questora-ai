@@ -20,11 +20,21 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
   const [testName, setTestName] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [numberOfQuestions, setNumberOfQuestions] = useState(15);
-  const [timeframe, setTimeframe] = useState(23); // Default for 15 questions
+  const [timeframe, setTimeframe] = useState(20); // Default for 15 questions
 
-  // Calculate timeframe based on number of questions
+  // Calculate timeframe based on number of questions using specified mapping
   useEffect(() => {
-    const calculatedTimeframe = Math.round((numberOfQuestions / 10) * 15);
+    const getTimeframeForQuestions = (questions: number): number => {
+      if (questions <= 10) return 15;
+      if (questions <= 15) return 20;
+      if (questions <= 20) return 25;
+      if (questions <= 25) return 30;
+      if (questions <= 30) return 35;
+      if (questions <= 40) return 45;
+      return 50; // 50 questions
+    };
+
+    const calculatedTimeframe = getTimeframeForQuestions(numberOfQuestions);
     setTimeframe(calculatedTimeframe);
   }, [numberOfQuestions]);
 
@@ -57,6 +67,16 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
     }
 
     onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe);
+  };
+
+  const getRecommendedTimeframe = (questions: number): number => {
+    if (questions <= 10) return 15;
+    if (questions <= 15) return 20;
+    if (questions <= 20) return 25;
+    if (questions <= 25) return 30;
+    if (questions <= 30) return 35;
+    if (questions <= 40) return 45;
+    return 50; // 50 questions
   };
 
   return (
@@ -143,7 +163,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
                 onChange={(e) => setTimeframe(Number(e.target.value))}
                 className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
               />
-              <p className="text-xs text-slate-500 mt-1">Recommended: {Math.round((numberOfQuestions / 10) * 15)} minutes for {numberOfQuestions} questions</p>
+              <p className="text-xs text-slate-500 mt-1">Recommended: {getRecommendedTimeframe(numberOfQuestions)} minutes for {numberOfQuestions} questions</p>
             </div>
           </div>
 
