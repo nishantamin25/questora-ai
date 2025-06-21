@@ -2,6 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle, Clock, Users, FileText, Edit } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Questionnaire } from '@/types/SaveTestDialog';
@@ -27,6 +28,18 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
     });
   };
 
+  const handleToggleActive = (checked: boolean) => {
+    console.log('Toggle active status:', checked);
+    onActiveToggle(checked);
+    
+    toast({
+      title: checked ? "Test Activated" : "Test Deactivated",
+      description: checked 
+        ? "Test is now visible to participants" 
+        : "Test is no longer visible to participants",
+    });
+  };
+
   return (
     <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
       <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200 rounded-t-xl">
@@ -48,7 +61,7 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
           
           <p className="text-slate-600 mb-6 font-inter">{savedTest.description}</p>
           
-          <div className="flex items-center justify-between text-sm text-slate-600">
+          <div className="flex items-center justify-between text-sm text-slate-600 mb-6">
             <div className="flex items-center space-x-1">
               <FileText className="h-4 w-4" />
               <span>{savedTest.questions.length} questions</span>
@@ -61,6 +74,19 @@ const TestSummaryCard = ({ savedTest, onActiveToggle, onDone }: TestSummaryCardP
               <Users className="h-4 w-4" />
               <span>0 participants</span>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-900">Test Status</span>
+              <span className="text-xs text-slate-600">
+                {savedTest.isActive ? 'Test is active and visible to participants' : 'Test is inactive'}
+              </span>
+            </div>
+            <Switch
+              checked={savedTest.isActive || false}
+              onCheckedChange={handleToggleActive}
+            />
           </div>
         </div>
 
