@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Save, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Questionnaire } from '@/types/SaveTestDialog';
@@ -18,9 +19,10 @@ interface SaveTestFormProps {
 const SaveTestForm = ({ questionnaire, onSave, onCancel }: SaveTestFormProps) => {
   const [testName, setTestName] = useState(questionnaire.testName || '');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>(questionnaire.difficulty || 'medium');
+  const [isActive, setIsActive] = useState(false);
 
   const handleSave = () => {
-    console.log('handleSave called with testName:', testName);
+    console.log('handleSave called with testName:', testName, 'isActive:', isActive);
     
     if (!testName.trim()) {
       toast({
@@ -35,7 +37,7 @@ const SaveTestForm = ({ questionnaire, onSave, onCancel }: SaveTestFormProps) =>
       ...questionnaire,
       testName: testName.trim(),
       difficulty,
-      isActive: false, // Initially inactive when saved
+      isActive: isActive,
       isSaved: true,
       timeframe: questionnaire.timeframe || 15 // Default timeframe if not set
     };
@@ -44,7 +46,7 @@ const SaveTestForm = ({ questionnaire, onSave, onCancel }: SaveTestFormProps) =>
     
     toast({
       title: "Success",
-      description: "Test saved successfully!",
+      description: `Test saved successfully${isActive ? ' and activated' : ''}!`,
     });
   };
 
@@ -80,6 +82,18 @@ const SaveTestForm = ({ questionnaire, onSave, onCancel }: SaveTestFormProps) =>
               <SelectItem value="hard">🔴 Hard</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+          <div>
+            <Label htmlFor="active-toggle" className="font-medium font-poppins">Make Test Active</Label>
+            <p className="text-sm text-slate-600 font-inter">Allow participants to take this test immediately</p>
+          </div>
+          <Switch
+            id="active-toggle"
+            checked={isActive}
+            onCheckedChange={setIsActive}
+          />
         </div>
 
         <div className="flex space-x-2 pt-4">
