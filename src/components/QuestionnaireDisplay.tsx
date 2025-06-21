@@ -1,11 +1,10 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy } from 'lucide-react';
+import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck } from 'lucide-react';
 import QuestionnaireEditor from '@/components/QuestionnaireEditor';
 import SaveTestDialog from '@/components/SaveTestDialog';
 import { ResponseService } from '@/services/ResponseService';
@@ -30,6 +29,7 @@ interface Questionnaire {
   testName?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   isSaved?: boolean;
+  timeframe?: number;
 }
 
 interface QuestionnaireDisplayProps {
@@ -50,17 +50,21 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   const currentUser = AuthService.getCurrentUser();
   const isGuest = currentUser?.role === 'guest';
 
+  // Get test taker count
+  const responses = ResponseService.getResponsesByQuestionnaireId(questionnaire.id);
+  const testTakersCount = new Set(responses.map(r => r.username || r.userId)).size;
+
   const getQuestionIcon = (type: string) => {
     switch (type) {
       case 'radio':
       case 'multiple-choice':
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
+        return <CheckCircle className="h-4 w-4 text-violet-500" />;
       case 'text':
         return <MessageSquare className="h-4 w-4 text-green-500" />;
       case 'rating':
         return <Star className="h-4 w-4 text-yellow-500" />;
       default:
-        return <FileText className="h-4 w-4 text-gray-500" />;
+        return <FileText className="h-4 w-4 text-slate-500" />;
     }
   };
 
@@ -73,18 +77,18 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       case 'hard':
         return 'bg-red-100 text-red-800 border-red-200';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-slate-100 text-slate-800 border-slate-200';
     }
   };
 
   const getStatusBadge = () => {
     if (!questionnaire.isSaved) {
-      return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Unsaved</Badge>;
+      return <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-poppins">Unsaved</Badge>;
     }
     if (!questionnaire.isActive) {
-      return <Badge className="bg-gray-100 text-gray-600 border-gray-200">Inactive</Badge>;
+      return <Badge className="bg-slate-100 text-slate-600 border-slate-200 font-poppins">Inactive</Badge>;
     }
-    return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
+    return <Badge className="bg-green-100 text-green-800 border-green-200 font-poppins">Active</Badge>;
   };
 
   const handleSave = (updatedQuestionnaire: Questionnaire) => {
@@ -205,25 +209,45 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
   }
 
   return (
-    <Card className="animate-fade-in bg-white border border-gray-200 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+    <Card className="animate-fade-in bg-white border border-slate-200 shadow-lg rounded-xl">
+      <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-3 flex-wrap">
-              <CardTitle className="text-xl text-gray-900">
+              <CardTitle className="text-xl text-slate-900 font-poppins">
                 {questionnaire.testName || questionnaire.title}
               </CardTitle>
               {getStatusBadge()}
               {isAdmin && questionnaire.difficulty && (
-                <Badge className={getDifficultyColor(questionnaire.difficulty)}>
+                <Badge className={getDifficultyColor(questionnaire.difficulty) + " font-poppins"}>
                   {questionnaire.difficulty.charAt(0).toUpperCase() + questionnaire.difficulty.slice(1)}
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-gray-600 mt-2">{questionnaire.description}</p>
+            <p className="text-sm text-slate-600 mt-2 font-inter">{questionnaire.description}</p>
+            
+            {/* Test Statistics */}
+            {questionnaire.isSaved && (
+              <div className="flex items-center space-x-4 mt-3 text-sm text-slate-600">
+                <div className="flex items-center space-x-1">
+                  <Users className="h-4 w-4 text-violet-500" />
+                  <span className="font-inter">{testTakersCount} test takers</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <FileCheck className="h-4 w-4 text-green-500" />
+                  <span className="font-inter">{questionnaire.questions.length} questions</span>
+                </div>
+                {questionnaire.timeframe && (
+                  <div className="flex items-center space-x-1">
+                    <Clock className="h-4 w-4 text-blue-500" />
+                    <span className="font-inter">{questionnaire.timeframe} minutes</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2">
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-500 font-inter">
               {new Date(questionnaire.createdAt).toLocaleString()}
             </div>
             {isAdmin && (
@@ -232,7 +256,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                   <Button
                     size="sm"
                     onClick={() => setShowSaveDialog(true)}
-                    className="bg-blue-600 text-white hover:bg-blue-700"
+                    className="bg-violet-600 text-white hover:bg-violet-700 rounded-lg font-poppins"
                   >
                     <Save className="h-4 w-4" />
                   </Button>
@@ -241,7 +265,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                   size="sm"
                   variant="outline"
                   onClick={() => setIsEditing(true)}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins"
                 >
                   <Edit3 className="h-4 w-4" />
                 </Button>
@@ -249,6 +273,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                   size="sm"
                   variant="destructive"
                   onClick={handleDelete}
+                  className="rounded-lg"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -259,22 +284,22 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       </CardHeader>
       <CardContent className="p-6">
         {showResults && testResults && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
             <div className="flex items-center space-x-3">
               <Trophy className="h-8 w-8 text-yellow-600" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Test Completed!</h3>
-                <p className="text-gray-700">
+                <h3 className="text-lg font-semibold text-slate-900 font-poppins">Test Completed!</h3>
+                <p className="text-slate-700 font-inter">
                   Your Score: <span className="font-bold text-green-700">{testResults.score}/{testResults.totalQuestions}</span>
                   {testResults.totalQuestions > 0 && (
-                    <span className="ml-2 text-sm text-gray-600">
+                    <span className="ml-2 text-sm text-slate-600">
                       ({Math.round((testResults.score / testResults.totalQuestions) * 100)}%)
                     </span>
                   )}
                 </p>
               </div>
             </div>
-            <Button onClick={resetTest} className="mt-3 bg-blue-600 text-white hover:bg-blue-700">
+            <Button onClick={resetTest} className="mt-3 bg-violet-600 text-white hover:bg-violet-700 rounded-lg font-poppins">
               Take Test Again
             </Button>
           </div>
@@ -282,14 +307,14 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
         <div className="space-y-6">
           {questionnaire.questions.map((question, index) => (
-            <div key={question.id} className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-gray-50 to-blue-50">
+            <div key={question.id} className="border border-slate-200 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-violet-50">
               <div className="flex items-start space-x-4">
-                <div className="bg-blue-100 p-2 rounded-full mt-1 border border-blue-200">
+                <div className="bg-violet-100 p-2 rounded-full mt-1 border border-violet-200">
                   {getQuestionIcon(question.type)}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-start justify-between mb-3">
-                    <h4 className="font-medium text-gray-900 text-lg">
+                    <h4 className="font-medium text-slate-900 text-lg font-poppins">
                       {index + 1}. {question.text}
                     </h4>
                   </div>
@@ -308,11 +333,11 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                 <RadioGroupItem 
                                   value={optionIndex.toString()} 
                                   id={`${question.id}-${optionIndex}`}
-                                  className="border-blue-400 text-blue-600"
+                                  className="border-violet-400 text-violet-600"
                                 />
                                 <Label 
                                   htmlFor={`${question.id}-${optionIndex}`}
-                                  className="text-gray-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-blue-200"
+                                  className="text-slate-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-violet-200 font-inter"
                                 >
                                   {String.fromCharCode(65 + optionIndex)}. {option}
                                 </Label>
@@ -322,10 +347,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                         </RadioGroup>
                       ) : (
                         <div>
-                          {!isGuest && <p className="text-xs text-gray-500 mb-3">Options:</p>}
+                          {!isGuest && <p className="text-xs text-slate-500 mb-3 font-inter">Options:</p>}
                           <div className="grid grid-cols-1 gap-2">
                             {question.options.map((option, optionIndex) => {
-                              let optionStyle = "px-4 py-3 rounded-lg text-sm border";
+                              let optionStyle = "px-4 py-3 rounded-lg text-sm border font-inter";
                               
                               if (showResults && testResults) {
                                 const userAnswer = testResults.answers.find(a => a.questionId === question.id);
@@ -339,10 +364,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                 } else if (isCorrect) {
                                   optionStyle += " bg-green-50 border-green-200 text-green-700";
                                 } else {
-                                  optionStyle += " bg-gray-100 border-gray-200 text-gray-700";
+                                  optionStyle += " bg-slate-100 border-slate-200 text-slate-700";
                                 }
                               } else {
-                                optionStyle += " bg-white border-gray-200 text-gray-700";
+                                optionStyle += " bg-white border-slate-200 text-slate-700";
                               }
 
                               return (
@@ -352,7 +377,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                     <span className="ml-2 text-green-600 font-medium">(Correct)</span>
                                   )}
                                   {isAdmin && question.correctAnswer === optionIndex && !showResults && (
-                                    <span className="ml-2 text-blue-600 font-medium">(Correct Answer)</span>
+                                    <span className="ml-2 text-violet-600 font-medium">(Correct Answer)</span>
                                   )}
                                 </div>
                               );
@@ -368,12 +393,17 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           ))}
         </div>
         
-        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-gray-700">
+        <div className="mt-6 p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
+          <p className="text-sm text-slate-700 font-inter">
             <strong>Total Questions:</strong> {questionnaire.questions.length}
             {isGuest && !showResults && (
               <span className="ml-4">
                 <strong>Answered:</strong> {Object.keys(answers).length}/{questionnaire.questions.length}
+              </span>
+            )}
+            {questionnaire.timeframe && (
+              <span className="ml-4">
+                <strong>Time Limit:</strong> {questionnaire.timeframe} minutes
               </span>
             )}
           </p>
@@ -385,7 +415,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             <Button
               onClick={handleSubmitResponse}
               disabled={!isSubmitReady || isSubmitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 py-3"
+              className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 disabled:opacity-50 py-3 rounded-xl font-poppins"
             >
               {isSubmitting ? (
                 <div className="flex items-center space-x-2">
@@ -400,7 +430,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
               )}
             </Button>
             {!isSubmitReady && (
-              <p className="text-sm text-amber-600 mt-2 text-center">
+              <p className="text-sm text-amber-600 mt-2 text-center font-inter">
                 Please answer all questions to submit your response
               </p>
             )}

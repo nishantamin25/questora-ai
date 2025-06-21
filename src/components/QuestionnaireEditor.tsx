@@ -27,6 +27,7 @@ interface Questionnaire {
   testName?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   isSaved?: boolean;
+  timeframe?: number;
 }
 
 interface QuestionnaireEditorProps {
@@ -119,19 +120,19 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   return (
-    <Card className="bg-white border border-gray-200 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+    <Card className="bg-white border border-slate-200 shadow-lg rounded-xl">
+      <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-gray-900 flex items-center space-x-2">
-            <Edit3 className="h-5 w-5 text-blue-600" />
+          <CardTitle className="text-slate-900 flex items-center space-x-2 font-poppins">
+            <Edit3 className="h-5 w-5 text-violet-600" />
             <span>Edit Questionnaire</span>
           </CardTitle>
           <div className="flex space-x-2">
-            <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white">
+            <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white rounded-lg font-poppins">
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
-            <Button onClick={onCancel} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+            <Button onClick={onCancel} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins">
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
@@ -142,21 +143,22 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
         {/* Title and Description */}
         <div className="space-y-4">
           <div>
-            <Label htmlFor="title" className="text-gray-700 font-medium">Title</Label>
+            <Label htmlFor="title" className="text-slate-700 font-medium font-poppins">Title</Label>
             <Input
               id="title"
               value={editedQuestionnaire.title}
               onChange={(e) => setEditedQuestionnaire(prev => ({ ...prev, title: e.target.value }))}
-              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
             />
           </div>
           <div>
-            <Label htmlFor="description" className="text-gray-700 font-medium">Description</Label>
+            <Label htmlFor="description" className="text-slate-700 font-medium font-poppins">Description</Label>
             <Textarea
               id="description"
               value={editedQuestionnaire.description}
               onChange={(e) => setEditedQuestionnaire(prev => ({ ...prev, description: e.target.value }))}
-              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+              rows={3}
             />
           </div>
         </div>
@@ -164,46 +166,47 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
         {/* Questions */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Questions</h3>
-            <Button onClick={handleAddQuestion} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+            <h3 className="text-lg font-semibold text-slate-900 font-poppins">Questions</h3>
+            <Button onClick={handleAddQuestion} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-poppins">
               <Plus className="h-4 w-4 mr-2" />
               Add Question
             </Button>
           </div>
 
           {editedQuestionnaire.questions.map((question, index) => (
-            <div key={question.id} className="border border-gray-300 rounded-lg p-4 bg-gray-50">
-              <div className="flex items-start justify-between mb-4">
-                <h4 className="font-medium text-gray-800">Question {index + 1}</h4>
+            <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-slate-100">
+              <div className="flex items-start justify-between mb-3">
+                <h4 className="font-medium text-slate-800 font-poppins">Question {index + 1}</h4>
                 <Button
                   onClick={() => handleDeleteQuestion(question.id)}
                   size="sm"
                   variant="destructive"
-                  className="ml-2"
+                  className="ml-2 rounded-lg"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <Label className="text-gray-700 font-medium">Question Text</Label>
+                  <Label className="text-slate-700 font-medium font-poppins text-sm">Question Text</Label>
                   <Textarea
                     value={question.text}
                     onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
-                    className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+                    rows={2}
                   />
                 </div>
 
                 <div>
-                  <Label className="text-gray-700 font-medium">Options & Correct Answer</Label>
-                  <div className="mt-2 space-y-3">
+                  <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Correct Answer</Label>
+                  <div className="mt-2 space-y-2">
                     <RadioGroup
                       value={question.correctAnswer?.toString()}
                       onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
                     >
                       {(question.options || []).map((option, optionIndex) => (
-                        <div key={optionIndex} className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-lg">
+                        <div key={optionIndex} className="flex items-center space-x-2 p-2 bg-white border border-slate-200 rounded-lg">
                           <RadioGroupItem 
                             value={optionIndex.toString()} 
                             id={`${question.id}-correct-${optionIndex}`}
@@ -211,20 +214,20 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                           />
                           <Label 
                             htmlFor={`${question.id}-correct-${optionIndex}`}
-                            className="text-sm text-gray-600 font-medium"
+                            className="text-xs text-slate-600 font-medium min-w-[20px]"
                           >
                             {String.fromCharCode(65 + optionIndex)}.
                           </Label>
                           <Input
                             value={option}
                             onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                            className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-sm rounded-lg font-inter"
                             placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                           />
                         </div>
                       ))}
                     </RadioGroup>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500 font-inter">
                       Select the radio button next to the correct answer
                     </p>
                   </div>

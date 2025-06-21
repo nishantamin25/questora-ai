@@ -18,12 +18,14 @@ interface Questionnaire {
   testName?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   isSaved?: boolean;
+  timeframe?: number;
 }
 
 interface GenerateQuestionnaireOptions {
   testName: string;
   difficulty: 'easy' | 'medium' | 'hard';
   numberOfQuestions: number;
+  timeframe: number;
 }
 
 class QuestionnaireServiceClass {
@@ -106,7 +108,8 @@ class QuestionnaireServiceClass {
       isActive: false,
       testName: options.testName,
       difficulty: options.difficulty,
-      isSaved: false
+      isSaved: false,
+      timeframe: options.timeframe
     };
 
     return questionnaire;
