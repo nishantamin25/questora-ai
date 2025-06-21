@@ -43,7 +43,11 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
   const [showSummary, setShowSummary] = useState(false);
   const [savedTest, setSavedTest] = useState<Questionnaire | null>(null);
 
+  console.log('SaveTestDialog render:', { showSummary, savedTest, testName, isActive });
+
   const handleSave = () => {
+    console.log('handleSave called with testName:', testName);
+    
     if (!testName.trim()) {
       toast({
         title: "Error",
@@ -58,9 +62,11 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
       testName: testName.trim(),
       difficulty,
       isActive: false, // Initially inactive when saved
-      isSaved: true
+      isSaved: true,
+      timeframe: questionnaire.timeframe || 15 // Default timeframe if not set
     };
 
+    console.log('Setting savedTest:', savedQuestionnaire);
     setSavedTest(savedQuestionnaire);
     setShowSummary(true);
     onSave(savedQuestionnaire);
@@ -72,6 +78,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
   };
 
   const handleActiveToggle = (checked: boolean) => {
+    console.log('handleActiveToggle called with:', checked);
     if (savedTest) {
       const updatedTest = { ...savedTest, isActive: checked };
       setSavedTest(updatedTest);
@@ -85,7 +92,10 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     }
   };
 
+  console.log('About to render, showSummary:', showSummary, 'savedTest exists:', !!savedTest);
+
   if (showSummary && savedTest) {
+    console.log('Rendering summary view for test:', savedTest.testName);
     return (
       <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
         <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200 rounded-t-xl">
@@ -105,7 +115,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
               )}
             </div>
             
-            <p className="text-slate-600 mb-6 font-inter">Test your general knowledge across various topics</p>
+            <p className="text-slate-600 mb-6 font-inter">{savedTest.description}</p>
             
             <div className="flex items-center justify-between text-sm text-slate-600">
               <div className="flex items-center space-x-1">
@@ -114,7 +124,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
               </div>
               <div className="flex items-center space-x-1">
                 <Clock className="h-4 w-4" />
-                <span>{savedTest.timeframe} minutes</span>
+                <span>{savedTest.timeframe || 15} minutes</span>
               </div>
               <div className="flex items-center space-x-1">
                 <Users className="h-4 w-4" />
@@ -146,6 +156,7 @@ const SaveTestDialog = ({ questionnaire, onSave, onCancel }: SaveTestDialogProps
     );
   }
 
+  console.log('Rendering initial save form');
   return (
     <Card className="bg-white border border-slate-200 shadow-lg rounded-xl max-w-md mx-auto">
       <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
