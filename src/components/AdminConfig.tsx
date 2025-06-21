@@ -50,34 +50,16 @@ const AdminConfig = () => {
   };
 
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
+    <Card className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-blue-100 to-indigo-100 border-b border-blue-200">
+        <CardTitle className="flex items-center space-x-2 text-blue-800">
           <Settings className="h-5 w-5" />
           <span>Admin Configuration</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         <div>
-          <Label htmlFor="questionType">Default Question Type</Label>
-          <Select 
-            value={config.defaultQuestionType} 
-            onValueChange={(value) => setConfig(prev => ({ ...prev, defaultQuestionType: value }))}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="multiple-choice">Multiple Choice</SelectItem>
-              <SelectItem value="text">Text Input</SelectItem>
-              <SelectItem value="rating">Rating Scale</SelectItem>
-              <SelectItem value="yes-no">Yes/No</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label htmlFor="numQuestions">Number of Questions</Label>
+          <Label htmlFor="numQuestions" className="text-gray-700 font-medium">Number of Questions</Label>
           <Input
             id="numQuestions"
             type="number"
@@ -85,18 +67,18 @@ const AdminConfig = () => {
             max="20"
             value={config.numberOfQuestions}
             onChange={(e) => setConfig(prev => ({ ...prev, numberOfQuestions: parseInt(e.target.value) || 5 }))}
-            className="mt-1"
+            className="mt-1 border-blue-300 focus:border-blue-500 focus:ring-blue-500"
           />
         </div>
 
         <div>
-          <Label htmlFor="options">Multiple Choice Options</Label>
+          <Label htmlFor="options" className="text-gray-700 font-medium">Multiple Choice Options</Label>
           <Textarea
             id="options"
             value={config.multipleChoiceOptions}
             onChange={(e) => setConfig(prev => ({ ...prev, multipleChoiceOptions: e.target.value }))}
             placeholder="Enter options separated by commas"
-            className="mt-1"
+            className="mt-1 border-blue-300 focus:border-blue-500 focus:ring-blue-500"
             rows={3}
           />
           <p className="text-xs text-gray-500 mt-1">
@@ -105,10 +87,10 @@ const AdminConfig = () => {
         </div>
 
         <div className="flex space-x-2 pt-2">
-          <Button onClick={handleSave} className="flex-1">
+          <Button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
             Save Configuration
           </Button>
-          <Button variant="outline" onClick={handleReset}>
+          <Button variant="outline" onClick={handleReset} className="border-blue-300 text-blue-700 hover:bg-blue-50">
             Reset
           </Button>
         </div>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Edit3, Save, X, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -13,6 +14,7 @@ interface Question {
   text: string;
   type: string;
   options?: string[];
+  correctAnswer?: number;
 }
 
 interface Questionnaire {
@@ -22,6 +24,9 @@ interface Questionnaire {
   questions: Question[];
   createdAt: string;
   isActive?: boolean;
+  testName?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  isSaved?: boolean;
 }
 
 interface QuestionnaireEditorProps {
@@ -35,7 +40,8 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     ...questionnaire,
     questions: questionnaire.questions.map(q => ({
       ...q,
-      options: q.options?.length === 4 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D']
+      options: q.options?.length === 4 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
+      correctAnswer: q.correctAnswer ?? 0
     }))
   });
 
@@ -60,12 +66,22 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     }));
   };
 
+  const handleCorrectAnswerChange = (questionId: string, correctIndex: number) => {
+    setEditedQuestionnaire(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === questionId ? { ...q, correctAnswer: correctIndex } : q
+      )
+    }));
+  };
+
   const handleAddQuestion = () => {
     const newQuestion: Question = {
       id: Date.now().toString(),
       text: 'New question',
       type: 'multiple-choice',
-      options: ['Option A', 'Option B', 'Option C', 'Option D']
+      options: ['Option A', 'Option B', 'Option C', 'Option D'],
+      correctAnswer: 0
     };
 
     setEditedQuestionnaire(prev => ({
@@ -82,12 +98,14 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   const handleSave = () => {
-    // Validate that all questions have 4 options
-    const invalidQuestions = editedQuestionnaire.questions.filter(q => !q.options || q.options.length !== 4);
+    // Validate that all questions have 4 options and a correct answer
+    const invalidQuestions = editedQuestionnaire.questions.filter(q => 
+      !q.options || q.options.length !== 4 || q.correctAnswer === undefined
+    );
     if (invalidQuestions.length > 0) {
       toast({
         title: "Error",
-        description: "All questions must have exactly 4 options",
+        description: "All questions must have exactly 4 options and a correct answer selected",
         variant: "destructive"
       });
       return;
@@ -101,11 +119,11 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   return (
-    <Card className="bg-gray-900 border-gray-800">
-      <CardHeader>
+    <Card className="bg-white border border-gray-200 shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-white flex items-center space-x-2">
-            <Edit3 className="h-5 w-5" />
+          <CardTitle className="text-gray-900 flex items-center space-x-2">
+            <Edit3 className="h-5 w-5 text-blue-600" />
             <span>Edit Questionnaire</span>
           </CardTitle>
           <div className="flex space-x-2">
@@ -113,32 +131,32 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
-            <Button onClick={onCancel} variant="outline" className="border-gray-700 bg-gray-800 text-white hover:bg-gray-700">
+            <Button onClick={onCancel} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 p-6">
         {/* Title and Description */}
         <div className="space-y-4">
           <div>
-            <Label htmlFor="title" className="text-gray-300">Title</Label>
+            <Label htmlFor="title" className="text-gray-700 font-medium">Title</Label>
             <Input
               id="title"
               value={editedQuestionnaire.title}
               onChange={(e) => setEditedQuestionnaire(prev => ({ ...prev, title: e.target.value }))}
-              className="bg-gray-800 border-gray-700 text-white"
+              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             />
           </div>
           <div>
-            <Label htmlFor="description" className="text-gray-300">Description</Label>
+            <Label htmlFor="description" className="text-gray-700 font-medium">Description</Label>
             <Textarea
               id="description"
               value={editedQuestionnaire.description}
               onChange={(e) => setEditedQuestionnaire(prev => ({ ...prev, description: e.target.value }))}
-              className="bg-gray-800 border-gray-700 text-white"
+              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -146,7 +164,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
         {/* Questions */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">Questions</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Questions</h3>
             <Button onClick={handleAddQuestion} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="h-4 w-4 mr-2" />
               Add Question
@@ -154,9 +172,9 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
           </div>
 
           {editedQuestionnaire.questions.map((question, index) => (
-            <div key={question.id} className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+            <div key={question.id} className="border border-gray-300 rounded-lg p-4 bg-gray-50">
               <div className="flex items-start justify-between mb-4">
-                <h4 className="font-medium text-gray-300">Question {index + 1}</h4>
+                <h4 className="font-medium text-gray-800">Question {index + 1}</h4>
                 <Button
                   onClick={() => handleDeleteQuestion(question.id)}
                   size="sm"
@@ -167,30 +185,48 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                 </Button>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-gray-300">Question Text</Label>
+                  <Label className="text-gray-700 font-medium">Question Text</Label>
                   <Textarea
                     value={question.text}
                     onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
-                    className="bg-gray-700 border-gray-600 text-white"
+                    className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-gray-300">Options (exactly 4 required)</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                    {(question.options || []).map((option, optionIndex) => (
-                      <div key={optionIndex} className="flex items-center space-x-2">
-                        <span className="text-gray-400 font-mono">{String.fromCharCode(65 + optionIndex)}.</span>
-                        <Input
-                          value={option}
-                          onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                          className="bg-gray-700 border-gray-600 text-white"
-                          placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                        />
-                      </div>
-                    ))}
+                  <Label className="text-gray-700 font-medium">Options & Correct Answer</Label>
+                  <div className="mt-2 space-y-3">
+                    <RadioGroup
+                      value={question.correctAnswer?.toString()}
+                      onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
+                    >
+                      {(question.options || []).map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-lg">
+                          <RadioGroupItem 
+                            value={optionIndex.toString()} 
+                            id={`${question.id}-correct-${optionIndex}`}
+                            className="border-green-500 text-green-600"
+                          />
+                          <Label 
+                            htmlFor={`${question.id}-correct-${optionIndex}`}
+                            className="text-sm text-gray-600 font-medium"
+                          >
+                            {String.fromCharCode(65 + optionIndex)}.
+                          </Label>
+                          <Input
+                            value={option}
+                            onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
+                            className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                          />
+                        </div>
+                      ))}
+                    </RadioGroup>
+                    <p className="text-xs text-gray-500">
+                      Select the radio button next to the correct answer
+                    </p>
                   </div>
                 </div>
               </div>

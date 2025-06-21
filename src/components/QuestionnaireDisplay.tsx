@@ -54,13 +54,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     switch (type) {
       case 'radio':
       case 'multiple-choice':
-        return <CheckCircle className="h-4 w-4" />;
+        return <CheckCircle className="h-4 w-4 text-blue-500" />;
       case 'text':
-        return <MessageSquare className="h-4 w-4" />;
+        return <MessageSquare className="h-4 w-4 text-green-500" />;
       case 'rating':
-        return <Star className="h-4 w-4" />;
+        return <Star className="h-4 w-4 text-yellow-500" />;
       default:
-        return <FileText className="h-4 w-4" />;
+        return <FileText className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -282,9 +282,9 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
 
         <div className="space-y-6">
           {questionnaire.questions.map((question, index) => (
-            <div key={question.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div key={question.id} className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex items-start space-x-4">
-                <div className="bg-blue-100 p-2 rounded-full mt-1">
+                <div className="bg-blue-100 p-2 rounded-full mt-1 border border-blue-200">
                   {getQuestionIcon(question.type)}
                 </div>
                 <div className="flex-1">
@@ -312,7 +312,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                 />
                                 <Label 
                                   htmlFor={`${question.id}-${optionIndex}`}
-                                  className="text-gray-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-gray-200"
+                                  className="text-gray-800 cursor-pointer flex-1 p-3 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-blue-200"
                                 >
                                   {String.fromCharCode(65 + optionIndex)}. {option}
                                 </Label>
@@ -351,6 +351,9 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
                                   {showResults && question.correctAnswer === optionIndex && (
                                     <span className="ml-2 text-green-600 font-medium">(Correct)</span>
                                   )}
+                                  {isAdmin && question.correctAnswer === optionIndex && !showResults && (
+                                    <span className="ml-2 text-blue-600 font-medium">(Correct Answer)</span>
+                                  )}
                                 </div>
                               );
                             })}
@@ -365,7 +368,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           ))}
         </div>
         
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-gray-700">
             <strong>Total Questions:</strong> {questionnaire.questions.length}
             {isGuest && !showResults && (

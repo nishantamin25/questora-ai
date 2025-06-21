@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bot, X } from 'lucide-react';
+import { Bot, X, Sparkles } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface GenerateTestDialogProps {
@@ -45,7 +45,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
 
   return (
     <Dialog open={open} onOpenChange={onCancel}>
-      <DialogContent className="sm:max-w-md bg-white border border-gray-200 shadow-xl">
+      <DialogContent className="sm:max-w-md bg-white border border-gray-200 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-gray-900 flex items-center space-x-2">
             <Bot className="h-5 w-5 text-blue-600" />
@@ -53,58 +53,70 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-gray-700">
-              <strong className="text-blue-800">Prompt:</strong> {prompt}
-            </p>
-            {uploadedFile && (
-              <p className="text-sm text-gray-700 mt-2">
-                <strong className="text-blue-800">File:</strong> {uploadedFile.name}
-              </p>
-            )}
+        <div className="space-y-5 py-4">
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <Sparkles className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-gray-700 font-medium mb-2">Your Prompt:</p>
+                <p className="text-sm text-blue-800 bg-white p-2 rounded border border-blue-200">
+                  {prompt}
+                </p>
+                {uploadedFile && (
+                  <p className="text-sm text-gray-700 mt-2">
+                    <strong className="text-blue-800">File:</strong> 
+                    <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                      {uploadedFile.name}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="testName" className="text-gray-700 font-medium">Test Name</Label>
-            <Input
-              id="testName"
-              value={testName}
-              onChange={(e) => setTestName(e.target.value)}
-              placeholder="Enter a name for this test"
-              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-            />
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="testName" className="text-gray-700 font-medium">Test Name</Label>
+              <Input
+                id="testName"
+                value={testName}
+                onChange={(e) => setTestName(e.target.value)}
+                placeholder="Enter a name for this test"
+                className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="difficulty" className="text-gray-700 font-medium">Difficulty Level</Label>
+              <Select value={difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}>
+                <SelectTrigger className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                  <SelectValue placeholder="Select difficulty" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="easy">🟢 Easy</SelectItem>
+                  <SelectItem value="medium">🟡 Medium</SelectItem>
+                  <SelectItem value="hard">🔴 Hard</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="numberOfQuestions" className="text-gray-700 font-medium">Number of Questions</Label>
+              <Input
+                id="numberOfQuestions"
+                type="number"
+                min={10}
+                max={50}
+                value={numberOfQuestions}
+                onChange={(e) => setNumberOfQuestions(Number(e.target.value))}
+                className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Between 10 and 50 questions</p>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="difficulty" className="text-gray-700 font-medium">Difficulty Level</Label>
-            <Select value={difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}>
-              <SelectTrigger className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                <SelectValue placeholder="Select difficulty" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="easy">Easy</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="numberOfQuestions" className="text-gray-700 font-medium">Number of Questions (10-50)</Label>
-            <Input
-              id="numberOfQuestions"
-              type="number"
-              min={10}
-              max={50}
-              value={numberOfQuestions}
-              onChange={(e) => setNumberOfQuestions(Number(e.target.value))}
-              className="mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="flex space-x-3 pt-4">
-            <Button onClick={handleGenerate} className="bg-blue-600 text-white hover:bg-blue-700 flex-1">
+          <div className="flex space-x-3 pt-4 border-t border-gray-200">
+            <Button onClick={handleGenerate} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 flex-1">
               <Bot className="h-4 w-4 mr-2" />
               Generate Test
             </Button>
