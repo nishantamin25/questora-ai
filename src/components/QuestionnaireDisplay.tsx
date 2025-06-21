@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save, Trophy, Users, Clock, FileCheck, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import QuestionnaireEditor from '@/components/QuestionnaireEditor';
 import SaveTestDialog from '@/components/SaveTestDialog';
 import { ResponseService } from '@/services/ResponseService';
@@ -273,17 +274,30 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
           <div className="flex items-center space-x-2">
             {isAdmin && (
               <div className="flex items-center space-x-2">
-                {/* Active/Inactive Toggle - only show for saved tests */}
+                {/* Enhanced Active/Inactive Toggle - only show for saved tests */}
                 {questionnaire.isSaved && (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-300 rounded-lg">
-                    <span className="text-xs text-slate-700 font-inter">
-                      {questionnaire.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                    <Switch
-                      checked={questionnaire.isActive || false}
-                      onCheckedChange={handleToggleActive}
-                      className="scale-75"
-                    />
+                  <div className="flex items-center space-x-3 px-4 py-2 bg-white border border-slate-300 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-2">
+                      {questionnaire.isActive ? (
+                        <Eye className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <EyeOff className="h-4 w-4 text-slate-500" />
+                      )}
+                      <span className={`text-sm font-medium font-inter transition-colors duration-200 ${
+                        questionnaire.isActive 
+                          ? 'text-emerald-700' 
+                          : 'text-slate-600'
+                      }`}>
+                        {questionnaire.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <Switch
+                        checked={questionnaire.isActive || false}
+                        onCheckedChange={handleToggleActive}
+                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-300 transition-colors duration-200"
+                      />
+                    </div>
                   </div>
                 )}
                 
