@@ -1,10 +1,10 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send } from 'lucide-react';
+import { CheckCircle, FileText, Star, MessageSquare, Edit3, Trash2, Send, Save } from 'lucide-react';
 import QuestionnaireEditor from '@/components/QuestionnaireEditor';
+import SaveTestDialog from '@/components/SaveTestDialog';
 import { ResponseService } from '@/services/ResponseService';
 import { AuthService } from '@/services/AuthService';
 import { toast } from '@/hooks/use-toast';
@@ -23,6 +23,9 @@ interface Questionnaire {
   questions: Question[];
   createdAt: string;
   isActive?: boolean;
+  testName?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  isSaved?: boolean;
 }
 
 interface QuestionnaireDisplayProps {
@@ -34,6 +37,7 @@ interface QuestionnaireDisplayProps {
 
 const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDelete }: QuestionnaireDisplayProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [answers, setAnswers] = useState<{ [questionId: string]: number }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -68,11 +72,31 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     }
   };
 
+  const getDifficultyColor = (difficulty?: string) => {
+    switch (difficulty) {
+      case 'easy':
+        return 'bg-green-600 text-green-100';
+      case 'medium':
+        return 'bg-yellow-600 text-yellow-100';
+      case 'hard':
+        return 'bg-red-600 text-red-100';
+      default:
+        return 'bg-gray-600 text-gray-100';
+    }
+  };
+
   const handleSave = (updatedQuestionnaire: Questionnaire) => {
     if (onUpdate) {
       onUpdate(updatedQuestionnaire);
     }
     setIsEditing(false);
+  };
+
+  const handleTestSave = (savedQuestionnaire: Questionnaire) => {
+    if (onUpdate) {
+      onUpdate(savedQuestionnaire);
+    }
+    setShowSaveDialog(false);
   };
 
   const handleDelete = () => {
@@ -113,7 +137,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
       const response = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
         questionnaireId: questionnaire.id,
-        questionnaireTitle: questionnaire.title,
+        questionnaireTitle: questionnaire.testName || questionnaire.title,
         userId: currentUser.token,
         username: currentUser.username,
         answers: questionnaire.questions.map(question => ({
@@ -157,19 +181,44 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
     );
   }
 
+  if (showSaveDialog) {
+    return (
+      <SaveTestDialog
+        questionnaire={questionnaire}
+        onSave={handleTestSave}
+        onCancel={() => setShowSaveDialog(false)}
+      />
+    );
+  }
+
   return (
     <Card className="animate-fade-in bg-gray-900 border-gray-800">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center space-x-2">
-              <CardTitle className="text-lg text-white">{questionnaire.title}</CardTitle>
-              {questionnaire.isActive !== undefined && (
+            <div className="flex items-center space-x-2 flex-wrap">
+              <CardTitle className="text-lg text-white">
+                {questionnaire.testName || questionnaire.title}
+              </CardTitle>
+              {questionnaire.isSaved && (
                 <Badge 
                   variant={questionnaire.isActive ? "default" : "secondary"}
                   className={questionnaire.isActive ? "bg-green-600 text-white" : "bg-gray-600 text-gray-300"}
                 >
                   {questionnaire.isActive ? "Active" : "Inactive"}
+                </Badge>
+              )}
+              {questionnaire.difficulty && (
+                <Badge 
+                  variant="secondary" 
+                  className={getDifficultyColor(questionnaire.difficulty)}
+                >
+                  {questionnaire.difficulty.charAt(0).toUpperCase() + questionnaire.difficulty.slice(1)}
+                </Badge>
+              )}
+              {!questionnaire.isSaved && (
+                <Badge variant="secondary" className="bg-yellow-600 text-yellow-100">
+                  Unsaved
                 </Badge>
               )}
             </div>
@@ -181,6 +230,16 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin = false, onUpdate, onDele
             </div>
             {isAdmin && (
               <div className="flex space-x-1">
+                {!questionnaire.isSaved && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => setShowSaveDialog(true)}
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"

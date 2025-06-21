@@ -31,8 +31,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   }, []);
 
   const loadQuestionnaires = () => {
-    const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
-    setQuestionnaires(allQuestionnaires);
+    if (user.role === 'admin') {
+      const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
+      setQuestionnaires(allQuestionnaires);
+    } else {
+      // For guests, only show active and saved questionnaires
+      const activeQuestionnaires = QuestionnaireService.getActiveQuestionnaires();
+      setQuestionnaires(activeQuestionnaires);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,7 +161,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       toast({
         title: "Success",
-        description: "Questionnaire generated successfully!",
+        description: "Questionnaire generated successfully! Click the save button to save your test.",
       });
     } catch (error) {
       toast({
@@ -330,10 +336,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardContent className="p-8 text-center">
                   <Bot className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-white mb-2">
-                    Guest Access
+                    Available Tests
                   </h3>
                   <p className="text-gray-400">
-                    Welcome! Click on the answer options below to select your responses, then submit when you've answered all questions.
+                    Click on the answer options below to select your responses, then submit when you've answered all questions.
                   </p>
                 </CardContent>
               </Card>
@@ -356,12 +362,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                   <CardContent className="p-8 text-center">
                     <Bot className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-white mb-2">
-                      No questionnaires yet
+                      {user.role === 'admin' ? 'No questionnaires yet' : 'No active tests available'}
                     </h3>
                     <p className="text-gray-400">
                       {user.role === 'admin' 
                         ? "Enter a prompt above to generate your first questionnaire"
-                        : "No questionnaires have been created yet"
+                        : "No active tests have been published yet"
                       }
                     </p>
                   </CardContent>
@@ -383,13 +389,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               <CardContent className="space-y-3 text-sm">
                 {user.role === 'admin' ? (
                   <>
+                    <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                      <p className="font-semibold text-blue-300">Save tests</p>
+                      <p className="text-blue-400">After generating, click the save button to name your test and set difficulty</p>
+                    </div>
                     <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
                       <p className="font-semibold text-green-300">View responses</p>
                       <p className="text-green-400">Use the Responses tab to see guest submissions and statistics</p>
                     </div>
                     <div className="p-3 bg-purple-900/30 border border-purple-700 rounded-lg">
                       <p className="font-semibold text-purple-300">Manage activation</p>
-                      <p className="text-purple-400">Use the Analytics tab to activate/deactivate tests and view stats</p>
+                      <p className="text-purple-400">Only active tests are visible to guests</p>
                     </div>
                   </>
                 ) : (

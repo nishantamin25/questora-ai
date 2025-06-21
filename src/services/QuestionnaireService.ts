@@ -1,4 +1,3 @@
-
 import { ConfigService } from './ConfigService';
 
 interface Question {
@@ -15,6 +14,9 @@ interface Questionnaire {
   questions: Question[];
   createdAt: string;
   isActive?: boolean;
+  testName?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  isSaved?: boolean;
 }
 
 class QuestionnaireServiceClass {
@@ -75,11 +77,9 @@ class QuestionnaireServiceClass {
       description,
       questions,
       createdAt: new Date().toISOString(),
-      isActive: false
+      isActive: false,
+      isSaved: false
     };
-
-    // Save to localStorage
-    this.saveQuestionnaire(questionnaire);
 
     return questionnaire;
   }
@@ -87,7 +87,7 @@ class QuestionnaireServiceClass {
   saveQuestionnaire(questionnaire: Questionnaire): void {
     const existingQuestionnaires = this.getAllQuestionnaires();
     const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
-    updatedQuestionnaires.unshift(questionnaire);
+    updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
     localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
   }
 
@@ -97,6 +97,10 @@ class QuestionnaireServiceClass {
       return JSON.parse(stored);
     }
     return [];
+  }
+
+  getActiveQuestionnaires(): Questionnaire[] {
+    return this.getAllQuestionnaires().filter(q => q.isActive && q.isSaved);
   }
 
   deleteQuestionnaire(questionnaireId: string): void {
