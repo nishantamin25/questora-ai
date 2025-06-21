@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, LogOut, Settings, Upload, Send } from 'lucide-react';
+import { Bot, LogOut, Settings, Upload, Send, Paperclip, X } from 'lucide-react';
 import AdminConfig from '@/components/AdminConfig';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
@@ -40,6 +40,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         description: `File "${file.name}" uploaded successfully`,
       });
     }
+  };
+
+  const removeFile = () => {
+    setUploadedFile(null);
   };
 
   const handleGenerateQuestionnaire = async () => {
@@ -94,17 +98,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Bot className="h-6 w-6 text-white" />
+            <div className="bg-white p-2 rounded-lg">
+              <Bot className="h-6 w-6 text-black" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Questionnaire Bot</h1>
-              <p className="text-sm text-gray-600">Welcome, {user.username} ({user.role})</p>
+              <h1 className="text-xl font-bold text-white">Questionnaire Bot</h1>
+              <p className="text-sm text-gray-400">Welcome, {user.username} ({user.role})</p>
             </div>
           </div>
           
@@ -114,7 +118,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowConfig(!showConfig)}
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
               >
                 <Settings className="h-4 w-4" />
                 <span>Config</span>
@@ -124,7 +128,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               variant="outline"
               size="sm"
               onClick={onLogout}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 border-gray-700 bg-gray-800 text-white hover:bg-gray-700"
             >
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
@@ -138,49 +142,59 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Input Area */}
-            <Card className="mb-6">
+            <Card className="mb-6 bg-gray-900 border-gray-800">
               <CardHeader>
-                <CardTitle>Generate Questionnaire</CardTitle>
+                <CardTitle className="text-white">Generate Questionnaire</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="prompt">Describe your questionnaire</Label>
-                  <Textarea
-                    id="prompt"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="e.g., Create a questionnaire about customer satisfaction for an e-commerce website"
-                    className="mt-1 min-h-[100px]"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="file">Upload file (optional)</Label>
-                  <div className="mt-1 flex items-center space-x-2">
-                    <Input
-                      id="file"
-                      type="file"
-                      onChange={handleFileUpload}
-                      accept=".txt,.pdf,.doc,.docx"
-                      className="flex-1"
+                  <Label htmlFor="prompt" className="text-gray-300">Describe your questionnaire</Label>
+                  <div className="relative mt-1">
+                    <Textarea
+                      id="prompt"
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder="e.g., Create a questionnaire about customer satisfaction for an e-commerce website"
+                      className="min-h-[120px] bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-12"
                     />
-                    <Upload className="h-5 w-5 text-gray-400" />
+                    <div className="absolute bottom-3 right-3 flex items-center space-x-2">
+                      <label htmlFor="file-upload" className="cursor-pointer">
+                        <Paperclip className="h-5 w-5 text-gray-400 hover:text-white transition-colors" />
+                      </label>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        onChange={handleFileUpload}
+                        accept=".txt,.pdf,.doc,.docx"
+                        className="hidden"
+                      />
+                    </div>
                   </div>
+                  
                   {uploadedFile && (
-                    <p className="text-sm text-green-600 mt-1">
-                      File uploaded: {uploadedFile.name}
-                    </p>
+                    <div className="mt-2 flex items-center justify-between bg-gray-800 border border-gray-700 rounded-md px-3 py-2">
+                      <div className="flex items-center space-x-2">
+                        <Upload className="h-4 w-4 text-green-400" />
+                        <span className="text-sm text-green-400">{uploadedFile.name}</span>
+                      </div>
+                      <button
+                        onClick={removeFile}
+                        className="text-gray-400 hover:text-white transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
                 
                 <Button
                   onClick={handleGenerateQuestionnaire}
                   disabled={isGenerating}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-white text-black hover:bg-gray-200"
                 >
                   {isGenerating ? (
                     <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
                       <span>Generating...</span>
                     </div>
                   ) : (
@@ -200,13 +214,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               ))}
               
               {questionnaires.length === 0 && (
-                <Card>
+                <Card className="bg-gray-900 border-gray-800">
                   <CardContent className="p-8 text-center">
                     <Bot className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3 className="text-lg font-semibold text-white mb-2">
                       No questionnaires yet
                     </h3>
-                    <p className="text-gray-600">
+                    <p className="text-gray-400">
                       Enter a prompt above to generate your first questionnaire
                     </p>
                   </CardContent>
@@ -219,22 +233,22 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           <div className="lg:col-span-1">
             {user.role === 'admin' && showConfig && <AdminConfig />}
             
-            <Card>
+            <Card className="bg-gray-900 border-gray-800">
               <CardHeader>
-                <CardTitle>Quick Tips</CardTitle>
+                <CardTitle className="text-white">Quick Tips</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="p-3 bg-blue-50 rounded-lg">
-                  <p className="font-semibold text-blue-900">Be specific</p>
-                  <p className="text-blue-700">Include the topic, target audience, and purpose</p>
+                <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                  <p className="font-semibold text-blue-300">Be specific</p>
+                  <p className="text-blue-400">Include the topic, target audience, and purpose</p>
                 </div>
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <p className="font-semibold text-green-900">Upload context</p>
-                  <p className="text-green-700">Add files to provide more context for better questions</p>
+                <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                  <p className="font-semibold text-green-300">Upload context</p>
+                  <p className="text-green-400">Add files to provide more context for better questions</p>
                 </div>
-                <div className="p-3 bg-purple-50 rounded-lg">
-                  <p className="font-semibold text-purple-900">Configure settings</p>
-                  <p className="text-purple-700">{user.role === 'admin' ? 'Use the config panel to customize generation' : 'Ask an admin to configure question types and options'}</p>
+                <div className="p-3 bg-purple-900/30 border border-purple-700 rounded-lg">
+                  <p className="font-semibold text-purple-300">Configure settings</p>
+                  <p className="text-purple-400">{user.role === 'admin' ? 'Use the config panel to customize generation' : 'Ask an admin to configure question types and options'}</p>
                 </div>
               </CardContent>
             </Card>
