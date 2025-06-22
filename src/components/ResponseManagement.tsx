@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -292,13 +291,15 @@ const ResponseManagement = () => {
                         {new Date(response.submittedAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <button
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => openPersonResponse(response)}
-                          className="bg-gray-600 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                          className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
                         >
-                          <FileText className="h-4 w-4" />
-                          <span>View Answers</span>
-                        </button>
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Answers
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
