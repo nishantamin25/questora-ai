@@ -48,7 +48,7 @@ class ChatGPTServiceClass {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4-turbo-preview',
+          model: 'gpt-4.1-2025-04-14',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -60,6 +60,7 @@ class ChatGPTServiceClass {
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('OpenAI API error:', error);
         throw new Error(error.error?.message || 'Failed to generate questions with ChatGPT');
       }
 
@@ -70,6 +71,7 @@ class ChatGPTServiceClass {
         throw new Error('No content received from ChatGPT');
       }
 
+      console.log('ChatGPT response:', content);
       return this.parseQuestions(content);
     } catch (error) {
       console.error('ChatGPT API error:', error);
