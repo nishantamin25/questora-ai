@@ -1,4 +1,5 @@
 import { ConfigService } from './ConfigService';
+import { ChatGPTService } from './ChatGPTService';
 
 interface Question {
   id: string;
@@ -85,19 +86,43 @@ class QuestionnaireServiceClass {
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const questionnaireId = this.generateId();
-    
-    // Analyze prompt to determine questionnaire type
-    const category = this.categorizePrompt(prompt, fileContent);
     const title = options.testName;
     const description = this.generateDescription(prompt, fileContent);
     
-    // Generate questions based on prompt and configuration
-    const questions = this.generateQuestions(
-      prompt, 
-      category, 
-      options.numberOfQuestions,
-      fileContent
-    );
+    let questions: Question[] = [];
+    
+    // Try to use ChatGPT first if API key is available
+    const chatGptApiKey = ChatGPTService.getApiKey();
+    if (chatGptApiKey) {
+      try {
+        console.log('Using ChatGPT to generate questions...');
+        const chatGptQuestions = await ChatGPTService.generateQuestions(
+          prompt,
+          options.numberOfQuestions,
+          options.difficulty,
+          fileContent
+        );
+        
+        // Convert ChatGPT questions to our format
+        questions = chatGptQuestions.map(q => ({
+          id: this.generateId(),
+          text: q.question,
+          type: 'multiple-choice',
+          options: q.options,
+          correctAnswer: q.correctAnswer
+        }));
+        
+        console.log('Successfully generated questions with ChatGPT');
+      } catch (error) {
+        console.error('ChatGPT generation failed, falling back to template-based generation:', error);
+        // Fall back to template-based generation
+        questions = this.generateFallbackQuestions(prompt, options, fileContent);
+      }
+    } else {
+      console.log('No ChatGPT API key found, using template-based generation');
+      // Use template-based generation
+      questions = this.generateFallbackQuestions(prompt, options, fileContent);
+    }
 
     const questionnaire: Questionnaire = {
       id: questionnaireId,
@@ -280,6 +305,12 @@ class QuestionnaireServiceClass {
     }
     
     return adapted;
+  }
+
+  private generateFallbackQuestions(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Question[] {
+    // This is the existing question generation logic
+    const category = this.categorizePrompt(prompt, fileContent);
+    return this.generateQuestions(prompt, category, options.numberOfQuestions, fileContent);
   }
 
   private generateId(): string {
