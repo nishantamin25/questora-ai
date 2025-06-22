@@ -9,7 +9,8 @@ class AuthServiceClass {
   private currentUser: User | null = null;
   
   private credentials = {
-    admin: { username: 'admin', password: 'admin123', role: 'admin' as const }
+    salman: { username: 'salman', password: 'salman786', role: 'admin' as const },
+    nishant: { username: 'nishant', password: 'nishant25', role: 'admin' as const }
   };
 
   async login(username: string, password: string, role: string): Promise<User | null> {
@@ -33,11 +34,14 @@ class AuthServiceClass {
       return user;
     }
     
-    // Handle admin login - requires correct credentials
+    // Handle admin login - requires correct credentials (case insensitive username)
     if (role === 'admin') {
-      const cred = this.credentials.admin;
+      const normalizedUsername = username.toLowerCase();
+      const cred = Object.values(this.credentials).find(
+        c => c.username === normalizedUsername && c.password === password
+      );
       
-      if (cred && cred.username === username && cred.password === password) {
+      if (cred) {
         const user: User = {
           username: cred.username,
           role: cred.role,

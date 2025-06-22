@@ -143,12 +143,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
-            <p className="font-semibold mb-2">Demo Credentials:</p>
-            <p><strong>Admin:</strong> admin / admin123</p>
-            <p><strong>Guest:</strong> Just enter your name</p>
-          </div>
         </CardContent>
       </Card>
     </div>
