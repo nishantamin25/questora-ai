@@ -1,4 +1,3 @@
-
 interface ChatGPTQuestion {
   question: string;
   options: string[];
@@ -16,6 +15,7 @@ class ChatGPTServiceClass {
   setApiKey(apiKey: string) {
     this.apiKey = apiKey;
     localStorage.setItem('chatgpt_api_key', apiKey);
+    console.log('ChatGPT API key updated');
   }
 
   getApiKey(): string {
@@ -33,6 +33,14 @@ class ChatGPTServiceClass {
   ): Promise<ChatGPTQuestion[]> {
     const apiKey = this.getApiKey();
     
+    console.log('ChatGPT generation started:', {
+      prompt,
+      numberOfQuestions,
+      difficulty,
+      hasFileContent: !!fileContent,
+      hasApiKey: !!apiKey
+    });
+
     if (!apiKey) {
       throw new Error('ChatGPT API key is required');
     }
@@ -40,7 +48,11 @@ class ChatGPTServiceClass {
     const systemPrompt = this.buildSystemPrompt(difficulty);
     const userPrompt = this.buildUserPrompt(prompt, numberOfQuestions, fileContent);
 
+    console.log('System prompt:', systemPrompt);
+    console.log('User prompt:', userPrompt);
+
     try {
+      console.log('Making request to OpenAI API...');
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -58,21 +70,39 @@ class ChatGPTServiceClass {
         }),
       });
 
+      console.log('OpenAI API response status:', response.status);
+
       if (!response.ok) {
         const error = await response.json();
-        console.error('OpenAI API error:', error);
+        console.error('OpenAI API error details:', error);
+        
+        // Check for specific error types
+        if (error.error?.code === 'insufficient_quota') {
+          throw new Error('Your OpenAI API key has exceeded its quota. Please check your OpenAI account billing.');
+        }
+        
+        if (error.error?.code === 'invalid_api_key') {
+          throw new Error('Invalid OpenAI API key. Please check your API key and try again.');
+        }
+        
         throw new Error(error.error?.message || 'Failed to generate questions with ChatGPT');
       }
 
       const data = await response.json();
+      console.log('OpenAI API response data:', data);
+      
       const content = data.choices[0]?.message?.content;
       
       if (!content) {
+        console.error('No content in ChatGPT response');
         throw new Error('No content received from ChatGPT');
       }
 
-      console.log('ChatGPT response:', content);
-      return this.parseQuestions(content);
+      console.log('ChatGPT raw response content:', content);
+      const parsedQuestions = this.parseQuestions(content);
+      console.log('Parsed questions:', parsedQuestions);
+      
+      return parsedQuestions;
     } catch (error) {
       console.error('ChatGPT API error:', error);
       throw error;
@@ -130,6 +160,8 @@ Please incorporate information from both the prompt and the file content to crea
 
   private parseQuestions(content: string): ChatGPTQuestion[] {
     try {
+      console.log('Parsing ChatGPT response...');
+      
       // Clean the content - remove any markdown formatting or extra text
       let cleanContent = content.trim();
       
@@ -138,20 +170,24 @@ Please incorporate information from both the prompt and the file content to crea
       const jsonEnd = cleanContent.lastIndexOf(']') + 1;
       
       if (jsonStart === -1 || jsonEnd === 0) {
+        console.error('No JSON array found in response');
         throw new Error('No JSON array found in response');
       }
       
       cleanContent = cleanContent.substring(jsonStart, jsonEnd);
+      console.log('Extracted JSON content:', cleanContent);
       
       const parsed = JSON.parse(cleanContent);
       
       if (!Array.isArray(parsed)) {
+        console.error('Response is not an array');
         throw new Error('Response is not an array');
       }
 
       // Validate and clean the questions
       return parsed.map((item, index) => {
         if (!item.question || !Array.isArray(item.options) || item.options.length !== 4) {
+          console.error(`Invalid question format at index ${index}:`, item);
           throw new Error(`Invalid question format at index ${index}`);
         }
         
