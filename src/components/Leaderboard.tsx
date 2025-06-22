@@ -210,7 +210,7 @@ const Leaderboard = () => {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => exportToExcel(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
-                                className="border-gray-600 text-white hover:bg-gray-700"
+                                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
                               >
                                 <Download className="h-4 w-4 mr-2" />
                                 Export Excel
@@ -219,7 +219,7 @@ const Leaderboard = () => {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => exportToPDF(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
-                                className="border-gray-600 text-white hover:bg-gray-700"
+                                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
                               >
                                 <FileText className="h-4 w-4 mr-2" />
                                 Export PDF

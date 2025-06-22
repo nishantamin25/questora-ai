@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -217,7 +218,7 @@ const ResponseManagement = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => exportToExcel(prepareExportData(), `${selectedTest.title}_responses`)}
-                className="border-gray-600 text-white hover:bg-gray-700"
+                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export Excel
@@ -226,7 +227,7 @@ const ResponseManagement = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => exportToPDF(prepareExportData(), `${selectedTest.title}_responses`)}
-                className="border-gray-600 text-white hover:bg-gray-700"
+                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Export PDF
