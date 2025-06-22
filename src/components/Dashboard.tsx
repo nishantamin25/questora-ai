@@ -4,8 +4,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, LogOut, Upload, Zap, Paperclip, X, BarChart3, MessageSquare } from 'lucide-react';
-import AdminAnalytics from '@/components/AdminAnalytics';
+import { Bot, LogOut, Upload, Zap, Paperclip, X, Trophy, MessageSquare } from 'lucide-react';
+import Leaderboard from '@/components/Leaderboard';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
 import GenerateTestDialog from '@/components/GenerateTestDialog';
@@ -22,7 +22,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
 
@@ -249,11 +249,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  onClick={() => setShowLeaderboard(!showLeaderboard)}
                   className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
                 >
-                  <BarChart3 className="h-4 w-4" />
-                  <span>Analytics</span>
+                  <Trophy className="h-4 w-4" />
+                  <span>Leaderboard</span>
                 </Button>
               </>
             )}
@@ -281,10 +281,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </div>
             )}
 
-            {/* Admin Analytics */}
-            {user.role === 'admin' && showAnalytics && (
+            {/* Admin Leaderboard */}
+            {user.role === 'admin' && showLeaderboard && (
               <div className="mb-6">
-                <AdminAnalytics />
+                <Leaderboard />
               </div>
             )}
 
@@ -442,8 +442,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                       <p className="text-green-600 font-inter">Use the Responses tab to see guest submissions and statistics</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg">
-                      <p className="font-semibold text-purple-700 font-poppins">Manage activation</p>
-                      <p className="text-purple-600 font-inter">Only active tests are visible to guests</p>
+                      <p className="font-semibold text-purple-700 font-poppins">View leaderboard</p>
+                      <p className="text-purple-600 font-inter">Check the Leaderboard tab to see top performers for each test</p>
                     </div>
                   </>
                 ) : (
