@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trophy, Medal, Award, ChevronDown, ChevronUp, Users, FileExcel, FilePdf } from 'lucide-react';
+import { Trophy, Medal, Award, ChevronDown, ChevronUp, Users, Download, FileText } from 'lucide-react';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { ResponseService } from '@/services/ResponseService';
 
@@ -212,7 +212,7 @@ const Leaderboard = () => {
                                 onClick={() => exportToExcel(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
                                 className="border-gray-600 text-white hover:bg-gray-700"
                               >
-                                <FileExcel className="h-4 w-4 mr-2" />
+                                <Download className="h-4 w-4 mr-2" />
                                 Export Excel
                               </Button>
                               <Button
@@ -221,7 +221,7 @@ const Leaderboard = () => {
                                 onClick={() => exportToPDF(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
                                 className="border-gray-600 text-white hover:bg-gray-700"
                               >
-                                <FilePdf className="h-4 w-4 mr-2" />
+                                <FileText className="h-4 w-4 mr-2" />
                                 Export PDF
                               </Button>
                             </div>

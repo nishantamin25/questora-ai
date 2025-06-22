@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, User, CheckCircle, XCircle, MessageSquare, FileText, Clock, FileExcel, FilePdf, Download } from 'lucide-react';
+import { ArrowLeft, Users, User, CheckCircle, XCircle, MessageSquare, FileText, Clock, Download, FileExcel, FilePdf } from 'lucide-react';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { ResponseService } from '@/services/ResponseService';
 
@@ -220,7 +219,7 @@ const ResponseManagement = () => {
                 onClick={() => exportToExcel(prepareExportData(), `${selectedTest.title}_responses`)}
                 className="border-gray-600 text-white hover:bg-gray-700"
               >
-                <FileExcel className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4 mr-2" />
                 Export Excel
               </Button>
               <Button
@@ -229,7 +228,7 @@ const ResponseManagement = () => {
                 onClick={() => exportToPDF(prepareExportData(), `${selectedTest.title}_responses`)}
                 className="border-gray-600 text-white hover:bg-gray-700"
               >
-                <FilePdf className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-2" />
                 Export PDF
               </Button>
             </div>
