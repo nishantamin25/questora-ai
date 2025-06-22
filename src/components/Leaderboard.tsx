@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trophy, Medal, Award, ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { Trophy, Medal, Award, ChevronDown, ChevronUp, Users, FileExcel, FilePdf } from 'lucide-react';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { ResponseService } from '@/services/ResponseService';
 
@@ -69,6 +69,90 @@ const Leaderboard = () => {
     return Math.round((score / totalQuestions) * 100);
   };
 
+  const exportToExcel = (data: any[], filename: string) => {
+    const csvContent = convertToCSV(data);
+    downloadFile(csvContent, `${filename}.csv`, 'text/csv');
+  };
+
+  const exportToPDF = (data: any[], filename: string) => {
+    const htmlContent = convertToHTML(data);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>${filename}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              h1 { color: #333; }
+            </style>
+          </head>
+          <body>
+            <h1>${filename}</h1>
+            ${htmlContent}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    if (data.length === 0) return '';
+    
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => 
+      Object.values(row).map(value => 
+        typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value
+      ).join(',')
+    ).join('\n');
+    
+    return `${headers}\n${rows}`;
+  };
+
+  const convertToHTML = (data: any[]) => {
+    if (data.length === 0) return '<p>No data available</p>';
+    
+    const headers = Object.keys(data[0]);
+    const headerRow = headers.map(h => `<th>${h}</th>`).join('');
+    const dataRows = data.map(row => 
+      `<tr>${headers.map(h => `<td>${row[h]}</td>`).join('')}</tr>`
+    ).join('');
+    
+    return `<table><thead><tr>${headerRow}</tr></thead><tbody>${dataRows}</tbody></table>`;
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const prepareLeaderboardExportData = () => {
+    return leaderboardData.map((response, index) => ({
+      Rank: index + 1,
+      Player: response.username,
+      Score: `${response.score}/${response.totalQuestions}`,
+      Percentage: `${getScorePercentage(response.score || 0, response.totalQuestions || 0)}%`,
+      Submitted: new Date(response.submittedAt).toLocaleDateString()
+    }));
+  };
+
+  const getCurrentTestTitle = () => {
+    const currentTest = questionnaires.find(q => q.id === expandedTest);
+    return currentTest ? currentTest.title : 'Leaderboard';
+  };
+
   return (
     <Card className="bg-gray-900 border-gray-800">
       <CardHeader>
@@ -116,10 +200,32 @@ const Leaderboard = () => {
                         <p className="text-gray-400 text-center py-8">No submissions yet for this test</p>
                       ) : (
                         <div className="space-y-4">
-                          <h4 className="text-white font-medium flex items-center space-x-2">
-                            <Trophy className="h-4 w-4 text-yellow-500" />
-                            <span>Top Performers</span>
-                          </h4>
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-white font-medium flex items-center space-x-2">
+                              <Trophy className="h-4 w-4 text-yellow-500" />
+                              <span>Top Performers</span>
+                            </h4>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => exportToExcel(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
+                                className="border-gray-600 text-white hover:bg-gray-700"
+                              >
+                                <FileExcel className="h-4 w-4 mr-2" />
+                                Export Excel
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => exportToPDF(prepareLeaderboardExportData(), `${getCurrentTestTitle()}_leaderboard`)}
+                                className="border-gray-600 text-white hover:bg-gray-700"
+                              >
+                                <FilePdf className="h-4 w-4 mr-2" />
+                                Export PDF
+                              </Button>
+                            </div>
+                          </div>
                           
                           <Table>
                             <TableHeader>
