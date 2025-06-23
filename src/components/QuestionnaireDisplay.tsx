@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Save, Edit, Trash2, Play, Square, Clock, Users, Hash } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Save, Edit, Trash2, Play, Square, Clock, Users, Hash, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
 import SaveTestDialog from './SaveTestDialog';
@@ -51,25 +52,32 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [questionsVisible, setQuestionsVisible] = useState(false);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
 
   useEffect(() => {
     if (questionnaire) {
       setEditedQuestionnaire(questionnaire);
+      setEditedQuestions(questionnaire.questions || []);
     }
   }, [questionnaire]);
 
   const handleEditToggle = () => {
-    setIsEditing(true);
+    setIsEditing(!isEditing);
+    if (isEditing) {
+      // Save changes when exiting edit mode
+      const updatedQuestionnaire = { ...editedQuestionnaire, questions: editedQuestions };
+      setEditedQuestionnaire(updatedQuestionnaire);
+      onUpdate(updatedQuestionnaire);
+    }
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
+    setEditingQuestionId(null);
     setEditedQuestionnaire(questionnaire);
-  };
-
-  const handleSaveEdit = () => {
-    onUpdate(editedQuestionnaire);
-    setIsEditing(false);
+    setEditedQuestions(questionnaire.questions || []);
   };
 
   const handleActiveToggle = (checked: boolean) => {
@@ -82,7 +90,23 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
     setResponses(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const allQuestionsAnswered = questionnaire.questions.every(question => responses[question.id]);
+  const handleQuestionEdit = (questionId: string, field: 'text' | 'options', value: string | string[]) => {
+    setEditedQuestions(prev => prev.map(q => 
+      q.id === questionId 
+        ? { ...q, [field]: value }
+        : q
+    ));
+  };
+
+  const handleQuestionOptionEdit = (questionId: string, optionIndex: number, value: string) => {
+    setEditedQuestions(prev => prev.map(q => 
+      q.id === questionId 
+        ? { ...q, options: q.options?.map((opt, idx) => idx === optionIndex ? value : opt) || [] }
+        : q
+    ));
+  };
+
+  const allQuestionsAnswered = editedQuestions.every(question => responses[question.id]);
 
   const handleSubmitResponses = async () => {
     setIsSubmitting(true);
@@ -167,7 +191,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
 
   return (
     <>
-      <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden">
+      <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden mb-4">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-violet-50 border-b border-slate-200">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -204,10 +228,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
                   </Badge>
                 )}
                 
-                {questionnaire.questions && questionnaire.questions.length > 0 && (
+                {editedQuestions && editedQuestions.length > 0 && (
                   <Badge variant="outline" className="text-slate-600 border-slate-300">
                     <Users className="h-3 w-3 mr-1" />
-                    {questionnaire.questions.length} questions
+                    {editedQuestions.length} questions
                   </Badge>
                 )}
               </div>
@@ -242,18 +266,17 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
                 
                 {questionnaire.isSaved ? (
                   <>
-                    {isEditing ? (
-                      <div className="flex space-x-2">
-                        <Button onClick={handleSaveEdit} size="sm" variant="default">
-                          <Save className="h-4 w-4" />
-                        </Button>
-                        <Button onClick={handleCancelEdit} size="sm" variant="outline">
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button onClick={handleEditToggle} size="sm" variant="outline">
-                        <Edit className="h-4 w-4" />
+                    <Button 
+                      onClick={handleEditToggle} 
+                      size="sm" 
+                      variant={isEditing ? "default" : "outline"}
+                      className={isEditing ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                    >
+                      {isEditing ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+                    </Button>
+                    {isEditing && (
+                      <Button onClick={handleCancelEdit} size="sm" variant="outline">
+                        Cancel
                       </Button>
                     )}
                     <Button 
@@ -286,61 +309,129 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
           </div>
         )}
 
-        {/* Questions Display */}
-        {questionnaire.questions && questionnaire.questions.length > 0 && (
-          <CardContent className="p-6">
-            <div className="space-y-6">
-              {questionnaire.questions.map((question, index) => (
-                <div key={question.id} className="border-b border-slate-100 pb-4 last:border-b-0">
-                  <h3 className="text-slate-900 font-medium mb-3 font-poppins">
-                    {index + 1}. {question.text}
-                  </h3>
-                  
-                  {question.options && (
-                    <RadioGroup
-                      value={responses[question.id] || ''}
-                      onValueChange={(value) => handleResponseChange(question.id, value)}
-                      className="space-y-2"
-                    >
-                      {question.options.map((option, optionIndex) => (
-                        <div key={optionIndex} className="flex items-center space-x-2">
-                          <RadioGroupItem
-                            value={option}
-                            id={`${question.id}-${optionIndex}`}
-                            className="border-slate-300"
-                          />
-                          <Label
-                            htmlFor={`${question.id}-${optionIndex}`}
-                            className="text-slate-700 font-inter cursor-pointer hover:text-slate-900"
+        {/* Questions Display - Collapsible */}
+        {editedQuestions && editedQuestions.length > 0 && (
+          <CardContent className="p-0">
+            <Collapsible open={questionsVisible} onOpenChange={setQuestionsVisible}>
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-between p-6 hover:bg-slate-50"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-slate-900">
+                      Questions ({editedQuestions.length})
+                    </span>
+                  </div>
+                  {questionsVisible ? (
+                    <div className="flex items-center space-x-2">
+                      <EyeOff className="h-4 w-4 text-slate-500" />
+                      <ChevronDown className="h-4 w-4 text-slate-500" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <Eye className="h-4 w-4 text-slate-500" />
+                      <ChevronRight className="h-4 w-4 text-slate-500" />
+                    </div>
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent>
+                <div className="px-6 pb-6 space-y-6">
+                  {editedQuestions.map((question, index) => (
+                    <div key={question.id} className="border-b border-slate-100 pb-4 last:border-b-0">
+                      <div className="flex items-start justify-between mb-3">
+                        {isEditing && editingQuestionId === question.id ? (
+                          <div className="flex-1 space-y-2">
+                            <Textarea
+                              value={question.text}
+                              onChange={(e) => handleQuestionEdit(question.id, 'text', e.target.value)}
+                              className="text-slate-900 font-medium border-slate-300 focus:border-violet-500"
+                            />
+                          </div>
+                        ) : (
+                          <h3 className="text-slate-900 font-medium font-poppins flex-1">
+                            {index + 1}. {question.text}
+                          </h3>
+                        )}
+                        
+                        {isEditing && (
+                          <Button
+                            onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
+                            size="sm"
+                            variant="outline"
+                            className="ml-2"
                           >
-                            {option}
-                          </Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {question.options && (
+                        <>
+                          {isEditing && editingQuestionId === question.id ? (
+                            <div className="space-y-2">
+                              {question.options.map((option, optionIndex) => (
+                                <div key={optionIndex} className="flex items-center space-x-2">
+                                  <span className="text-sm text-slate-500 w-6">{optionIndex + 1}.</span>
+                                  <Input
+                                    value={option}
+                                    onChange={(e) => handleQuestionOptionEdit(question.id, optionIndex, e.target.value)}
+                                    className="flex-1 border-slate-300 focus:border-violet-500"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <RadioGroup
+                              value={responses[question.id] || ''}
+                              onValueChange={(value) => handleResponseChange(question.id, value)}
+                              className="space-y-2"
+                            >
+                              {question.options.map((option, optionIndex) => (
+                                <div key={optionIndex} className="flex items-center space-x-2">
+                                  <RadioGroupItem
+                                    value={option}
+                                    id={`${question.id}-${optionIndex}`}
+                                    className="border-slate-300"
+                                  />
+                                  <Label
+                                    htmlFor={`${question.id}-${optionIndex}`}
+                                    className="text-slate-700 font-inter cursor-pointer hover:text-slate-900"
+                                  >
+                                    {option}
+                                  </Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {!isAdmin && questionnaire.isActive && (
+                    <div className="pt-4 border-t border-slate-200">
+                      <Button 
+                        onClick={handleSubmitResponses}
+                        disabled={!allQuestionsAnswered || isSubmitting}
+                        className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
+                      >
+                        {isSubmitting ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Submitting...</span>
+                          </div>
+                        ) : (
+                          'Submit Responses'
+                        )}
+                      </Button>
+                    </div>
                   )}
                 </div>
-              ))}
-              
-              {!isAdmin && questionnaire.isActive && (
-                <div className="pt-4 border-t border-slate-200">
-                  <Button 
-                    onClick={handleSubmitResponses}
-                    disabled={!allQuestionsAnswered || isSubmitting}
-                    className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
-                  >
-                    {isSubmitting ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Submitting...</span>
-                      </div>
-                    ) : (
-                      'Submit Responses'
-                    )}
-                  </Button>
-                </div>
-              )}
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         )}
       </Card>
