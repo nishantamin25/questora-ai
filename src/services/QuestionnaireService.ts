@@ -164,7 +164,7 @@ class QuestionnaireServiceClass {
         } catch (error) {
           console.error('ChatGPT generation failed, falling back to template-based generation:', error);
           // Fall back to template-based generation
-          questions = this.generateQuestions(
+          questions = this.generateTemplateQuestions(
             prompt, 
             options.numberOfQuestions, 
             options.difficulty, 
@@ -176,7 +176,7 @@ class QuestionnaireServiceClass {
       } else {
         console.log('No ChatGPT API key found, using template-based generation');
         // Use template-based generation
-        questions = this.generateQuestions(
+        questions = this.generateTemplateQuestions(
           prompt, 
           options.numberOfQuestions, 
           options.difficulty, 
@@ -413,7 +413,7 @@ class QuestionnaireServiceClass {
     return description;
   }
 
-  private generateQuestions(
+  private generateTemplateQuestions(
     prompt: string, 
     numberOfQuestions: number, 
     difficulty: 'easy' | 'medium' | 'hard', 
