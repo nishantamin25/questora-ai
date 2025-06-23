@@ -36,22 +36,46 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
   const [contentType, setContentType] = useState<'questionnaires' | 'course' | 'both'>('questionnaires');
 
-  // Check if course can be enabled based on uploaded files
-  const canEnableCourse = uploadedFiles.some(file => {
+  // Check if course can be enabled based on uploaded files - more inclusive logic
+  const canEnableCourse = uploadedFiles.length > 0 && uploadedFiles.some(file => {
     const fileName = file.name.toLowerCase();
     const fileType = file.type.toLowerCase();
-    return (
+    
+    console.log('Checking file for course capability:', fileName, fileType);
+    
+    // More inclusive file type checking
+    const isValidFile = (
+      // Image files
       fileType.startsWith('image/') ||
+      fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ||
+      
+      // Video files
       fileType.startsWith('video/') ||
+      fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv)$/i) ||
+      
+      // Audio files
       fileType.startsWith('audio/') ||
-      fileName.endsWith('.pdf') ||
+      fileName.match(/\.(mp3|wav|ogg|m4a|flac)$/i) ||
+      
+      // Document files
       fileType === 'application/pdf' ||
-      fileName.endsWith('.doc') ||
-      fileName.endsWith('.docx') ||
-      fileName.endsWith('.txt') ||
-      fileName.endsWith('.md')
+      fileName.match(/\.pdf$/i) ||
+      fileName.match(/\.(doc|docx)$/i) ||
+      fileType.includes('document') ||
+      
+      // Text files
+      fileType.startsWith('text/') ||
+      fileName.match(/\.(txt|md|csv|rtf)$/i) ||
+      
+      // Any file with content that we can attempt to read
+      file.size > 0
     );
+    
+    console.log('File valid for course:', fileName, isValidFile);
+    return isValidFile;
   });
+
+  console.log('Can enable course:', canEnableCourse, 'Files:', uploadedFiles.length);
 
   // Update checkboxes based on content type selection
   useEffect(() => {
@@ -141,6 +165,16 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       return;
     }
 
+    // Additional validation for course generation
+    if (includeCourse && uploadedFiles.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload files to generate course content",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (includeQuestionnaire && (numberOfQuestions < 10 || numberOfQuestions > 50)) {
       toast({
         title: "Error",
@@ -165,7 +199,8 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       numberOfQuestions,
       timeframe,
       includeCourse,
-      includeQuestionnaire
+      includeQuestionnaire,
+      uploadedFilesCount: uploadedFiles.length
     });
 
     onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire);
@@ -261,7 +296,8 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-slate-500 mt-1">
-                  {!canEnableCourse && "Upload files to enable course generation"}
+                  {!canEnableCourse && uploadedFiles.length === 0 && "Upload files to enable course generation"}
+                  {!canEnableCourse && uploadedFiles.length > 0 && "Files uploaded but not suitable for course generation"}
                   {canEnableCourse && uploadedFiles.length > 0 && `${uploadedFiles.length} file(s) uploaded and ready for course generation`}
                 </p>
               </div>
