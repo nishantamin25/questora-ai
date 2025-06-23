@@ -1,4 +1,3 @@
-
 interface ChatGPTQuestion {
   question: string;
   options: string[];
@@ -16,7 +15,7 @@ class ChatGPTServiceClass {
   setApiKey(apiKey: string) {
     this.apiKey = apiKey;
     localStorage.setItem('chatgpt_api_key', apiKey);
-    console.log('ChatGPT API key updated');
+    console.log('OpenAI API key updated');
   }
 
   getApiKey(): string {
@@ -24,6 +23,12 @@ class ChatGPTServiceClass {
       this.apiKey = localStorage.getItem('chatgpt_api_key') || '';
     }
     return this.apiKey;
+  }
+
+  clearApiKey() {
+    this.apiKey = '';
+    localStorage.removeItem('chatgpt_api_key');
+    console.log('OpenAI API key cleared');
   }
 
   async generateQuestions(
@@ -48,7 +53,7 @@ class ChatGPTServiceClass {
     });
 
     if (!apiKey) {
-      throw new Error('ChatGPT API key is required');
+      throw new Error('OpenAI API key is required');
     }
 
     const systemPrompt = this.buildSystemPrompt(difficulty, !!fileContent);
@@ -84,14 +89,24 @@ class ChatGPTServiceClass {
         
         // Check for specific error types
         if (error.error?.code === 'insufficient_quota') {
-          throw new Error('Your OpenAI API key has exceeded its quota. Please check your OpenAI account billing.');
+          throw new Error('Your OpenAI API key has exceeded its quota. Please check your OpenAI account billing and ensure you have sufficient credits.');
         }
         
         if (error.error?.code === 'invalid_api_key') {
-          throw new Error('Invalid OpenAI API key. Please check your API key and try again.');
+          // Clear the invalid key
+          this.clearApiKey();
+          throw new Error('Invalid OpenAI API key. The key has been cleared. Please check your API key and enter a valid one.');
+        }
+
+        if (error.error?.code === 'model_not_found') {
+          throw new Error('The requested model is not available. Please check your OpenAI account access.');
+        }
+
+        if (error.error?.code === 'rate_limit_exceeded') {
+          throw new Error('Rate limit exceeded. Please wait a moment and try again.');
         }
         
-        throw new Error(error.error?.message || 'Failed to generate questions with ChatGPT');
+        throw new Error(error.error?.message || 'Failed to generate questions with OpenAI');
       }
 
       const data = await response.json();
@@ -101,7 +116,7 @@ class ChatGPTServiceClass {
       
       if (!content) {
         console.error('No content in ChatGPT response');
-        throw new Error('No content received from ChatGPT');
+        throw new Error('No content received from OpenAI');
       }
 
       console.log('ChatGPT raw response length:', content.length);
