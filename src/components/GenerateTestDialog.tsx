@@ -1,491 +1,305 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Zap, X, Key, Bot, GraduationCap, FileText, ChevronDown, Hash } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
-import { ChatGPTService } from '@/services/ChatGPTService';
-import ChatGPTKeyDialog from './ChatGPTKeyDialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent } from '@/components/ui/card';
+import { Upload, FileText, Image, Video, Music, File, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface GenerateTestDialogProps {
   open: boolean;
   prompt: string;
   uploadedFiles: File[];
-  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets?: number) => void;
+  processedFileContent?: string;
+  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets: number) => void;
   onCancel: () => void;
 }
 
-const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel }: GenerateTestDialogProps) => {
+const GenerateTestDialog = ({ 
+  open, 
+  prompt, 
+  uploadedFiles, 
+  processedFileContent = '',
+  onGenerate, 
+  onCancel 
+}: GenerateTestDialogProps) => {
   const [testName, setTestName] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [numberOfQuestions, setNumberOfQuestions] = useState(15);
-  const [timeframe, setTimeframe] = useState(20);
+  const [numberOfQuestions, setNumberOfQuestions] = useState(10);
+  const [timeframe, setTimeframe] = useState(15);
   const [includeCourse, setIncludeCourse] = useState(false);
   const [includeQuestionnaire, setIncludeQuestionnaire] = useState(true);
   const [numberOfSets, setNumberOfSets] = useState(1);
-  const [showChatGPTKeyDialog, setShowChatGPTKeyDialog] = useState(false);
-  const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
-  const [contentType, setContentType] = useState<'questionnaires' | 'course' | 'both'>('questionnaires');
+  const [contentType, setContentType] = useState<'questionnaire' | 'course' | 'both'>('questionnaire');
 
-  // Comprehensive file validation function
-  const isValidFileForCourse = (file: File): boolean => {
-    const fileName = file.name.toLowerCase();
-    const fileType = file.type.toLowerCase();
-    
-    console.log('Validating file:', {
-      name: fileName,
-      type: fileType,
-      size: file.size
-    });
-    
-    // Check if file has any content
-    if (file.size === 0) {
-      console.log('File rejected: empty file');
-      return false;
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setTestName('');
+      setDifficulty('medium');
+      setNumberOfQuestions(10);
+      setTimeframe(15);
+      setIncludeCourse(false);
+      setIncludeQuestionnaire(true);
+      setNumberOfSets(1);
+      setContentType('questionnaire');
     }
-    
-    // More comprehensive file type checking
-    const isValidFile = (
-      // Image files
-      fileType.startsWith('image/') ||
-      !!fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i) ||
-      
-      // Video files
-      fileType.startsWith('video/') ||
-      !!fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i) ||
-      
-      // Audio files
-      fileType.startsWith('audio/') ||
-      !!fileName.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i) ||
-      
-      // Document files
-      fileType === 'application/pdf' ||
-      !!fileName.match(/\.pdf$/i) ||
-      !!fileName.match(/\.(doc|docx)$/i) ||
-      fileType.includes('document') ||
-      fileType === 'application/msword' ||
-      fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      
-      // Text files
-      fileType.startsWith('text/') ||
-      !!fileName.match(/\.(txt|md|csv|rtf)$/i) ||
-      
-      // Any other file that might contain readable content
-      file.size > 0
-    );
-    
-    console.log('File validation result:', fileName, isValidFile);
-    return isValidFile;
+  }, [open]);
+
+  // Update content type based on switches
+  useEffect(() => {
+    if (includeCourse && includeQuestionnaire) {
+      setContentType('both');
+    } else if (includeCourse) {
+      setContentType('course');
+    } else {
+      setContentType('questionnaire');
+    }
+  }, [includeCourse, includeQuestionnaire]);
+
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) return <Image className="h-4 w-4" />;
+    if (file.type.startsWith('video/')) return <Video className="h-4 w-4" />;
+    if (file.type.startsWith('audio/')) return <Music className="h-4 w-4" />;
+    if (file.type === 'application/pdf' || file.type.startsWith('text/')) return <FileText className="h-4 w-4" />;
+    return <File className="h-4 w-4" />;
   };
 
-  // Check if course can be enabled based on uploaded files
-  const canEnableCourse = uploadedFiles.length > 0 && uploadedFiles.some(file => isValidFileForCourse(file));
+  const canEnableCourse = uploadedFiles.length > 0 && processedFileContent.length > 0;
 
   console.log('Course enablement check:', {
     totalFiles: uploadedFiles.length,
     canEnableCourse,
-    fileDetails: uploadedFiles.map(f => ({
-      name: f.name,
-      type: f.type,
-      size: f.size,
-      isValid: isValidFileForCourse(f)
-    }))
+    fileDetails: uploadedFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
   });
 
-  // Update checkboxes based on content type selection
-  useEffect(() => {
-    console.log('Content type changed to:', contentType, 'Can enable course:', canEnableCourse);
-    
-    switch (contentType) {
-      case 'questionnaires':
-        setIncludeQuestionnaire(true);
-        setIncludeCourse(false);
-        break;
-      case 'course':
-        if (canEnableCourse) {
-          setIncludeQuestionnaire(false);
-          setIncludeCourse(true);
-        } else {
-          // Fallback to questionnaires if course can't be enabled
-          setContentType('questionnaires');
-          setIncludeQuestionnaire(true);
-          setIncludeCourse(false);
-          toast({
-            title: "Course Not Available",
-            description: "Upload files (images, videos, documents) to enable course generation",
-            variant: "destructive"
-          });
-        }
-        break;
-      case 'both':
-        setIncludeQuestionnaire(true);
-        setIncludeCourse(canEnableCourse);
-        if (!canEnableCourse) {
-          toast({
-            title: "Course Not Available", 
-            description: "Upload files to enable course generation. Only questionnaires will be generated.",
-            variant: "destructive"
-          });
-        }
-        break;
-    }
-  }, [contentType, canEnableCourse]);
-
-  // Calculate timeframe based on number of questions using specified mapping
-  useEffect(() => {
-    if (includeQuestionnaire) {
-      const getTimeframeForQuestions = (questions: number): number => {
-        if (questions <= 10) return 15;
-        if (questions <= 15) return 20;
-        if (questions <= 20) return 25;
-        if (questions <= 25) return 30;
-        if (questions <= 30) return 35;
-        if (questions <= 40) return 45;
-        return 50; // 50 questions
-      };
-
-      const calculatedTimeframe = getTimeframeForQuestions(numberOfQuestions);
-      setTimeframe(calculatedTimeframe);
-    }
-  }, [numberOfQuestions, includeQuestionnaire]);
-
-  // Check if ChatGPT API key exists
-  useEffect(() => {
-    const apiKey = ChatGPTService.getApiKey();
-    setHasChatGPTKey(!!apiKey);
-  }, []);
-
-  const handleChatGPTKeySet = (apiKey: string) => {
-    ChatGPTService.setApiKey(apiKey);
-    setHasChatGPTKey(true);
-    setShowChatGPTKeyDialog(false);
-  };
+  console.log('Content type changed to:', contentType, 'Can enable course:', canEnableCourse);
 
   const handleGenerate = () => {
-    console.log('Generate button clicked with state:', {
-      testName: testName.trim(),
-      includeCourse,
-      includeQuestionnaire,
-      numberOfSets,
-      uploadedFilesCount: uploadedFiles.length,
-      canEnableCourse,
-      validFiles: uploadedFiles.filter(f => isValidFileForCourse(f)).length
-    });
-
     if (!testName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a test name",
-        variant: "destructive"
-      });
       return;
     }
 
-    if (!includeCourse && !includeQuestionnaire) {
-      toast({
-        title: "Error",
-        description: "Please select at least one content type",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Updated validation for course generation - check for valid files, not just any files
-    if (includeCourse && !canEnableCourse) {
-      console.log('Course generation blocked: no valid files');
-      toast({
-        title: "Error",
-        description: "Please upload valid files (images, videos, documents, text files) to generate course content",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (includeQuestionnaire && (numberOfQuestions < 10 || numberOfQuestions > 50)) {
-      toast({
-        title: "Error",
-        description: "Number of questions must be between 10 and 50",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (includeQuestionnaire && (timeframe < 5 || timeframe > 180)) {
-      toast({
-        title: "Error",
-        description: "Timeframe must be between 5 and 180 minutes",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (includeQuestionnaire && (numberOfSets < 1 || numberOfSets > 10)) {
-      toast({
-        title: "Error",
-        description: "Number of sets must be between 1 and 10",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    console.log('Generating with final options:', {
-      testName: testName.trim(),
+    console.log('Generating with processed content:', {
+      testName,
       difficulty,
       numberOfQuestions,
       timeframe,
       includeCourse,
       includeQuestionnaire,
       numberOfSets,
-      uploadedFilesCount: uploadedFiles.length,
-      validFilesCount: uploadedFiles.filter(f => isValidFileForCourse(f)).length
+      hasProcessedContent: !!processedFileContent,
+      processedContentLength: processedFileContent.length
     });
 
-    onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets);
-  };
-
-  const getRecommendedTimeframe = (questions: number): number => {
-    if (questions <= 10) return 15;
-    if (questions <= 15) return 20;
-    if (questions <= 20) return 25;
-    if (questions <= 25) return 30;
-    if (questions <= 30) return 35;
-    if (questions <= 40) return 45;
-    return 50; // 50 questions
+    onGenerate(testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets);
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onCancel}>
-        <DialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-2xl rounded-xl">
-          <DialogHeader>
-            <DialogTitle className="text-slate-900 flex items-center space-x-2 font-poppins text-lg">
-              <div className="bg-gradient-to-r from-violet-500 to-purple-500 p-2 rounded-lg">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-              <span>Generate Content</span>
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-5 py-4">
-            {/* ChatGPT Integration Status */}
-            <div className={`p-4 rounded-xl border ${hasChatGPTKey 
-              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200' 
-              : 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Bot className={`h-5 w-5 ${hasChatGPTKey ? 'text-green-600' : 'text-orange-600'}`} />
-                  <div>
-                    <p className={`font-medium text-sm ${hasChatGPTKey ? 'text-green-700' : 'text-orange-700'}`}>
-                      {hasChatGPTKey ? 'ChatGPT Integration Active' : 'ChatGPT Integration Available'}
-                    </p>
-                    <p className={`text-xs ${hasChatGPTKey ? 'text-green-600' : 'text-orange-600'}`}>
-                      {hasChatGPTKey 
-                        ? 'Questions will be generated using ChatGPT for better relevance' 
-                        : 'Setup ChatGPT for more relevant questions'
-                      }
-                    </p>
+    <Dialog open={open} onOpenChange={onCancel}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Generate Test Content</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* Prompt Preview */}
+          <Card>
+            <CardContent className="p-4">
+              <Label className="text-sm font-medium text-slate-700">Prompt</Label>
+              <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-2 rounded border max-h-20 overflow-y-auto">
+                {prompt}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* File Upload Status */}
+          {uploadedFiles.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium text-slate-700">Uploaded Files</Label>
+                  <div className="flex items-center space-x-1">
+                    {processedFileContent.length > 0 ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span className="text-xs text-green-600">Processed</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        <span className="text-xs text-amber-600">Processing...</span>
+                      </>
+                    )}
                   </div>
                 </div>
-                {!hasChatGPTKey && (
-                  <Button
-                    onClick={() => setShowChatGPTKeyDialog(true)}
-                    size="sm"
-                    className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg"
-                  >
-                    <Key className="h-3 w-3 mr-1" />
-                    Setup
-                  </Button>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-sm text-slate-600 bg-slate-50 p-2 rounded border">
+                      {getFileIcon(file)}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-slate-500">{Math.round(file.size / 1024)}KB</span>
+                    </div>
+                  ))}
+                </div>
+                {processedFileContent.length > 0 && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-xs text-green-700">
+                      ✅ Content extracted successfully ({processedFileContent.length} characters)
+                    </p>
+                  </div>
                 )}
-              </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Test Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="testName">Test Name</Label>
+              <Input
+                id="testName"
+                value={testName}
+                onChange={(e) => setTestName(e.target.value)}
+                placeholder="Enter test name"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="difficulty">Difficulty</Label>
+              <Select value={difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="easy">Easy</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="hard">Hard</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Content Type Selection */}
-            <div className="space-y-4">
-              <div>
-                <Label className="text-slate-700 font-medium font-poppins mb-3 block">Content Type</Label>
-                <Select value={contentType} onValueChange={(value: 'questionnaires' | 'course' | 'both') => setContentType(value)}>
-                  <SelectTrigger className="w-full border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
-                    <SelectValue placeholder="Select content type" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-[100]">
-                    <SelectItem value="questionnaires">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4 text-violet-600" />
-                        <span>Questionnaires Only</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="course" disabled={!canEnableCourse}>
-                      <div className="flex items-center space-x-2">
-                        <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-gray-400'}`} />
-                        <span className={canEnableCourse ? '' : 'text-gray-400'}>Course Only</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="both" disabled={!canEnableCourse}>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex space-x-1">
-                          <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-gray-400'}`} />
-                          <FileText className="h-4 w-4 text-violet-600" />
-                        </div>
-                        <span className={canEnableCourse ? '' : 'text-gray-400'}>Course + Questionnaires</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500 mt-1">
-                  {!canEnableCourse && uploadedFiles.length === 0 && "Upload files to enable course generation"}
-                  {!canEnableCourse && uploadedFiles.length > 0 && "Files uploaded but not suitable for course generation"}
-                  {canEnableCourse && uploadedFiles.length > 0 && `${uploadedFiles.length} file(s) uploaded and ready for course generation`}
-                </p>
-              </div>
+            <div>
+              <Label htmlFor="questions">Number of Questions</Label>
+              <Select value={numberOfQuestions.toString()} onValueChange={(value) => setNumberOfQuestions(parseInt(value))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 Questions</SelectItem>
+                  <SelectItem value="10">10 Questions</SelectItem>
+                  <SelectItem value="15">15 Questions</SelectItem>
+                  <SelectItem value="20">20 Questions</SelectItem>
+                  <SelectItem value="25">25 Questions</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div>
-                <Label htmlFor="testName" className="text-slate-700 font-medium font-poppins">Test Name</Label>
-                <Input
-                  id="testName"
-                  value={testName}
-                  onChange={(e) => setTestName(e.target.value)}
-                  placeholder="Enter a name for this test"
-                  className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+            <div>
+              <Label htmlFor="timeframe">Time Limit (minutes)</Label>
+              <Select value={timeframe.toString()} onValueChange={(value) => setTimeframe(parseInt(value))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 minutes</SelectItem>
+                  <SelectItem value="15">15 minutes</SelectItem>
+                  <SelectItem value="20">20 minutes</SelectItem>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="sets">Number of Sets</Label>
+              <Select value={numberOfSets.toString()} onValueChange={(value) => setNumberOfSets(parseInt(value))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 Set</SelectItem>
+                  <SelectItem value="2">2 Sets</SelectItem>
+                  <SelectItem value="3">3 Sets</SelectItem>
+                  <SelectItem value="4">4 Sets</SelectItem>
+                  <SelectItem value="5">5 Sets</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Content Type Selection */}
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <Label className="text-base font-medium">Content Type</Label>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="questionnaire-switch" className="text-sm font-medium">
+                    Generate Questionnaire
+                  </Label>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Create questions based on the content
+                  </p>
+                </div>
+                <Switch
+                  id="questionnaire-switch"
+                  checked={includeQuestionnaire}
+                  onCheckedChange={setIncludeQuestionnaire}
                 />
               </div>
 
-              <div>
-                <Label htmlFor="difficulty" className="text-slate-700 font-medium font-poppins">Difficulty Level</Label>
-                <Select value={difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}>
-                  <SelectTrigger className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
-                    <SelectValue placeholder="Select difficulty" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-[100]">
-                    <SelectItem value="easy">🟢 Easy</SelectItem>
-                    <SelectItem value="medium">🟡 Medium</SelectItem>
-                    <SelectItem value="hard">🔴 Hard</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="course-switch" className="text-sm font-medium">
+                    Generate Course
+                  </Label>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {canEnableCourse ? 'Create learning materials from uploaded files' : 'Upload files to enable course generation'}
+                  </p>
+                </div>
+                <Switch
+                  id="course-switch"
+                  checked={includeCourse}
+                  onCheckedChange={setIncludeCourse}
+                  disabled={!canEnableCourse}
+                />
               </div>
 
-              {includeQuestionnaire && (
-                <>
-                  <div>
-                    <Label htmlFor="numberOfSets" className="text-slate-700 font-medium font-poppins">Number of Sets</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Hash className="h-4 w-4 text-violet-600" />
-                            <span>{numberOfSets} set{numberOfSets > 1 ? 's' : ''}</span>
-                          </div>
-                          <ChevronDown className="h-4 w-4 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                          <DropdownMenuItem 
-                            key={num} 
-                            onClick={() => setNumberOfSets(num)}
-                            className="cursor-pointer hover:bg-slate-50"
-                          >
-                            {num} set{num > 1 ? 's' : ''}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <p className="text-xs text-slate-500 mt-1">Each set will contain unique questions</p>
+              {!canEnableCourse && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Upload className="h-4 w-4 text-amber-600" />
+                    <p className="text-sm text-amber-700">
+                      Course generation requires uploaded files with processed content
+                    </p>
                   </div>
-
-                  <div>
-                    <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions (per set)</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
-                        >
-                          {numberOfQuestions} questions
-                          <ChevronDown className="h-4 w-4 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
-                        {[10, 15, 20, 25, 30, 35, 40, 45, 50].map((num) => (
-                          <DropdownMenuItem 
-                            key={num} 
-                            onClick={() => setNumberOfQuestions(num)}
-                            className="cursor-pointer hover:bg-slate-50"
-                          >
-                            {num} questions
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <p className="text-xs text-slate-500 mt-1">Choose between 10 and 50 questions per set</p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes per set)</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
-                        >
-                          {timeframe} minutes
-                          <ChevronDown className="h-4 w-4 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
-                        {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 90, 120, 150, 180].map((time) => (
-                          <DropdownMenuItem 
-                            key={time} 
-                            onClick={() => setTimeframe(time)}
-                            className="cursor-pointer hover:bg-slate-50"
-                          >
-                            {time} minutes
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <p className="text-xs text-slate-500 mt-1">Recommended: {getRecommendedTimeframe(numberOfQuestions)} minutes for {numberOfQuestions} questions</p>
-                  </div>
-                </>
+                </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex space-x-3 pt-4 border-t border-slate-200">
-              <Button 
-                onClick={handleGenerate} 
-                className="bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 flex-1 rounded-lg font-poppins font-medium"
-                disabled={!testName.trim() || (!includeCourse && !includeQuestionnaire)}
-              >
-                <Zap className="h-4 w-4 mr-2" />
-                Generate Content
-              </Button>
-              <Button onClick={onCancel} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins">
-                <X className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleGenerate}
+              disabled={!testName.trim() || (!includeCourse && !includeQuestionnaire)}
+              className="bg-violet-600 hover:bg-violet-700"
+            >
+              Generate {contentType === 'both' ? 'Course & Test' : contentType === 'course' ? 'Course' : 'Test'}
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <ChatGPTKeyDialog
-        open={showChatGPTKeyDialog}
-        onKeySet={handleChatGPTKeySet}
-        onCancel={() => setShowChatGPTKeyDialog(false)}
-      />
-    </>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

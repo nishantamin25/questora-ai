@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +24,7 @@ interface DashboardProps {
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [prompt, setPrompt] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [processedFileContent, setProcessedFileContent] = useState<string>('');
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [unsavedQuestionnaires, setUnsavedQuestionnaires] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -41,6 +43,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     // Clean up old guest assignments periodically
     GuestAssignmentService.cleanupOldAssignments();
   }, []);
+
+  // Process files immediately when they are uploaded
+  useEffect(() => {
+    if (uploadedFiles.length > 0) {
+      processFilesForContent(uploadedFiles);
+    } else {
+      setProcessedFileContent('');
+    }
+  }, [uploadedFiles]);
 
   const loadQuestionnaires = () => {
     try {
@@ -98,7 +109,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    setIsProcessingFiles(true);
+    console.log('Files uploaded:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
 
     try {
       // Check file size for each file (50MB limit)
@@ -109,7 +120,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           description: `Files must be less than 50MB: ${oversizedFiles.map(f => f.name).join(', ')}`,
           variant: "destructive"
         });
-        setIsProcessingFiles(false);
         return;
       }
 
@@ -139,10 +149,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       // Add supported files
       const supportedFiles = files.filter(file => !unsupportedFiles.includes(file));
       if (supportedFiles.length > 0) {
-        setUploadedFiles(prev => [...prev, ...supportedFiles]);
+        setUploadedFiles(prev => {
+          const newFiles = [...prev, ...supportedFiles];
+          console.log('Updated uploaded files state:', newFiles.map(f => f.name));
+          return newFiles;
+        });
+        
         toast({
           title: "Success",
-          description: `${supportedFiles.length} file(s) uploaded successfully and will be processed for content extraction`,
+          description: `${supportedFiles.length} file(s) uploaded successfully and are being processed`,
         });
       }
     } catch (error) {
@@ -153,7 +168,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         variant: "destructive"
       });
     } finally {
-      setIsProcessingFiles(false);
       // Clear the input
       if (e.target) {
         e.target.value = '';
@@ -161,15 +175,19 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const processFilesForContent = async (files: File[]): Promise<string> => {
-    if (files.length === 0) return '';
+  const processFilesForContent = async (files: File[]): Promise<void> => {
+    if (files.length === 0) {
+      setProcessedFileContent('');
+      return;
+    }
 
-    console.log(`Processing ${files.length} files for content extraction...`);
+    console.log(`Starting file processing for ${files.length} files...`);
+    setIsProcessingFiles(true);
     
     try {
       const filePromises = files.map(async (file) => {
         try {
-          console.log(`Processing file: ${file.name} (${file.type})`);
+          console.log(`Processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
           const processedFile = await FileProcessingService.processFile(file);
           
           console.log(`Successfully processed ${file.name}:`, {
@@ -180,6 +198,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           
           return `=== File: ${file.name} ===
 Type: ${processedFile.type}
+Size: ${Math.round(file.size / 1024)}KB
 Extraction Method: ${processedFile.metadata.extractionMethod}
 Content:
 ${processedFile.content}
@@ -188,9 +207,10 @@ ${processedFile.content}
         } catch (error) {
           console.error(`Error processing file ${file.name}:`, error);
           return `=== File: ${file.name} ===
-Error: Could not process file content
+Error: Could not process file content - ${error instanceof Error ? error.message : 'Unknown error'}
 Type: ${getFileCategory(file)}
-Note: File processing failed, but file type information is available for context.
+Size: ${Math.round(file.size / 1024)}KB
+Note: File processing failed, but file information is available.
 
 `;
         }
@@ -199,56 +219,35 @@ Note: File processing failed, but file type information is available for context
       const processedContents = await Promise.all(filePromises);
       const combinedContent = processedContents.join('\n');
       
-      console.log(`All files processed. Total content length: ${combinedContent.length} characters`);
-      return combinedContent;
+      console.log(`File processing completed. Total content length: ${combinedContent.length} characters`);
+      console.log('Combined file content preview:', combinedContent.substring(0, 500) + '...');
+      
+      setProcessedFileContent(combinedContent);
+      
+      toast({
+        title: "Files Processed",
+        description: `${files.length} file(s) processed successfully. Content is ready for course generation.`,
+      });
     } catch (error) {
       console.error('Error during batch file processing:', error);
-      return `Error processing uploaded files: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      const errorContent = `Error processing uploaded files: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      setProcessedFileContent(errorContent);
+      
+      toast({
+        title: "Processing Error",
+        description: "Some files could not be processed, but generation will continue with available content.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingFiles(false);
     }
   };
 
   const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const readFileContentAsync = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        resolve(result || '');
-      };
-      
-      reader.onerror = () => {
-        console.error(`Failed to read file: ${file.name}`);
-        resolve(`[File: ${file.name} - Could not read content]`);
-      };
-      
-      const category = getFileCategory(file);
-      
-      // Handle different file types
-      switch (category) {
-        case 'text':
-          reader.readAsText(file);
-          break;
-        case 'image':
-        case 'video':
-        case 'audio':
-          // For media files, just return metadata
-          resolve(`[Media File: ${file.name} (${file.type}) - Size: ${Math.round(file.size / 1024)}KB]`);
-          break;
-        case 'document':
-          // For PDFs and docs, attempt text reading (limited support)
-          try {
-            reader.readAsText(file);
-          } catch {
-            resolve(`[Document: ${file.name} - Binary content not readable as text]`);
-          }
-          break;
-        default:
-          resolve(`[File: ${file.name} - Unsupported type for content extraction]`);
-      }
+    setUploadedFiles(prev => {
+      const newFiles = prev.filter((_, i) => i !== index);
+      console.log('File removed. Remaining files:', newFiles.map(f => f.name));
+      return newFiles;
     });
   };
 
@@ -271,6 +270,13 @@ Note: File processing failed, but file type information is available for context
       return;
     }
 
+    console.log('Generate button clicked with:', {
+      prompt: prompt.trim(),
+      uploadedFilesCount: uploadedFiles.length,
+      processedContentLength: processedFileContent.length,
+      hasFileContent: !!processedFileContent
+    });
+
     setShowGenerateDialog(true);
   };
 
@@ -278,35 +284,50 @@ Note: File processing failed, but file type information is available for context
     setIsGenerating(true);
     setShowGenerateDialog(false);
     
+    console.log('Starting questionnaire generation with:', {
+      testName,
+      difficulty,
+      numberOfQuestions,
+      timeframe,
+      includeCourse,
+      includeQuestionnaire,
+      numberOfSets,
+      uploadedFilesCount: uploadedFiles.length,
+      processedContentLength: processedFileContent.length,
+      hasProcessedContent: !!processedFileContent.trim()
+    });
+    
     try {
-      let fileContent = '';
+      // Use the already processed file content
+      const fileContentToUse = processedFileContent.trim();
       
-      if (uploadedFiles.length > 0) {
-        console.log(`Processing ${uploadedFiles.length} files for enhanced content extraction...`);
-        
-        try {
-          fileContent = await processFilesForContent(uploadedFiles);
-          console.log('Enhanced file processing completed successfully');
-        } catch (error) {
-          console.error('Error during enhanced file processing:', error);
-          toast({
-            title: "Warning", 
-            description: "Some files could not be processed optimally. Generating content with available information.",
-            variant: "destructive"
-          });
-        }
+      if (uploadedFiles.length > 0 && !fileContentToUse) {
+        console.warn('Files uploaded but no processed content available, waiting for processing...');
+        toast({
+          title: "Processing Files",
+          description: "Files are still being processed. Please wait a moment and try again.",
+          variant: "destructive"
+        });
+        setIsGenerating(false);
+        return;
       }
       
-      console.log('Generating with enhanced options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets });
+      console.log('Using file content for generation:', {
+        hasContent: !!fileContentToUse,
+        contentLength: fileContentToUse.length,
+        contentPreview: fileContentToUse.substring(0, 200) + '...'
+      });
       
       // Generate multiple sets if requested
       const generatedQuestionnaires = [];
       
       for (let setIndex = 1; setIndex <= numberOfSets; setIndex++) {
+        console.log(`Generating set ${setIndex} of ${numberOfSets}...`);
+        
         const questionnaire = await QuestionnaireService.generateQuestionnaire(
           prompt,
           { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
-          fileContent,
+          fileContentToUse, // Pass the processed content directly
           setIndex,
           numberOfSets
         );
@@ -316,25 +337,37 @@ Note: File processing failed, but file type information is available for context
         questionnaire.totalSets = numberOfSets;
         
         generatedQuestionnaires.push(questionnaire);
+        console.log(`Generated set ${setIndex} successfully:`, {
+          id: questionnaire.id,
+          questionsCount: questionnaire.questions?.length || 0
+        });
       }
       
       // Store all generated questionnaires as unsaved
       setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
       setPrompt('');
       setUploadedFiles([]);
+      setProcessedFileContent('');
       
-      // Success message with file processing info
-      if (uploadedFiles.length > 0) {
-        toast({
-          title: "Success",
-          description: `Generated ${numberOfSets} questionnaire set(s) with enhanced file content analysis`,
-        });
-      }
+      // Success message
+      const successMessage = uploadedFiles.length > 0 
+        ? `Generated ${numberOfSets} questionnaire set(s) with file content analysis from ${uploadedFiles.length} file(s)`
+        : `Generated ${numberOfSets} questionnaire set(s) successfully`;
+        
+      toast({
+        title: "Success",
+        description: successMessage,
+      });
+      
+      console.log('Generation completed successfully:', {
+        generatedCount: generatedQuestionnaires.length,
+        withFileContent: !!fileContentToUse
+      });
     } catch (error) {
       console.error('Error generating content:', error);
       toast({
         title: "Error",
-        description: "Failed to generate content. Please try again.",
+        description: `Failed to generate content: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
@@ -452,7 +485,6 @@ Note: File processing failed, but file type information is available for context
 
   // Ensure we have valid data before rendering
   const validQuestionnaires = filteredQuestionnaires.filter(q => q && typeof q === 'object');
-  console.log('Rendering questionnaires:', validQuestionnaires);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
@@ -536,6 +568,7 @@ Note: File processing failed, but file type information is available for context
               open={showGenerateDialog}
               prompt={prompt}
               uploadedFiles={uploadedFiles}
+              processedFileContent={processedFileContent}
               onGenerate={handleGenerateQuestionnaire}
               onCancel={() => setShowGenerateDialog(false)}
             />
@@ -577,7 +610,12 @@ Note: File processing failed, but file type information is available for context
                           <div key={index} className="flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
                             <div className="flex items-center space-x-2">
                               <Upload className="h-4 w-4 text-violet-600" />
-                              <span className="text-sm text-violet-800 font-medium font-inter">{file.name}</span>
+                              <div className="flex flex-col">
+                                <span className="text-sm text-violet-800 font-medium font-inter">{file.name}</span>
+                                <span className="text-xs text-violet-600">
+                                  {Math.round(file.size / 1024)}KB • {isProcessingFiles ? 'Processing...' : 'Processed'}
+                                </span>
+                              </div>
                             </div>
                             <button
                               onClick={() => removeFile(index)}
@@ -587,19 +625,32 @@ Note: File processing failed, but file type information is available for context
                             </button>
                           </div>
                         ))}
+                        
+                        {processedFileContent && (
+                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-xs text-green-700 font-medium">
+                              ✅ {uploadedFiles.length} file(s) processed successfully ({processedFileContent.length} characters extracted)
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                   
                   <Button
                     onClick={handleGenerateClick}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isProcessingFiles}
                     className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
                   >
                     {isGenerating ? (
                       <div className="flex items-center space-x-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                         <span>Generating...</span>
+                      </div>
+                    ) : isProcessingFiles ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Processing Files...</span>
                       </div>
                     ) : (
                       <div className="flex items-center space-x-2">
@@ -637,7 +688,6 @@ Note: File processing failed, but file type information is available for context
                 }
 
                 const questionnaireId = questionnaire.id || `questionnaire-${index}`;
-                console.log('Rendering questionnaire:', questionnaireId, questionnaire);
                 
                 return (
                   <QuestionnaireDisplay 
@@ -681,16 +731,16 @@ Note: File processing failed, but file type information is available for context
                 {user.role === 'admin' ? (
                   <>
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
-                      <p className="font-semibold text-blue-700 font-poppins">Save tests</p>
-                      <p className="text-blue-600 font-inter">After generating, click the save button to name your test and set difficulty</p>
+                      <p className="font-semibold text-blue-700 font-poppins">Upload files</p>
+                      <p className="text-blue-600 font-inter">Click the paperclip icon to upload documents, images, or videos for content analysis</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-                      <p className="font-semibold text-green-700 font-poppins">View responses</p>
-                      <p className="text-green-600 font-inter">Use the Responses tab to see guest submissions and statistics</p>
+                      <p className="font-semibold text-green-700 font-poppins">Save tests</p>
+                      <p className="text-green-600 font-inter">After generating, click the save button to name your test and set difficulty</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg">
-                      <p className="font-semibold text-purple-700 font-poppins">View leaderboard</p>
-                      <p className="text-purple-600 font-inter">Check the Leaderboard tab to see top performers for each test</p>
+                      <p className="font-semibold text-purple-700 font-poppins">View responses</p>
+                      <p className="text-purple-600 font-inter">Use the Responses tab to see guest submissions and statistics</p>
                     </div>
                   </>
                 ) : (
