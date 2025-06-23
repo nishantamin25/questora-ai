@@ -12,6 +12,7 @@ import GenerateTestDialog from '@/components/GenerateTestDialog';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { GuestAssignmentService } from '@/services/GuestAssignmentService';
+import { FileProcessingService } from '@/services/FileProcessingService';
 import { toast } from '@/hooks/use-toast';
 
 interface DashboardProps {
@@ -61,9 +62,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   const getSupportedFileTypes = () => {
     return {
-      text: ['.txt', '.md', '.csv'],
+      text: ['.txt', '.md', '.csv', '.pdf', '.doc', '.docx'],
       document: ['.pdf', '.doc', '.docx'],
-      image: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'],
+      image: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'],
       video: ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'],
       audio: ['.mp3', '.wav', '.ogg', '.m4a']
     };
@@ -141,7 +142,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         setUploadedFiles(prev => [...prev, ...supportedFiles]);
         toast({
           title: "Success",
-          description: `${supportedFiles.length} file(s) uploaded successfully`,
+          description: `${supportedFiles.length} file(s) uploaded successfully and will be processed for content extraction`,
         });
       }
     } catch (error) {
@@ -157,6 +158,52 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       if (e.target) {
         e.target.value = '';
       }
+    }
+  };
+
+  const processFilesForContent = async (files: File[]): Promise<string> => {
+    if (files.length === 0) return '';
+
+    console.log(`Processing ${files.length} files for content extraction...`);
+    
+    try {
+      const filePromises = files.map(async (file) => {
+        try {
+          console.log(`Processing file: ${file.name} (${file.type})`);
+          const processedFile = await FileProcessingService.processFile(file);
+          
+          console.log(`Successfully processed ${file.name}:`, {
+            type: processedFile.type,
+            contentLength: processedFile.content.length,
+            extractionMethod: processedFile.metadata.extractionMethod
+          });
+          
+          return `=== File: ${file.name} ===
+Type: ${processedFile.type}
+Extraction Method: ${processedFile.metadata.extractionMethod}
+Content:
+${processedFile.content}
+
+`;
+        } catch (error) {
+          console.error(`Error processing file ${file.name}:`, error);
+          return `=== File: ${file.name} ===
+Error: Could not process file content
+Type: ${getFileCategory(file)}
+Note: File processing failed, but file type information is available for context.
+
+`;
+        }
+      });
+      
+      const processedContents = await Promise.all(filePromises);
+      const combinedContent = processedContents.join('\n');
+      
+      console.log(`All files processed. Total content length: ${combinedContent.length} characters`);
+      return combinedContent;
+    } catch (error) {
+      console.error('Error during batch file processing:', error);
+      return `Error processing uploaded files: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   };
 
@@ -235,34 +282,22 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       let fileContent = '';
       
       if (uploadedFiles.length > 0) {
-        console.log(`Processing ${uploadedFiles.length} files...`);
+        console.log(`Processing ${uploadedFiles.length} files for enhanced content extraction...`);
         
         try {
-          // Process files asynchronously to prevent UI blocking
-          const filePromises = uploadedFiles.map(async (file) => {
-            try {
-              const content = await readFileContentAsync(file);
-              return `File: ${file.name} (${getFileCategory(file)})\nContent: ${content}`;
-            } catch (error) {
-              console.error(`Error reading file ${file.name}:`, error);
-              return `File: ${file.name} - Error reading content`;
-            }
-          });
-          
-          const fileContents = await Promise.all(filePromises);
-          fileContent = fileContents.join('\n\n');
-          console.log('All files processed successfully');
+          fileContent = await processFilesForContent(uploadedFiles);
+          console.log('Enhanced file processing completed successfully');
         } catch (error) {
-          console.error('Error processing files:', error);
+          console.error('Error during enhanced file processing:', error);
           toast({
             title: "Warning", 
-            description: "Some files could not be processed. Generating content without file context.",
+            description: "Some files could not be processed optimally. Generating content with available information.",
             variant: "destructive"
           });
         }
       }
       
-      console.log('Generating with options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets });
+      console.log('Generating with enhanced options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets });
       
       // Generate multiple sets if requested
       const generatedQuestionnaires = [];
@@ -288,7 +323,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       setPrompt('');
       setUploadedFiles([]);
       
-      // No success toast needed - keep it simple
+      // Success message with file processing info
+      if (uploadedFiles.length > 0) {
+        toast({
+          title: "Success",
+          description: `Generated ${numberOfSets} questionnaire set(s) with enhanced file content analysis`,
+        });
+      }
     } catch (error) {
       console.error('Error generating content:', error);
       toast({

@@ -1,5 +1,6 @@
 import { ConfigService } from './ConfigService';
 import { ChatGPTService } from './ChatGPTService';
+import { FileProcessingService } from './FileProcessingService';
 
 interface Question {
   id: string;
@@ -100,15 +101,12 @@ class QuestionnaireServiceClass {
   private cleanupOldQuestionnaires(): void {
     try {
       const questionnaires = this.getAllQuestionnaires();
-      // Keep only the 5 most recent questionnaires (reduced from 10)
       const recentQuestionnaires = questionnaires
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 5);
       
-      // Clear storage completely first
       localStorage.removeItem('questionnaires');
       
-      // Try to save the reduced set
       if (recentQuestionnaires.length > 0) {
         localStorage.setItem('questionnaires', JSON.stringify(recentQuestionnaires));
       }
@@ -116,7 +114,6 @@ class QuestionnaireServiceClass {
       console.log('Cleaned up old questionnaires, kept:', recentQuestionnaires.length);
     } catch (error) {
       console.error('Error during cleanup:', error);
-      // If cleanup fails, clear all questionnaires
       localStorage.removeItem('questionnaires');
     }
   }
@@ -125,26 +122,24 @@ class QuestionnaireServiceClass {
     console.log('Generating questionnaire with options:', options, 'Set:', setNumber, 'of', totalSets);
     console.log('Raw file content provided:', !!fileContent, 'Length:', fileContent?.length);
     
-    // Enhanced file content validation and processing
     let processedFileContent = '';
     let isFileContentUsable = false;
     
     if (fileContent && fileContent.trim().length > 0) {
       console.log('Processing file content for questionnaire generation...');
       
-      // First, validate if the content is readable text
-      if (this.isReadableContent(fileContent)) {
-        processedFileContent = this.processFileContent(fileContent);
-        isFileContentUsable = processedFileContent.length > 50;
-        console.log('File content is readable. Processed length:', processedFileContent.length);
-      } else {
-        console.log('File content appears to be binary/corrupted, falling back to prompt-based generation');
+      try {
+        const processedFile = await FileProcessingService.processFile(new File([fileContent], 'uploadedFile'));
+        processedFileContent = processedFile.content;
+        isFileContentUsable = processedFileContent.length > 100; // Increased threshold
+        console.log('File content is educational and usable. Processed length:', processedFileContent.length);
+      } catch (error) {
+        console.error('Error processing file content:', error);
         processedFileContent = '';
         isFileContentUsable = false;
       }
     }
     
-    // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const questionnaireId = this.generateId();
@@ -154,23 +149,20 @@ class QuestionnaireServiceClass {
     
     let questions: Question[] = [];
     
-    // Only generate questions if includeQuestionnaire is true
     if (options.includeQuestionnaire) {
-      // Try to use ChatGPT first if API key is available and we have usable content
       const chatGptApiKey = ChatGPTService.getApiKey();
-      if (chatGptApiKey && isFileContentUsable) {
+      if (chatGptApiKey && (isFileContentUsable || prompt.trim())) {
         try {
-          console.log('Using ChatGPT to generate file-based questions...');
+          console.log('Using ChatGPT to generate questions...');
           const chatGptQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
             options.difficulty,
-            processedFileContent,
+            isFileContentUsable ? processedFileContent : undefined,
             setNumber,
             totalSets
           );
           
-          // Convert ChatGPT questions to our format
           questions = chatGptQuestions.map(q => ({
             id: this.generateId(),
             text: q.question,
@@ -179,46 +171,42 @@ class QuestionnaireServiceClass {
             correctAnswer: q.correctAnswer
           }));
           
-          console.log(`Successfully generated ${questions.length} file-based questions with ChatGPT`);
+          console.log(`Successfully generated ${questions.length} questions with ChatGPT`);
         } catch (error) {
-          console.error('ChatGPT generation failed, falling back to enhanced file-based generation:', error);
-          // Fall back to enhanced file-based generation
-          questions = this.generateEnhancedFileBasedQuestions(
-            processedFileContent, 
+          console.error('ChatGPT generation failed, falling back to enhanced generation:', error);
+          questions = this.generateTemplateQuestions(
             prompt,
-            options.numberOfQuestions, 
-            options.difficulty, 
-            setNumber, 
+            options.numberOfQuestions,
+            options.difficulty,
+            undefined,
+            setNumber,
             totalSets
           );
         }
       } else if (isFileContentUsable) {
         console.log('Using enhanced file-based generation (no ChatGPT API key)');
-        // Use enhanced file-based generation when we have substantial file content
-        questions = this.generateEnhancedFileBasedQuestions(
-          processedFileContent, 
+        questions = this.generateEnhancedQuestions(
           prompt,
           options.numberOfQuestions, 
           options.difficulty, 
+          processedFileContent,
           setNumber, 
           totalSets
         );
       } else {
         console.log('Using template-based generation (no usable file content)');
-        // Use template-based generation when no usable file content is available
         questions = this.generateTemplateQuestions(
           prompt, 
           options.numberOfQuestions, 
           options.difficulty, 
-          undefined, // Don't pass unusable file content
+          undefined,
           setNumber, 
           totalSets
         );
       }
       
-      // Ensure we have the correct number of questions
       if (questions.length < options.numberOfQuestions) {
-        console.log(`Only generated ${questions.length} questions, filling to ${options.numberOfQuestions} with template questions`);
+        console.log(`Generated ${questions.length} questions, need ${options.numberOfQuestions}. Filling remaining slots.`);
         const additionalQuestions = this.generateTemplateQuestions(
           prompt,
           options.numberOfQuestions - questions.length,
@@ -230,15 +218,8 @@ class QuestionnaireServiceClass {
         questions.push(...additionalQuestions);
       }
       
-      // Trim to exact number requested
       questions = questions.slice(0, options.numberOfQuestions);
-    }
-
-    // Handle course generation
-    let courseContent = null;
-    if (options.includeCourse) {
-      console.log('Generating course content...');
-      courseContent = this.generateCourseContent(prompt, isFileContentUsable ? processedFileContent : undefined);
+      console.log(`Final question count: ${questions.length}`);
     }
 
     const questionnaire: Questionnaire = {
@@ -253,639 +234,15 @@ class QuestionnaireServiceClass {
       isSaved: false,
       timeframe: options.timeframe,
       setNumber,
-      totalSets,
-      ...(courseContent && { courseContent })
+      totalSets
     };
 
     console.log(`Generated questionnaire with ${questions.length} questions:`, questionnaire);
     return questionnaire;
   }
 
-  private isReadableContent(content: string): boolean {
-    // Check for signs of binary or corrupted content
-    const binaryIndicators = [
-      /^\s*%PDF/,           // PDF header
-      /<<\s*\/Type\s*\/Catalog/,  // PDF object structure
-      /obj\s*<<.*>>/,       // PDF object notation
-      /endstream/,          // PDF stream markers
-      /^\s*\d+\s+\d+\s+obj/, // PDF object references
-      /%����/,              // Common binary corruption markers
-      /\0/,                 // Null bytes (binary content)
-    ];
-    
-    // Check if content contains binary indicators
-    for (const indicator of binaryIndicators) {
-      if (indicator.test(content)) {
-        console.log('Detected binary/PDF content, marking as unreadable');
-        return false;
-      }
-    }
-    
-    // Check for excessive non-printable characters
-    const nonPrintableCount = (content.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g) || []).length;
-    const nonPrintableRatio = nonPrintableCount / content.length;
-    
-    if (nonPrintableRatio > 0.1) { // More than 10% non-printable characters
-      console.log('High ratio of non-printable characters, marking as unreadable');
-      return false;
-    }
-    
-    // Check for reasonable text content
-    const readableCharCount = (content.match(/[a-zA-Z0-9\s]/g) || []).length;
-    const readableRatio = readableCharCount / content.length;
-    
-    if (readableRatio < 0.5) { // Less than 50% readable characters
-      console.log('Low ratio of readable characters, marking as unreadable');
-      return false;
-    }
-    
-    console.log('Content appears to be readable text');
-    return true;
-  }
-
-  private processFileContent(rawContent: string): string {
-    // Clean and structure the file content for better question generation
-    let processedContent = rawContent;
-    
-    // Remove excessive whitespace and normalize line breaks
-    processedContent = processedContent.replace(/\s+/g, ' ').trim();
-    processedContent = processedContent.replace(/\n\s*\n/g, '\n\n');
-    
-    // Remove any remaining binary artifacts or special characters
-    processedContent = processedContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
-    
-    // Extract key sections and topics
-    const sections = this.extractSections(processedContent);
-    
-    // If we found structured sections, use them; otherwise use the cleaned original content
-    if (sections.length > 0) {
-      processedContent = sections.map(section => 
-        `Section: ${section.title}\nContent: ${section.content}`
-      ).join('\n\n');
-    }
-    
-    return processedContent;
-  }
-
-  private extractSections(content: string): Array<{title: string, content: string}> {
-    const sections = [];
-    const lines = content.split('\n');
-    
-    let currentSection = null;
-    let currentContent: string[] = [];
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      
-      // Check if this line could be a section header
-      if (this.isSectionHeader(trimmedLine)) {
-        // Save previous section if exists
-        if (currentSection) {
-          sections.push({
-            title: currentSection,
-            content: currentContent.join(' ').trim()
-          });
-        }
-        
-        // Start new section
-        currentSection = trimmedLine.replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '');
-        currentContent = [];
-      } else if (trimmedLine.length > 0) {
-        // Add to current section content
-        currentContent.push(trimmedLine);
-      }
-    }
-    
-    // Don't forget the last section
-    if (currentSection && currentContent.length > 0) {
-      sections.push({
-        title: currentSection,
-        content: currentContent.join(' ').trim()
-      });
-    }
-    
-    return sections.filter(section => section.content.length > 20); // Filter out very short sections
-  }
-
-  private isSectionHeader(line: string): boolean {
-    // Check for various header patterns
-    return (
-      line.startsWith('#') || // Markdown headers
-      !!line.match(/^[A-Z][^.]*:?$/) || // ALL CAPS or Title Case ending with optional colon
-      !!line.match(/^\d+\./) || // Numbered sections
-      !!line.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) || // Title Case
-      (line.length < 80 && line.length > 5 && !line.includes(',') && !line.includes(';'))
-    );
-  }
-
-  private generateEnhancedFileBasedQuestions(
-    fileContent: string,
-    prompt: string,
-    numberOfQuestions: number,
-    difficulty: 'easy' | 'medium' | 'hard',
-    setNumber?: number,
-    totalSets?: number
-  ): Question[] {
-    console.log('Generating enhanced file-based questions...');
-    
-    const questions: Question[] = [];
-    const sections = this.extractSections(fileContent);
-    const keyTopics = this.extractKeyTopics(fileContent);
-    
-    console.log('Found sections:', sections.length);
-    console.log('Key topics:', keyTopics);
-    
-    // Generate questions from different sections to ensure variety
-    const sectionsToUse = sections.length > 0 ? sections : [{ title: 'Main Content', content: fileContent }];
-    
-    // Generate questions using a round-robin approach to ensure we get the requested number
-    for (let i = 0; i < numberOfQuestions; i++) {
-      let question: Question | null = null;
-      
-      // Try different generation methods in order
-      if (i < sectionsToUse.length * 2) {
-        // First, try section-based questions
-        const sectionIndex = i % sectionsToUse.length;
-        const section = sectionsToUse[sectionIndex];
-        question = this.generateQuestionFromSection(
-          section,
-          keyTopics,
-          difficulty,
-          i + 1,
-          setNumber
-        );
-      } else if (keyTopics.length > 0) {
-        // Then try topic-based questions
-        const topicIndex = i % keyTopics.length;
-        const topic = keyTopics[topicIndex];
-        question = this.generateTopicBasedQuestion(
-          topic,
-          fileContent,
-          difficulty,
-          i + 1,
-          setNumber
-        );
-      }
-      
-      // If we couldn't generate a file-based question, create a general one
-      if (!question) {
-        question = this.generateGenericFileQuestion(
-          fileContent,
-          difficulty,
-          i + 1,
-          setNumber
-        );
-      }
-      
-      if (question) {
-        questions.push(question);
-      }
-    }
-    
-    console.log(`Generated ${questions.length} enhanced file-based questions`);
-    return questions;
-  }
-
-  private generateGenericFileQuestion(
-    fileContent: string,
-    difficulty: 'easy' | 'medium' | 'hard',
-    questionNumber: number,
-    setNumber?: number
-  ): Question {
-    const setVariation = setNumber ? ` (Set ${setNumber})` : '';
-    
-    const genericQuestions = [
-      {
-        text: `Based on the provided document, what is the main focus of the content?${setVariation}`,
-        options: [
-          'The primary topic discussed in the document',
-          'A topic not mentioned in the document',
-          'An unrelated subject matter',
-          'External information not provided'
-        ]
-      },
-      {
-        text: `According to the document content, which statement best represents the information provided?${setVariation}`,
-        options: [
-          'Information directly stated in the document',
-          'Assumptions not supported by the text',
-          'External knowledge not in the document',
-          'Contradictory information'
-        ]
-      },
-      {
-        text: `What can be concluded from the material provided in the document?${setVariation}`,
-        options: [
-          'Conclusions supported by the document content',
-          'Unsupported external conclusions',
-          'Information not present in the document',
-          'Opposite of what is stated'
-        ]
-      }
-    ];
-    
-    const selectedQuestion = genericQuestions[questionNumber % genericQuestions.length];
-    
-    return {
-      id: this.generateId(),
-      text: selectedQuestion.text,
-      type: 'multiple-choice',
-      options: selectedQuestion.options,
-      correctAnswer: 0
-    };
-  }
-
-  private extractKeyTopics(content: string): string[] {
-    const words = content.toLowerCase().split(/\s+/);
-    const wordCount: Record<string, number> = {};
-    
-    // Count word frequency, excluding common words
-    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those']);
-    
-    words.forEach(word => {
-      const cleanWord = word.replace(/[^\w]/g, '');
-      if (cleanWord.length > 3 && !commonWords.has(cleanWord)) {
-        wordCount[cleanWord] = (wordCount[cleanWord] || 0) + 1;
-      }
-    });
-    
-    // Get top 10 most frequent words as key topics
-    return Object.entries(wordCount)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 10)
-      .map(([word]) => word);
-  }
-
-  private generateQuestionFromSection(
-    section: { title: string, content: string },
-    keyTopics: string[],
-    difficulty: 'easy' | 'medium' | 'hard',
-    questionNumber: number,
-    setNumber?: number
-  ): Question | null {
-    if (section.content.length < 20) return null;
-    
-    const sentences = section.content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-    if (sentences.length === 0) return null;
-    
-    // Select a sentence that contains key information
-    const informativeSentence = sentences.find(s => 
-      keyTopics.some(topic => s.toLowerCase().includes(topic))
-    ) || sentences[0];
-    
-    const questionTypes = this.getQuestionTypes(difficulty);
-    const questionType = questionTypes[questionNumber % questionTypes.length];
-    
-    return this.createQuestionFromSentence(
-      informativeSentence.trim(),
-      section.title,
-      questionType,
-      questionNumber,
-      setNumber
-    );
-  }
-
-  private generateTopicBasedQuestion(
-    topic: string,
-    fileContent: string,
-    difficulty: 'easy' | 'medium' | 'hard',
-    questionNumber: number,
-    setNumber?: number
-  ): Question | null {
-    // Find sentences containing the topic
-    const sentences = fileContent.split(/[.!?]+/).filter(s => 
-      s.toLowerCase().includes(topic) && s.trim().length > 15
-    );
-    
-    if (sentences.length === 0) return null;
-    
-    const sentence = sentences[0].trim();
-    const questionTypes = this.getQuestionTypes(difficulty);
-    const questionType = questionTypes[questionNumber % questionTypes.length];
-    
-    return this.createQuestionFromSentence(
-      sentence,
-      `Topic: ${topic}`,
-      questionType,
-      questionNumber,
-      setNumber
-    );
-  }
-
-  private getQuestionTypes(difficulty: 'easy' | 'medium' | 'hard'): string[] {
-    switch (difficulty) {
-      case 'easy':
-        return ['definition', 'identification', 'simple_fact'];
-      case 'medium':
-        return ['explanation', 'comparison', 'application'];
-      case 'hard':
-        return ['analysis', 'evaluation', 'synthesis'];
-      default:
-        return ['explanation', 'application'];
-    }
-  }
-
-  private createQuestionFromSentence(
-    sentence: string,
-    context: string,
-    questionType: string,
-    questionNumber: number,
-    setNumber?: number
-  ): Question {
-    const setVariation = setNumber ? ` (Set ${setNumber})` : '';
-    
-    // Generate question based on type and sentence content
-    let questionText = '';
-    let options: string[] = [];
-    let correctAnswer = 0;
-    
-    switch (questionType) {
-      case 'definition':
-        questionText = `Based on the content, what is the main concept discussed in: "${sentence.substring(0, 50)}..."?${setVariation}`;
-        options = [
-          this.extractKeyConceptFromSentence(sentence),
-          'A different unrelated concept',
-          'A general business term',
-          'An external reference'
-        ];
-        break;
-        
-      case 'identification':
-        questionText = `According to the document, which statement is most accurate regarding the content?${setVariation}`;
-        options = [
-          sentence.substring(0, 60) + '...',
-          'This is not mentioned in the document',
-          'The opposite of what is stated',
-          'An assumption not supported by the text'
-        ];
-        break;
-        
-      case 'explanation':
-        questionText = `From the provided material, what can be concluded about ${context.toLowerCase()}?${setVariation}`;
-        options = [
-          this.generateCorrectConclusion(sentence),
-          'Something not mentioned in the document',
-          'The opposite conclusion',
-          'An unrelated conclusion'
-        ];
-        break;
-        
-      case 'application':
-        questionText = `Based on the information provided, how would you apply the concepts discussed?${setVariation}`;
-        options = [
-          this.generateCorrectApplication(sentence),
-          'Apply unrelated concepts',
-          'Ignore the provided information',
-          'Use external assumptions'
-        ];
-        break;
-        
-      default:
-        questionText = `According to the document content, what is stated about this topic?${setVariation}`;
-        options = [
-          sentence.substring(0, 50) + '...',
-          'Information not in the document',
-          'Contradictory information',
-          'External assumptions'
-        ];
-    }
-    
-    return {
-      id: this.generateId(),
-      text: questionText,
-      type: 'multiple-choice',
-      options,
-      correctAnswer
-    };
-  }
-
-  private extractKeyConceptFromSentence(sentence: string): string {
-    // Extract the main concept from the sentence
-    const words = sentence.split(' ');
-    const importantWords = words.filter(word => 
-      word.length > 4 && 
-      !['that', 'this', 'with', 'from', 'they', 'them', 'were', 'been', 'have'].includes(word.toLowerCase())
-    );
-    
-    return importantWords.slice(0, 3).join(' ') || sentence.substring(0, 30);
-  }
-
-  private generateCorrectConclusion(sentence: string): string {
-    // Generate a conclusion based on the sentence content
-    if (sentence.includes('important') || sentence.includes('significant')) {
-      return 'It is an important aspect mentioned in the document';
-    }
-    if (sentence.includes('process') || sentence.includes('method')) {
-      return 'It describes a process outlined in the material';
-    }
-    if (sentence.includes('result') || sentence.includes('outcome')) {
-      return 'It represents an outcome discussed in the content';
-    }
-    
-    return 'It is directly supported by the provided information';
-  }
-
-  private generateCorrectApplication(sentence: string): string {
-    // Generate an application based on the sentence content
-    if (sentence.includes('should') || sentence.includes('must')) {
-      return 'Follow the guidelines as specified in the document';
-    }
-    if (sentence.includes('best') || sentence.includes('effective')) {
-      return 'Implement the best practices mentioned';
-    }
-    if (sentence.includes('avoid') || sentence.includes('prevent')) {
-      return 'Avoid the issues highlighted in the material';
-    }
-    
-    return 'Apply the principles discussed in the content';
-  }
-
-  private generateCourseContent(prompt: string, fileContent?: string): any {
-    console.log('Generating course content from prompt and files');
-    
-    // Basic course structure generation
-    const courseContent = {
-      id: this.generateId(),
-      title: `Course: ${prompt.substring(0, 50)}...`,
-      description: `This course was generated based on: "${prompt}"`,
-      modules: []
-    };
-
-    // If we have file content, try to create modules from it
-    if (fileContent && fileContent.trim().length > 0) {
-      const modules = this.extractModulesFromContent(fileContent);
-      courseContent.modules = modules;
-    } else {
-      // Create a basic module structure from the prompt
-      courseContent.modules = [
-        {
-          id: this.generateId(),
-          title: 'Introduction',
-          content: `Welcome to this course about: ${prompt}`,
-          type: 'text'
-        },
-        {
-          id: this.generateId(),
-          title: 'Main Content',
-          content: `This module covers the key concepts related to: ${prompt}`,
-          type: 'text'
-        }
-      ];
-    }
-
-    return courseContent;
-  }
-
-  private extractModulesFromContent(fileContent: string): any[] {
-    const modules = [];
-    
-    // Try to extract meaningful sections from file content
-    const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
-    
-    let currentModule = null;
-    let moduleContent = [];
-    
-    for (const line of lines) {
-      // Check if this line could be a heading/title
-      if (line.length < 100 && (
-        line.startsWith('#') || 
-        line.match(/^[A-Z][^.]*:?$/) ||
-        line.match(/^\d+\./)
-      )) {
-        // Save previous module if exists
-        if (currentModule) {
-          modules.push({
-            id: this.generateId(),
-            title: currentModule,
-            content: moduleContent.join('\n'),
-            type: 'text'
-          });
-        }
-        
-        // Start new module
-        currentModule = line.replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '');
-        moduleContent = [];
-      } else {
-        // Add to current module content
-        moduleContent.push(line);
-      }
-    }
-    
-    // Don't forget the last module
-    if (currentModule) {
-      modules.push({
-        id: this.generateId(),
-        title: currentModule,
-        content: moduleContent.join('\n'),
-        type: 'text'
-      });
-    }
-    
-    // If no modules were extracted, create a single module with all content
-    if (modules.length === 0) {
-      modules.push({
-        id: this.generateId(),
-        title: 'Course Content',
-        content: fileContent,
-        type: 'text'
-      });
-    }
-    
-    return modules.slice(0, 5); // Limit to 5 modules
-  }
-
-  saveQuestionnaire(questionnaire: Questionnaire): void {
-    try {
-      const existingQuestionnaires = this.getAllQuestionnaires();
-      const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
-      updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
-      
-      // Try to save with more aggressive size management
-      const dataToSave = JSON.stringify(updatedQuestionnaires);
-      
-      // Check if data size is too large (approximate check)
-      if (dataToSave.length > 4000000) { // ~4MB limit
-        console.log('Data too large, performing aggressive cleanup...');
-        this.cleanupOldQuestionnaires();
-        
-        // Try again with just this questionnaire
-        const minimalData = JSON.stringify([{...questionnaire, isSaved: true}]);
-        localStorage.setItem('questionnaires', minimalData);
-      } else {
-        localStorage.setItem('questionnaires', dataToSave);
-      }
-      
-      console.log('Questionnaire saved successfully');
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.log('Storage quota exceeded, performing aggressive cleanup...');
-        
-        // More aggressive cleanup - clear everything and save only this questionnaire
-        localStorage.removeItem('questionnaires');
-        
-        try {
-          const singleQuestionnaireData = JSON.stringify([{...questionnaire, isSaved: true}]);
-          localStorage.setItem('questionnaires', singleQuestionnaireData);
-          console.log('Questionnaire saved successfully after aggressive cleanup');
-        } catch (retryError) {
-          console.error('Failed to save questionnaire even after aggressive cleanup:', retryError);
-          throw new Error('Unable to save. Please try refreshing the page and try again.');
-        }
-      } else {
-        console.error('Error saving questionnaire:', error);
-        throw error;
-      }
-    }
-  }
-
-  getAllQuestionnaires(): Questionnaire[] {
-    try {
-      const stored = localStorage.getItem('questionnaires');
-      if (stored) {
-        return JSON.parse(stored);
-      }
-      return [];
-    } catch (error) {
-      console.error('Error reading questionnaires from localStorage:', error);
-      return [];
-    }
-  }
-
-  getActiveQuestionnaires(): Questionnaire[] {
-    return this.getAllQuestionnaires().filter(q => q.isActive && q.isSaved);
-  }
-
-  deleteQuestionnaire(questionnaireId: string): void {
-    try {
-      const questionnaires = this.getAllQuestionnaires();
-      const updatedQuestionnaires = questionnaires.filter(q => q.id !== questionnaireId);
-      localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
-      console.log('Questionnaire deleted successfully');
-    } catch (error) {
-      console.error('Error deleting questionnaire:', error);
-      throw error;
-    }
-  }
-
-  private categorizePrompt(prompt: string, fileContent?: string): string {
-    const lowerPrompt = prompt.toLowerCase();
-    const lowerFileContent = fileContent?.toLowerCase() || '';
-    const combinedContent = lowerPrompt + ' ' + lowerFileContent;
-    
-    if (combinedContent.includes('customer') || combinedContent.includes('satisfaction') || combinedContent.includes('service')) {
-      return 'customer satisfaction';
-    }
-    if (combinedContent.includes('employee') || combinedContent.includes('staff') || combinedContent.includes('workplace')) {
-      return 'employee feedback';
-    }
-    if (combinedContent.includes('product') || combinedContent.includes('feature') || combinedContent.includes('usability')) {
-      return 'product feedback';
-    }
-    if (combinedContent.includes('event') || combinedContent.includes('conference') || combinedContent.includes('workshop')) {
-      return 'event feedback';
-    }
-    
-    return 'general';
+  private generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 
   private generateDescription(prompt: string, fileContent?: string, setNumber?: number, totalSets?: number): string {
@@ -912,7 +269,6 @@ class QuestionnaireServiceClass {
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
                          this.questionTemplates['customer satisfaction'];
     
-    // Calculate how many questions to take from base questions vs file-based questions
     let baseQuestionCount = numberOfQuestions;
     let fileBasedQuestions: Question[] = [];
     
@@ -921,10 +277,8 @@ class QuestionnaireServiceClass {
       baseQuestionCount = Math.max(numberOfQuestions - fileBasedQuestions.length, Math.floor(numberOfQuestions * 0.7));
     }
     
-    // Create a much larger pool of questions to ensure uniqueness across sets
     const extendedQuestionPool = [
       ...baseQuestions,
-      // Add more generic questions to expand the pool
       'How would you rate your overall experience?',
       'What improvements would you suggest?',
       'How likely are you to participate again?',
@@ -957,17 +311,14 @@ class QuestionnaireServiceClass {
       'How valuable was the training received?'
     ];
     
-    // Shuffle and create unique offset for each set to ensure no overlap
     const shuffledQuestions = [...extendedQuestionPool].sort(() => Math.random() - 0.5);
     const setOffset = setNumber ? (setNumber - 1) * numberOfQuestions : 0;
     const totalQuestionsNeeded = totalSets ? totalSets * numberOfQuestions : numberOfQuestions;
     
-    // Ensure we have enough questions in the pool
     while (shuffledQuestions.length < totalQuestionsNeeded) {
       shuffledQuestions.push(...extendedQuestionPool);
     }
     
-    // Take unique questions for this set
     for (let i = 0; i < Math.min(baseQuestionCount, shuffledQuestions.length - setOffset); i++) {
       const questionIndex = setOffset + i;
       if (questionIndex < shuffledQuestions.length) {
@@ -989,10 +340,8 @@ class QuestionnaireServiceClass {
       }
     }
 
-    // Add file-based questions if available
     questions.push(...fileBasedQuestions.slice(0, numberOfQuestions - questions.length));
 
-    // Fill remaining slots with additional unique questions if needed
     while (questions.length < numberOfQuestions) {
       const remainingIndex = setOffset + questions.length;
       if (remainingIndex < shuffledQuestions.length) {
@@ -1004,7 +353,6 @@ class QuestionnaireServiceClass {
           options: ['Poor', 'Fair', 'Good', 'Excellent']
         });
       } else {
-        // Fallback if we somehow run out of questions
         questions.push({
           id: this.generateId(),
           text: `How would you rate this aspect? (Set ${setNumber || 1}, Question ${questions.length + 1})`,
@@ -1014,16 +362,66 @@ class QuestionnaireServiceClass {
       }
     }
 
-    console.log(`Generated ${questions.length} unique questions for set ${setNumber || 1}`);
     return questions.slice(0, numberOfQuestions);
+  }
+
+  private categorizePrompt(prompt: string, fileContent?: string): string {
+    const lowerPrompt = prompt.toLowerCase();
+    const lowerFileContent = fileContent?.toLowerCase() || '';
+    const combinedContent = lowerPrompt + ' ' + lowerFileContent;
+    
+    if (combinedContent.includes('customer') || combinedContent.includes('satisfaction') || combinedContent.includes('service')) {
+      return 'customer satisfaction';
+    }
+    if (combinedContent.includes('employee') || combinedContent.includes('staff') || combinedContent.includes('workplace')) {
+      return 'employee feedback';
+    }
+    if (combinedContent.includes('product') || combinedContent.includes('feature') || combinedContent.includes('usability')) {
+      return 'product feedback';
+    }
+    if (combinedContent.includes('event') || combinedContent.includes('conference') || combinedContent.includes('workshop')) {
+      return 'event feedback';
+    }
+    
+    return 'general';
+  }
+
+  private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string, setNumber?: number): string {
+    let adapted = baseQuestion;
+    const combinedContent = prompt.toLowerCase() + ' ' + (fileContent?.toLowerCase() || '');
+    
+    if (combinedContent.includes('website')) {
+      adapted = adapted.replace(/product\/service|service|product/gi, 'website');
+    } else if (combinedContent.includes('app')) {
+      adapted = adapted.replace(/product\/service|service|product/gi, 'app');
+    } else if (combinedContent.includes('course') || combinedContent.includes('training')) {
+      adapted = adapted.replace(/product\/service|service|product/gi, 'course');
+    } else if (combinedContent.includes('policy')) {
+      adapted = adapted.replace(/product\/service|service|product/gi, 'policy');
+    }
+    
+    if (setNumber && setNumber > 1) {
+      const variations = [
+        '', 
+        ' in your experience',
+        ' from your perspective',
+        ' in your opinion',
+        ' based on your usage'
+      ];
+      const variation = variations[setNumber % variations.length];
+      if (variation && !adapted.includes(variation)) {
+        adapted = adapted.replace('?', `${variation}?`);
+      }
+    }
+    
+    return adapted;
   }
 
   private generateFileBasedQuestions(fileContent: string, prompt: string, setNumber?: number): Question[] {
     const questions: Question[] = [];
     
-    // Analyze file content to generate relevant questions
     const content = fileContent.toLowerCase();
-    const setVariation = setNumber ? ` (Set ${setNumber} perspective)` : '';
+    const setVariation = setNumber ? ` (Set ${setNumber})` : '';
     
     if (content.includes('policy') || content.includes('procedure')) {
       questions.push({
@@ -1043,7 +441,6 @@ class QuestionnaireServiceClass {
       });
     }
     
-    // Default file-based question if no specific patterns are found
     if (questions.length === 0) {
       questions.push({
         id: this.generateId(),
@@ -1053,43 +450,7 @@ class QuestionnaireServiceClass {
       });
     }
     
-    return questions.slice(0, 3); // Limit to 3 additional questions from file content
-  }
-
-  private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string, setNumber?: number): string {
-    let adapted = baseQuestion;
-    const combinedContent = prompt.toLowerCase() + ' ' + (fileContent?.toLowerCase() || '');
-    
-    if (combinedContent.includes('website')) {
-      adapted = adapted.replace(/product\/service|service|product/gi, 'website');
-    } else if (combinedContent.includes('app')) {
-      adapted = adapted.replace(/product\/service|service|product/gi, 'app');
-    } else if (combinedContent.includes('course') || combinedContent.includes('training')) {
-      adapted = adapted.replace(/product\/service|service|product/gi, 'course');
-    } else if (combinedContent.includes('policy')) {
-      adapted = adapted.replace(/product\/service|service|product/gi, 'policy');
-    }
-    
-    // Add subtle variation for different sets
-    if (setNumber && setNumber > 1) {
-      const variations = [
-        '', // no change for set 1
-        ' in your experience',
-        ' from your perspective',
-        ' in your opinion',
-        ' based on your usage'
-      ];
-      const variation = variations[setNumber % variations.length];
-      if (variation && !adapted.includes(variation)) {
-        adapted = adapted.replace('?', `${variation}?`);
-      }
-    }
-    
-    return adapted;
-  }
-
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return questions.slice(0, 3);
   }
 }
 
