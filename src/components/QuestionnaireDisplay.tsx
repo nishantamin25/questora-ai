@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -134,6 +135,36 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
     return colors[(setNumber - 1) % colors.length];
   };
 
+  // Convert courseContent to the format expected by CourseDisplay
+  const convertCourseContent = (courseContent: any) => {
+    if (!courseContent) return null;
+    
+    return {
+      id: courseContent.id || 'course-' + questionnaire.id,
+      name: courseContent.title || questionnaire.title,
+      description: courseContent.description || questionnaire.description,
+      materials: courseContent.modules?.map((module: any) => ({
+        type: module.type || 'text',
+        content: module.content || '',
+        title: module.title || 'Module'
+      })) || [
+        {
+          type: 'text',
+          content: courseContent.content || 'Course content',
+          title: 'Course Material'
+        }
+      ],
+      estimatedTime: questionnaire.timeframe || 30
+    };
+  };
+
+  const handleCourseComplete = (courseId: string) => {
+    toast({
+      title: "Course Completed!",
+      description: "You can now access the questionnaire.",
+    });
+  };
+
   return (
     <>
       <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden">
@@ -248,7 +279,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
         {/* Course Content Display */}
         {questionnaire.courseContent && (
           <div className="border-b border-slate-200">
-            <CourseDisplay content={questionnaire.courseContent} />
+            <CourseDisplay 
+              course={convertCourseContent(questionnaire.courseContent)}
+              onCourseComplete={handleCourseComplete}
+            />
           </div>
         )}
 
