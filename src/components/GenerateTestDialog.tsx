@@ -57,27 +57,27 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
     const isValidFile = (
       // Image files
       fileType.startsWith('image/') ||
-      fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i) ||
+      !!fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i) ||
       
       // Video files
       fileType.startsWith('video/') ||
-      fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i) ||
+      !!fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i) ||
       
       // Audio files
       fileType.startsWith('audio/') ||
-      fileName.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i) ||
+      !!fileName.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i) ||
       
       // Document files
       fileType === 'application/pdf' ||
-      fileName.match(/\.pdf$/i) ||
-      fileName.match(/\.(doc|docx)$/i) ||
+      !!fileName.match(/\.pdf$/i) ||
+      !!fileName.match(/\.(doc|docx)$/i) ||
       fileType.includes('document') ||
       fileType === 'application/msword' ||
       fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       
       // Text files
       fileType.startsWith('text/') ||
-      fileName.match(/\.(txt|md|csv|rtf)$/i) ||
+      !!fileName.match(/\.(txt|md|csv|rtf)$/i) ||
       
       // Any other file that might contain readable content
       file.size > 0
