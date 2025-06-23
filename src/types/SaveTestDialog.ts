@@ -17,6 +17,9 @@ export interface Questionnaire {
   difficulty?: 'easy' | 'medium' | 'hard';
   isSaved?: boolean;
   timeframe?: number;
+  setNumber?: number;
+  totalSets?: number;
+  courseContent?: any;
 }
 
 export interface SaveTestDialogProps {

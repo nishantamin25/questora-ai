@@ -248,7 +248,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
         {/* Course Content Display */}
         {questionnaire.courseContent && (
           <div className="border-b border-slate-200">
-            <CourseDisplay courseContent={questionnaire.courseContent} />
+            <CourseDisplay content={questionnaire.courseContent} />
           </div>
         )}
 
@@ -312,7 +312,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
       </Card>
 
       <SaveTestDialog
-        open={showSaveDialog}
         questionnaire={questionnaire}
         onSave={onUpdate}
         onCancel={() => setShowSaveDialog(false)}

@@ -17,7 +17,34 @@ interface QuestionnaireResponse {
   totalQuestions?: number;
 }
 
+interface SubmitResponseData {
+  questionnaireId: string;
+  responses: Record<string, string>;
+  submittedAt: string;
+}
+
 class ResponseServiceClass {
+  async submitResponse(responseData: SubmitResponseData): Promise<void> {
+    // Convert the response data to our internal format
+    const response: QuestionnaireResponse = {
+      id: this.generateId(),
+      questionnaireId: responseData.questionnaireId,
+      questionnaireTitle: 'Questionnaire', // This could be enhanced to get actual title
+      userId: 'anonymous', // This could be enhanced with actual user data
+      username: 'Anonymous User',
+      answers: Object.entries(responseData.responses).map(([questionId, selectedOption]) => ({
+        questionId,
+        questionText: '', // This could be enhanced to get actual question text
+        selectedOption,
+        selectedOptionIndex: 0, // This could be enhanced to get actual index
+        isCorrect: undefined
+      })),
+      submittedAt: responseData.submittedAt
+    };
+
+    this.saveResponse(response);
+  }
+
   saveResponse(response: QuestionnaireResponse): void {
     const existingResponses = this.getAllResponses();
     existingResponses.unshift(response);
