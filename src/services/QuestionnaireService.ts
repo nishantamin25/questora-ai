@@ -47,7 +47,54 @@ class QuestionnaireServiceClass {
       'How professional was our staff during your interaction?',
       'How likely are you to use our services again?'
     ],
-    // ... keep existing code (other question templates)
+    'employee feedback': [
+      'How satisfied are you with your current role?',
+      'How would you rate the work-life balance?',
+      'How supportive is your immediate supervisor?',
+      'How clear are your job responsibilities?',
+      'How satisfied are you with professional development opportunities?',
+      'How would you rate communication within the team?',
+      'How fair is the compensation for your role?',
+      'How likely are you to recommend this company as a place to work?',
+      'How satisfied are you with the work environment?',
+      'How well does the company support your career goals?'
+    ],
+    'product feedback': [
+      'How easy is the product to use?',
+      'How well does the product meet your needs?',
+      'How would you rate the product quality?',
+      'How satisfied are you with the product features?',
+      'How likely are you to recommend this product?',
+      'How does this product compare to alternatives?',
+      'How satisfied are you with the product performance?',
+      'How intuitive is the product interface?',
+      'How reliable has the product been?',
+      'How would you rate the overall value of the product?'
+    ],
+    'event feedback': [
+      'How satisfied were you with the event overall?',
+      'How well organized was the event?',
+      'How relevant was the content to your interests?',
+      'How would you rate the quality of speakers/presenters?',
+      'How satisfied were you with the venue?',
+      'How likely are you to attend similar events?',
+      'How would you rate the networking opportunities?',
+      'How clear was the event communication beforehand?',
+      'How satisfied were you with the event duration?',
+      'How would you rate the registration process?'
+    ],
+    'general': [
+      'How would you rate your overall experience?',
+      'What improvements would you suggest?',
+      'How likely are you to participate again?',
+      'How clear were the instructions provided?',
+      'How satisfied are you with the support received?',
+      'How would you rate the quality of the content?',
+      'How user-friendly did you find the interface?',
+      'How relevant was the information provided?',
+      'How would you rate the response time?',
+      'How professional was the service?'
+    ]
   };
 
   private cleanupOldQuestionnaires(): void {
@@ -117,12 +164,12 @@ class QuestionnaireServiceClass {
         } catch (error) {
           console.error('ChatGPT generation failed, falling back to template-based generation:', error);
           // Fall back to template-based generation
-          questions = this.generateFallbackQuestions(prompt, options, fileContent, setNumber, totalSets);
+          questions = this.generateQuestions(prompt, options.numberOfQuestions, fileContent, setNumber, totalSets);
         }
       } else {
         console.log('No ChatGPT API key found, using template-based generation');
         // Use template-based generation
-        questions = this.generateFallbackQuestions(prompt, options, fileContent, setNumber, totalSets);
+        questions = this.generateQuestions(prompt, options.numberOfQuestions, fileContent, setNumber, totalSets);
       }
     }
 
@@ -352,15 +399,9 @@ class QuestionnaireServiceClass {
     return description;
   }
 
-  private generateFallbackQuestions(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
-    // This is the existing question generation logic with set awareness
-    const category = this.categorizePrompt(prompt, fileContent);
-    const questions = this.generateQuestions(prompt, category, options.numberOfQuestions, fileContent, setNumber, totalSets);
-    return questions;
-  }
-
-  private generateQuestions(prompt: string, category: string, numberOfQuestions: number, fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
+  private generateQuestions(prompt: string, numberOfQuestions: number, fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
     const questions: Question[] = [];
+    const category = this.categorizePrompt(prompt, fileContent);
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
                          this.questionTemplates['customer satisfaction'];
     
@@ -373,57 +414,100 @@ class QuestionnaireServiceClass {
       baseQuestionCount = Math.max(numberOfQuestions - fileBasedQuestions.length, Math.floor(numberOfQuestions * 0.7));
     }
     
-    // Shuffle and offset questions based on set number to ensure uniqueness
-    const shuffledBaseQuestions = [...baseQuestions].sort(() => Math.random() - 0.5);
-    const startOffset = setNumber ? (setNumber - 1) * numberOfQuestions : 0;
+    // Create a much larger pool of questions to ensure uniqueness across sets
+    const extendedQuestionPool = [
+      ...baseQuestions,
+      // Add more generic questions to expand the pool
+      'How would you rate your overall experience?',
+      'What improvements would you suggest?',
+      'How likely are you to participate again?',
+      'How clear were the instructions provided?',
+      'How satisfied are you with the support received?',
+      'How would you rate the quality of the content?',
+      'How user-friendly did you find the interface?',
+      'How relevant was the information provided?',
+      'How would you rate the response time?',
+      'How professional was the service?',
+      'How accessible was the platform?',
+      'How engaging was the content?',
+      'How comprehensive was the information?',
+      'How timely was the delivery?',
+      'How helpful was the documentation?',
+      'How intuitive was the navigation?',
+      'How reliable was the system performance?',
+      'How effective was the communication?',
+      'How satisfied are you with the features?',
+      'How would you rate the overall design?',
+      'How convenient was the process?',
+      'How thorough was the explanation?',
+      'How accurate was the information?',
+      'How flexible were the options?',
+      'How responsive was the support team?',
+      'How well did it meet your expectations?',
+      'How smooth was the experience?',
+      'How clear was the feedback provided?',
+      'How organized was the content structure?',
+      'How valuable was the training received?'
+    ];
     
-    for (let i = 0; i < Math.min(baseQuestionCount, shuffledBaseQuestions.length); i++) {
-      const questionIndex = (startOffset + i) % shuffledBaseQuestions.length;
-      const questionText = this.adaptQuestionToPrompt(shuffledBaseQuestions[questionIndex], prompt, fileContent, setNumber);
-      const question: Question = {
-        id: this.generateId(),
-        text: questionText,
-        type: 'radio'
-      };
+    // Shuffle and create unique offset for each set to ensure no overlap
+    const shuffledQuestions = [...extendedQuestionPool].sort(() => Math.random() - 0.5);
+    const setOffset = setNumber ? (setNumber - 1) * numberOfQuestions : 0;
+    const totalQuestionsNeeded = totalSets ? totalSets * numberOfQuestions : numberOfQuestions;
+    
+    // Ensure we have enough questions in the pool
+    while (shuffledQuestions.length < totalQuestionsNeeded) {
+      shuffledQuestions.push(...extendedQuestionPool);
+    }
+    
+    // Take unique questions for this set
+    for (let i = 0; i < Math.min(baseQuestionCount, shuffledQuestions.length - setOffset); i++) {
+      const questionIndex = setOffset + i;
+      if (questionIndex < shuffledQuestions.length) {
+        const questionText = this.adaptQuestionToPrompt(shuffledQuestions[questionIndex], prompt, fileContent, setNumber);
+        const question: Question = {
+          id: this.generateId(),
+          text: questionText,
+          type: 'radio'
+        };
 
-      question.options = [
-        'Strongly Disagree',
-        'Disagree', 
-        'Agree',
-        'Strongly Agree'
-      ];
+        question.options = [
+          'Strongly Disagree',
+          'Disagree', 
+          'Agree',
+          'Strongly Agree'
+        ];
 
-      questions.push(question);
+        questions.push(question);
+      }
     }
 
     // Add file-based questions if available
     questions.push(...fileBasedQuestions.slice(0, numberOfQuestions - questions.length));
 
-    // If we still need more questions, generate generic ones with set variation
+    // Fill remaining slots with additional unique questions if needed
     while (questions.length < numberOfQuestions) {
-      const genericQuestions = [
-        'How would you rate your overall experience?',
-        'What improvements would you suggest?',
-        'How likely are you to participate again?',
-        'How clear were the instructions provided?',
-        'How satisfied are you with the support received?',
-        'How would you rate the quality of the content?',
-        'How user-friendly did you find the interface?',
-        'How relevant was the information provided?',
-        'How would you rate the response time?',
-        'How professional was the service?'
-      ];
-      
-      const questionIndex = (startOffset + questions.length) % genericQuestions.length;
-      const randomGeneric = genericQuestions[questionIndex];
-      questions.push({
-        id: this.generateId(),
-        text: this.adaptQuestionToPrompt(randomGeneric, prompt, fileContent, setNumber),
-        type: 'radio',
-        options: ['Poor', 'Fair', 'Good', 'Excellent']
-      });
+      const remainingIndex = setOffset + questions.length;
+      if (remainingIndex < shuffledQuestions.length) {
+        const questionText = this.adaptQuestionToPrompt(shuffledQuestions[remainingIndex], prompt, fileContent, setNumber);
+        questions.push({
+          id: this.generateId(),
+          text: questionText,
+          type: 'radio',
+          options: ['Poor', 'Fair', 'Good', 'Excellent']
+        });
+      } else {
+        // Fallback if we somehow run out of questions
+        questions.push({
+          id: this.generateId(),
+          text: `How would you rate this aspect? (Set ${setNumber || 1}, Question ${questions.length + 1})`,
+          type: 'radio',
+          options: ['Poor', 'Fair', 'Good', 'Excellent']
+        });
+      }
     }
 
+    console.log(`Generated ${questions.length} unique questions for set ${setNumber || 1}`);
     return questions.slice(0, numberOfQuestions);
   }
 
