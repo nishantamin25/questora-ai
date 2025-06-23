@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,6 +26,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
 
   useEffect(() => {
     loadQuestionnaires();
@@ -48,7 +50,32 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const getSupportedFileTypes = () => {
+    return {
+      text: ['.txt', '.md', '.csv'],
+      document: ['.pdf', '.doc', '.docx'],
+      image: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'],
+      video: ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'],
+      audio: ['.mp3', '.wav', '.ogg', '.m4a']
+    };
+  };
+
+  const getFileCategory = (file: File): string => {
+    const fileName = file.name.toLowerCase();
+    const fileType = file.type.toLowerCase();
+    
+    if (fileType.startsWith('image/')) return 'image';
+    if (fileType.startsWith('video/')) return 'video';
+    if (fileType.startsWith('audio/')) return 'audio';
+    if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) return 'document';
+    if (fileType.startsWith('text/') || fileName.endsWith('.txt') || fileName.endsWith('.md')) return 'text';
+    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return 'document';
+    if (fileName.endsWith('.csv')) return 'text';
+    
+    return 'other';
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (user.role !== 'admin') {
       toast({
         title: "Access Denied",
@@ -59,7 +86,11 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
 
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
+    if (files.length === 0) return;
+
+    setIsProcessingFiles(true);
+
+    try {
       // Check file size for each file (50MB limit)
       const oversizedFiles = files.filter(file => file.size > 50 * 1024 * 1024);
       if (oversizedFiles.length > 0) {
@@ -68,14 +99,55 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
           description: `Files must be less than 50MB: ${oversizedFiles.map(f => f.name).join(', ')}`,
           variant: "destructive"
         });
+        setIsProcessingFiles(false);
         return;
       }
 
-      setUploadedFiles(prev => [...prev, ...files]);
-      toast({
-        title: "Success",
-        description: `${files.length} file(s) uploaded successfully`,
+      // Validate file types
+      const supportedTypes = getSupportedFileTypes();
+      const allSupportedExtensions = Object.values(supportedTypes).flat();
+      
+      const unsupportedFiles = files.filter(file => {
+        const fileName = file.name.toLowerCase();
+        const hasValidExtension = allSupportedExtensions.some(ext => fileName.endsWith(ext));
+        const hasValidMimeType = file.type.startsWith('image/') || 
+                                file.type.startsWith('video/') || 
+                                file.type.startsWith('audio/') ||
+                                file.type.startsWith('text/') ||
+                                file.type === 'application/pdf';
+        return !hasValidExtension && !hasValidMimeType;
       });
+
+      if (unsupportedFiles.length > 0) {
+        toast({
+          title: "Unsupported Files",
+          description: `Some files are not supported: ${unsupportedFiles.map(f => f.name).join(', ')}`,
+          variant: "destructive"
+        });
+      }
+
+      // Add supported files
+      const supportedFiles = files.filter(file => !unsupportedFiles.includes(file));
+      if (supportedFiles.length > 0) {
+        setUploadedFiles(prev => [...prev, ...supportedFiles]);
+        toast({
+          title: "Success",
+          description: `${supportedFiles.length} file(s) uploaded successfully`,
+        });
+      }
+    } catch (error) {
+      console.error('Error processing files:', error);
+      toast({
+        title: "Error",
+        description: "Error processing files",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingFiles(false);
+      // Clear the input
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -83,28 +155,43 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const readFileContent = async (file: File): Promise<string> => {
+  const readFileContentAsync = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        resolve(result);
+        resolve(result || '');
       };
       
-      reader.onerror = (e) => {
-        reject(new Error('Failed to read file'));
+      reader.onerror = () => {
+        console.error(`Failed to read file: ${file.name}`);
+        resolve(`[File: ${file.name} - Could not read content]`);
       };
       
-      // For PDF files, we'll read as text (limited support)
-      // For .docx and .doc, we'll read as text (limited support)
-      // For .txt files, this will work perfectly
-      if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
-        reader.readAsText(file);
-      } else {
-        // For other file types, we'll attempt to read as text
-        // Note: This is a simplified approach. In a real app, you'd use specialized libraries
-        reader.readAsText(file);
+      const category = getFileCategory(file);
+      
+      // Handle different file types
+      switch (category) {
+        case 'text':
+          reader.readAsText(file);
+          break;
+        case 'image':
+        case 'video':
+        case 'audio':
+          // For media files, just return metadata
+          resolve(`[Media File: ${file.name} (${file.type}) - Size: ${Math.round(file.size / 1024)}KB]`);
+          break;
+        case 'document':
+          // For PDFs and docs, attempt text reading (limited support)
+          try {
+            reader.readAsText(file);
+          } catch {
+            resolve(`[Document: ${file.name} - Binary content not readable as text]`);
+          }
+          break;
+        default:
+          resolve(`[File: ${file.name} - Unsupported type for content extraction]`);
       }
     });
   };
@@ -137,56 +224,60 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     
     try {
       let fileContent = '';
+      
       if (uploadedFiles.length > 0) {
+        console.log(`Processing ${uploadedFiles.length} files...`);
+        
         try {
-          const fileContents = await Promise.all(
-            uploadedFiles.map(async (file) => {
-              // For images and videos, we'll store the file reference for course generation
-              if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
-                return `Media file: ${file.name} (${file.type})`;
-              } else {
-                try {
-                  const content = await readFileContent(file);
-                  return `File: ${file.name}\nContent: ${content}`;
-                } catch {
-                  return `File: ${file.name} (could not read content)`;
-                }
-              }
-            })
-          );
+          // Process files asynchronously to prevent UI blocking
+          const filePromises = uploadedFiles.map(async (file) => {
+            try {
+              const content = await readFileContentAsync(file);
+              return `File: ${file.name} (${getFileCategory(file)})\nContent: ${content}`;
+            } catch (error) {
+              console.error(`Error reading file ${file.name}:`, error);
+              return `File: ${file.name} - Error reading content`;
+            }
+          });
+          
+          const fileContents = await Promise.all(filePromises);
           fileContent = fileContents.join('\n\n');
-          console.log('File content prepared successfully');
+          console.log('All files processed successfully');
         } catch (error) {
-          console.error('Error reading files:', error);
+          console.error('Error processing files:', error);
           toast({
-            title: "Warning",
-            description: "Could not read some file content. Generating questionnaire without file context.",
+            title: "Warning", 
+            description: "Some files could not be processed. Generating content without file context.",
             variant: "destructive"
           });
         }
       }
       
-      // Combine file content with options for the service call
-      const extendedPrompt = fileContent ? `${prompt}\n\nFile content: ${fileContent}` : prompt;
+      console.log('Generating with options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire });
       
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
-        extendedPrompt,
-        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire }
+        prompt,
+        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
+        fileContent
       );
       
       setQuestionnaires(prev => [questionnaire, ...prev]);
       setPrompt('');
       setUploadedFiles([]);
       
+      const contentTypes = [];
+      if (includeQuestionnaire) contentTypes.push('questionnaire');
+      if (includeCourse) contentTypes.push('course');
+      
       toast({
         title: "Success",
-        description: "Content generated successfully! Click the save button to save your content.",
+        description: `${contentTypes.join(' and ')} generated successfully! Click the save button to save your content.`,
       });
     } catch (error) {
-      console.error('Error generating questionnaire:', error);
+      console.error('Error generating content:', error);
       toast({
         title: "Error",
-        description: "Failed to generate content",
+        description: "Failed to generate content. Please try again.",
         variant: "destructive"
       });
     } finally {

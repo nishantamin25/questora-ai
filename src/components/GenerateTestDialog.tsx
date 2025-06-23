@@ -43,13 +43,20 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
     return (
       fileType.startsWith('image/') ||
       fileType.startsWith('video/') ||
+      fileType.startsWith('audio/') ||
       fileName.endsWith('.pdf') ||
-      fileType === 'application/pdf'
+      fileType === 'application/pdf' ||
+      fileName.endsWith('.doc') ||
+      fileName.endsWith('.docx') ||
+      fileName.endsWith('.txt') ||
+      fileName.endsWith('.md')
     );
   });
 
   // Update checkboxes based on content type selection
   useEffect(() => {
+    console.log('Content type changed to:', contentType, 'Can enable course:', canEnableCourse);
+    
     switch (contentType) {
       case 'questionnaires':
         setIncludeQuestionnaire(true);
@@ -64,30 +71,44 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
           setContentType('questionnaires');
           setIncludeQuestionnaire(true);
           setIncludeCourse(false);
+          toast({
+            title: "Course Not Available",
+            description: "Upload files (images, videos, documents) to enable course generation",
+            variant: "destructive"
+          });
         }
         break;
       case 'both':
         setIncludeQuestionnaire(true);
         setIncludeCourse(canEnableCourse);
+        if (!canEnableCourse) {
+          toast({
+            title: "Course Not Available", 
+            description: "Upload files to enable course generation. Only questionnaires will be generated.",
+            variant: "destructive"
+          });
+        }
         break;
     }
   }, [contentType, canEnableCourse]);
 
   // Calculate timeframe based on number of questions using specified mapping
   useEffect(() => {
-    const getTimeframeForQuestions = (questions: number): number => {
-      if (questions <= 10) return 15;
-      if (questions <= 15) return 20;
-      if (questions <= 20) return 25;
-      if (questions <= 25) return 30;
-      if (questions <= 30) return 35;
-      if (questions <= 40) return 45;
-      return 50; // 50 questions
-    };
+    if (includeQuestionnaire) {
+      const getTimeframeForQuestions = (questions: number): number => {
+        if (questions <= 10) return 15;
+        if (questions <= 15) return 20;
+        if (questions <= 20) return 25;
+        if (questions <= 25) return 30;
+        if (questions <= 30) return 35;
+        if (questions <= 40) return 45;
+        return 50; // 50 questions
+      };
 
-    const calculatedTimeframe = getTimeframeForQuestions(numberOfQuestions);
-    setTimeframe(calculatedTimeframe);
-  }, [numberOfQuestions]);
+      const calculatedTimeframe = getTimeframeForQuestions(numberOfQuestions);
+      setTimeframe(calculatedTimeframe);
+    }
+  }, [numberOfQuestions, includeQuestionnaire]);
 
   // Check if ChatGPT API key exists
   useEffect(() => {
@@ -129,7 +150,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       return;
     }
 
-    if (timeframe < 5 || timeframe > 180) {
+    if (includeQuestionnaire && (timeframe < 5 || timeframe > 180)) {
       toast({
         title: "Error",
         description: "Timeframe must be between 5 and 180 minutes",
@@ -137,6 +158,15 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       });
       return;
     }
+
+    console.log('Generating with final options:', {
+      testName: testName.trim(),
+      difficulty,
+      numberOfQuestions,
+      timeframe,
+      includeCourse,
+      includeQuestionnaire
+    });
 
     onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire);
   };
@@ -206,36 +236,33 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                   <SelectTrigger className="w-full border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
                     <SelectValue placeholder="Select content type" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-50">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-[100]">
                     <SelectItem value="questionnaires">
                       <div className="flex items-center space-x-2">
                         <FileText className="h-4 w-4 text-violet-600" />
                         <span>Questionnaires Only</span>
                       </div>
                     </SelectItem>
-                    {canEnableCourse && (
-                      <SelectItem value="course">
-                        <div className="flex items-center space-x-2">
-                          <GraduationCap className="h-4 w-4 text-blue-600" />
-                          <span>Course Only</span>
+                    <SelectItem value="course" disabled={!canEnableCourse}>
+                      <div className="flex items-center space-x-2">
+                        <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <span className={canEnableCourse ? '' : 'text-gray-400'}>Course Only</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="both" disabled={!canEnableCourse}>
+                      <div className="flex items-center space-x-2">
+                        <div className="flex space-x-1">
+                          <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-gray-400'}`} />
+                          <FileText className="h-4 w-4 text-violet-600" />
                         </div>
-                      </SelectItem>
-                    )}
-                    {canEnableCourse && (
-                      <SelectItem value="both">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex space-x-1">
-                            <GraduationCap className="h-4 w-4 text-blue-600" />
-                            <FileText className="h-4 w-4 text-violet-600" />
-                          </div>
-                          <span>Course + Questionnaires</span>
-                        </div>
-                      </SelectItem>
-                    )}
+                        <span className={canEnableCourse ? '' : 'text-gray-400'}>Course + Questionnaires</span>
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-slate-500 mt-1">
-                  {!canEnableCourse && "Upload images, videos, or PDFs to enable course options"}
+                  {!canEnableCourse && "Upload files to enable course generation"}
+                  {canEnableCourse && uploadedFiles.length > 0 && `${uploadedFiles.length} file(s) uploaded and ready for course generation`}
                 </p>
               </div>
 
@@ -256,7 +283,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                   <SelectTrigger className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
                     <SelectValue placeholder="Select difficulty" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-50">
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-[100]">
                     <SelectItem value="easy">🟢 Easy</SelectItem>
                     <SelectItem value="medium">🟡 Medium</SelectItem>
                     <SelectItem value="hard">🔴 Hard</SelectItem>
@@ -278,7 +305,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                           <ChevronDown className="h-4 w-4 opacity-50" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-50">
+                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
                         {[10, 15, 20, 25, 30, 35, 40, 45, 50].map((num) => (
                           <DropdownMenuItem 
                             key={num} 
@@ -305,7 +332,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                           <ChevronDown className="h-4 w-4 opacity-50" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-50">
+                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
                         {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 90, 120, 150, 180].map((time) => (
                           <DropdownMenuItem 
                             key={time} 
@@ -324,7 +351,11 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
             </div>
 
             <div className="flex space-x-3 pt-4 border-t border-slate-200">
-              <Button onClick={handleGenerate} className="bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 flex-1 rounded-lg font-poppins font-medium">
+              <Button 
+                onClick={handleGenerate} 
+                className="bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 flex-1 rounded-lg font-poppins font-medium"
+                disabled={!testName.trim() || (!includeCourse && !includeQuestionnaire)}
+              >
                 <Zap className="h-4 w-4 mr-2" />
                 Generate Content
               </Button>

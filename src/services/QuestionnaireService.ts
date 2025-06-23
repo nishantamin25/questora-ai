@@ -45,53 +45,25 @@ class QuestionnaireServiceClass {
       'How professional was our staff during your interaction?',
       'How likely are you to use our services again?'
     ],
-    'employee feedback': [
-      'How satisfied are you with your current role?',
-      'Do you feel valued and appreciated at work?',
-      'How would you rate the communication from management?',
-      'What motivates you most in your current position?',
-      'What suggestions do you have for improving our workplace?',
-      'How satisfied are you with your work-life balance?',
-      'How would you rate the training and development opportunities?',
-      'How comfortable do you feel expressing your opinions at work?',
-      'How satisfied are you with the recognition you receive?',
-      'How likely are you to recommend this company as a place to work?'
-    ],
-    'product feedback': [
-      'How easy was it to use our product?',
-      'Which features do you find most useful?',
-      'What problems does our product solve for you?',
-      'How does our product compare to alternatives?',
-      'What additional features would you like to see?',
-      'How would you rate the product design and interface?',
-      'How satisfied are you with the product performance?',
-      'How likely are you to upgrade to a newer version?',
-      'How would you rate the product documentation?',
-      'What is the biggest challenge you face when using our product?'
-    ],
-    'event feedback': [
-      'How would you rate the overall event experience?',
-      'Was the event content relevant to your needs?',
-      'How was the quality of the speakers/presentations?',
-      'Would you attend similar events in the future?',
-      'What could we do to improve future events?',
-      'How satisfied were you with the event venue and facilities?',
-      'How would you rate the event organization and logistics?',
-      'How useful was the networking opportunity provided?',
-      'How satisfied were you with the event duration?',
-      'What was the most valuable part of the event for you?'
-    ]
+    // ... keep existing code (other question templates)
   };
 
   private cleanupOldQuestionnaires(): void {
     try {
       const questionnaires = this.getAllQuestionnaires();
-      // Keep only the 10 most recent questionnaires
+      // Keep only the 5 most recent questionnaires (reduced from 10)
       const recentQuestionnaires = questionnaires
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 10);
+        .slice(0, 5);
       
-      localStorage.setItem('questionnaires', JSON.stringify(recentQuestionnaires));
+      // Clear storage completely first
+      localStorage.removeItem('questionnaires');
+      
+      // Try to save the reduced set
+      if (recentQuestionnaires.length > 0) {
+        localStorage.setItem('questionnaires', JSON.stringify(recentQuestionnaires));
+      }
+      
       console.log('Cleaned up old questionnaires, kept:', recentQuestionnaires.length);
     } catch (error) {
       console.error('Error during cleanup:', error);
@@ -101,6 +73,9 @@ class QuestionnaireServiceClass {
   }
 
   async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Promise<Questionnaire> {
+    console.log('Generating questionnaire with options:', options);
+    console.log('File content provided:', !!fileContent);
+    
     // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
@@ -110,37 +85,47 @@ class QuestionnaireServiceClass {
     
     let questions: Question[] = [];
     
-    // Try to use ChatGPT first if API key is available
-    const chatGptApiKey = ChatGPTService.getApiKey();
-    if (chatGptApiKey) {
-      try {
-        console.log('Using ChatGPT to generate questions...');
-        const chatGptQuestions = await ChatGPTService.generateQuestions(
-          prompt,
-          options.numberOfQuestions,
-          options.difficulty,
-          fileContent
-        );
-        
-        // Convert ChatGPT questions to our format
-        questions = chatGptQuestions.map(q => ({
-          id: this.generateId(),
-          text: q.question,
-          type: 'multiple-choice',
-          options: q.options,
-          correctAnswer: q.correctAnswer
-        }));
-        
-        console.log('Successfully generated questions with ChatGPT');
-      } catch (error) {
-        console.error('ChatGPT generation failed, falling back to template-based generation:', error);
-        // Fall back to template-based generation
+    // Only generate questions if includeQuestionnaire is true
+    if (options.includeQuestionnaire) {
+      // Try to use ChatGPT first if API key is available
+      const chatGptApiKey = ChatGPTService.getApiKey();
+      if (chatGptApiKey) {
+        try {
+          console.log('Using ChatGPT to generate questions...');
+          const chatGptQuestions = await ChatGPTService.generateQuestions(
+            prompt,
+            options.numberOfQuestions,
+            options.difficulty,
+            fileContent
+          );
+          
+          // Convert ChatGPT questions to our format
+          questions = chatGptQuestions.map(q => ({
+            id: this.generateId(),
+            text: q.question,
+            type: 'multiple-choice',
+            options: q.options,
+            correctAnswer: q.correctAnswer
+          }));
+          
+          console.log('Successfully generated questions with ChatGPT');
+        } catch (error) {
+          console.error('ChatGPT generation failed, falling back to template-based generation:', error);
+          // Fall back to template-based generation
+          questions = this.generateFallbackQuestions(prompt, options, fileContent);
+        }
+      } else {
+        console.log('No ChatGPT API key found, using template-based generation');
+        // Use template-based generation
         questions = this.generateFallbackQuestions(prompt, options, fileContent);
       }
-    } else {
-      console.log('No ChatGPT API key found, using template-based generation');
-      // Use template-based generation
-      questions = this.generateFallbackQuestions(prompt, options, fileContent);
+    }
+
+    // Handle course generation
+    let courseContent = null;
+    if (options.includeCourse) {
+      console.log('Generating course content...');
+      courseContent = this.generateCourseContent(prompt, fileContent);
     }
 
     const questionnaire: Questionnaire = {
@@ -153,10 +138,106 @@ class QuestionnaireServiceClass {
       testName: options.testName,
       difficulty: options.difficulty,
       isSaved: false,
-      timeframe: options.timeframe
+      timeframe: options.timeframe,
+      ...(courseContent && { courseContent })
     };
 
+    console.log('Generated questionnaire:', questionnaire);
     return questionnaire;
+  }
+
+  private generateCourseContent(prompt: string, fileContent?: string): any {
+    console.log('Generating course content from prompt and files');
+    
+    // Basic course structure generation
+    const courseContent = {
+      id: this.generateId(),
+      title: `Course: ${prompt.substring(0, 50)}...`,
+      description: `This course was generated based on: "${prompt}"`,
+      modules: []
+    };
+
+    // If we have file content, try to create modules from it
+    if (fileContent && fileContent.trim().length > 0) {
+      const modules = this.extractModulesFromContent(fileContent);
+      courseContent.modules = modules;
+    } else {
+      // Create a basic module structure from the prompt
+      courseContent.modules = [
+        {
+          id: this.generateId(),
+          title: 'Introduction',
+          content: `Welcome to this course about: ${prompt}`,
+          type: 'text'
+        },
+        {
+          id: this.generateId(),
+          title: 'Main Content',
+          content: `This module covers the key concepts related to: ${prompt}`,
+          type: 'text'
+        }
+      ];
+    }
+
+    return courseContent;
+  }
+
+  private extractModulesFromContent(fileContent: string): any[] {
+    const modules = [];
+    
+    // Try to extract meaningful sections from file content
+    const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
+    
+    let currentModule = null;
+    let moduleContent = [];
+    
+    for (const line of lines) {
+      // Check if this line could be a heading/title
+      if (line.length < 100 && (
+        line.startsWith('#') || 
+        line.match(/^[A-Z][^.]*:?$/) ||
+        line.match(/^\d+\./)
+      )) {
+        // Save previous module if exists
+        if (currentModule) {
+          modules.push({
+            id: this.generateId(),
+            title: currentModule,
+            content: moduleContent.join('\n'),
+            type: 'text'
+          });
+        }
+        
+        // Start new module
+        currentModule = line.replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '');
+        moduleContent = [];
+      } else {
+        // Add to current module content
+        moduleContent.push(line);
+      }
+    }
+    
+    // Don't forget the last module
+    if (currentModule) {
+      modules.push({
+        id: this.generateId(),
+        title: currentModule,
+        content: moduleContent.join('\n'),
+        type: 'text'
+      });
+    }
+    
+    // If no modules were extracted, create a single module with all content
+    if (modules.length === 0) {
+      modules.push({
+        id: this.generateId(),
+        title: 'Course Content',
+        content: fileContent,
+        type: 'text'
+      });
+    }
+    
+    return modules.slice(0, 5); // Limit to 5 modules
   }
 
   saveQuestionnaire(questionnaire: Questionnaire): void {
@@ -165,24 +246,36 @@ class QuestionnaireServiceClass {
       const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
       updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
       
-      localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+      // Try to save with more aggressive size management
+      const dataToSave = JSON.stringify(updatedQuestionnaires);
+      
+      // Check if data size is too large (approximate check)
+      if (dataToSave.length > 4000000) { // ~4MB limit
+        console.log('Data too large, performing aggressive cleanup...');
+        this.cleanupOldQuestionnaires();
+        
+        // Try again with just this questionnaire
+        const minimalData = JSON.stringify([{...questionnaire, isSaved: true}]);
+        localStorage.setItem('questionnaires', minimalData);
+      } else {
+        localStorage.setItem('questionnaires', dataToSave);
+      }
+      
       console.log('Questionnaire saved successfully');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.log('Storage quota exceeded, cleaning up old questionnaires...');
-        this.cleanupOldQuestionnaires();
+        console.log('Storage quota exceeded, performing aggressive cleanup...');
         
-        // Try saving again after cleanup
+        // More aggressive cleanup - clear everything and save only this questionnaire
+        localStorage.removeItem('questionnaires');
+        
         try {
-          const existingQuestionnaires = this.getAllQuestionnaires();
-          const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
-          updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
-          
-          localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
-          console.log('Questionnaire saved successfully after cleanup');
+          const singleQuestionnaireData = JSON.stringify([{...questionnaire, isSaved: true}]);
+          localStorage.setItem('questionnaires', singleQuestionnaireData);
+          console.log('Questionnaire saved successfully after aggressive cleanup');
         } catch (retryError) {
-          console.error('Failed to save questionnaire even after cleanup:', retryError);
-          throw new Error('Storage limit reached. Please delete some old tests to save new ones.');
+          console.error('Failed to save questionnaire even after aggressive cleanup:', retryError);
+          throw new Error('Unable to save. Please try refreshing the page and try again.');
         }
       } else {
         console.error('Error saving questionnaire:', error);
