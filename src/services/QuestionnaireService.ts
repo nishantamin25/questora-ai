@@ -125,6 +125,13 @@ class QuestionnaireServiceClass {
     console.log('Generating questionnaire with options:', options, 'Set:', setNumber, 'of', totalSets);
     console.log('File content provided:', !!fileContent);
     
+    // Enhanced file content validation and processing
+    if (fileContent && fileContent.trim().length > 0) {
+      console.log('Processing file content for questionnaire generation...');
+      fileContent = this.processFileContent(fileContent);
+      console.log('Processed file content length:', fileContent.length);
+    }
+    
     // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
@@ -139,9 +146,9 @@ class QuestionnaireServiceClass {
     if (options.includeQuestionnaire) {
       // Try to use ChatGPT first if API key is available
       const chatGptApiKey = ChatGPTService.getApiKey();
-      if (chatGptApiKey) {
+      if (chatGptApiKey && fileContent && fileContent.trim().length > 50) {
         try {
-          console.log('Using ChatGPT to generate questions...');
+          console.log('Using ChatGPT to generate file-based questions...');
           const chatGptQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
@@ -160,22 +167,33 @@ class QuestionnaireServiceClass {
             correctAnswer: q.correctAnswer
           }));
           
-          console.log('Successfully generated questions with ChatGPT');
+          console.log('Successfully generated file-based questions with ChatGPT');
         } catch (error) {
-          console.error('ChatGPT generation failed, falling back to template-based generation:', error);
-          // Fall back to template-based generation
-          questions = this.generateTemplateQuestions(
-            prompt, 
+          console.error('ChatGPT generation failed, falling back to enhanced file-based generation:', error);
+          // Fall back to enhanced file-based generation
+          questions = this.generateEnhancedFileBasedQuestions(
+            fileContent || '', 
+            prompt,
             options.numberOfQuestions, 
             options.difficulty, 
-            fileContent, 
             setNumber, 
             totalSets
           );
         }
+      } else if (fileContent && fileContent.trim().length > 50) {
+        console.log('Using enhanced file-based generation (no ChatGPT API key)');
+        // Use enhanced file-based generation when we have substantial file content
+        questions = this.generateEnhancedFileBasedQuestions(
+          fileContent, 
+          prompt,
+          options.numberOfQuestions, 
+          options.difficulty, 
+          setNumber, 
+          totalSets
+        );
       } else {
-        console.log('No ChatGPT API key found, using template-based generation');
-        // Use template-based generation
+        console.log('Using template-based generation (no file content)');
+        // Use template-based generation when no file content is available
         questions = this.generateTemplateQuestions(
           prompt, 
           options.numberOfQuestions, 
@@ -212,6 +230,344 @@ class QuestionnaireServiceClass {
 
     console.log('Generated questionnaire:', questionnaire);
     return questionnaire;
+  }
+
+  private processFileContent(rawContent: string): string {
+    // Clean and structure the file content for better question generation
+    let processedContent = rawContent;
+    
+    // Remove excessive whitespace and normalize line breaks
+    processedContent = processedContent.replace(/\s+/g, ' ').trim();
+    processedContent = processedContent.replace(/\n\s*\n/g, '\n\n');
+    
+    // Extract key sections and topics
+    const sections = this.extractSections(processedContent);
+    
+    // If we found structured sections, use them; otherwise use the original content
+    if (sections.length > 0) {
+      processedContent = sections.map(section => 
+        `Section: ${section.title}\nContent: ${section.content}`
+      ).join('\n\n');
+    }
+    
+    return processedContent;
+  }
+
+  private extractSections(content: string): Array<{title: string, content: string}> {
+    const sections = [];
+    const lines = content.split('\n');
+    
+    let currentSection = null;
+    let currentContent: string[] = [];
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Check if this line could be a section header
+      if (this.isSectionHeader(trimmedLine)) {
+        // Save previous section if exists
+        if (currentSection) {
+          sections.push({
+            title: currentSection,
+            content: currentContent.join(' ').trim()
+          });
+        }
+        
+        // Start new section
+        currentSection = trimmedLine.replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '');
+        currentContent = [];
+      } else if (trimmedLine.length > 0) {
+        // Add to current section content
+        currentContent.push(trimmedLine);
+      }
+    }
+    
+    // Don't forget the last section
+    if (currentSection && currentContent.length > 0) {
+      sections.push({
+        title: currentSection,
+        content: currentContent.join(' ').trim()
+      });
+    }
+    
+    return sections.filter(section => section.content.length > 20); // Filter out very short sections
+  }
+
+  private isSectionHeader(line: string): boolean {
+    // Check for various header patterns
+    return (
+      line.startsWith('#') || // Markdown headers
+      line.match(/^[A-Z][^.]*:?$/) || // ALL CAPS or Title Case ending with optional colon
+      line.match(/^\d+\./) || // Numbered sections
+      line.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) || // Title Case
+      (line.length < 80 && line.length > 5 && !line.includes(',') && !line.includes(';'))
+    );
+  }
+
+  private generateEnhancedFileBasedQuestions(
+    fileContent: string,
+    prompt: string,
+    numberOfQuestions: number,
+    difficulty: 'easy' | 'medium' | 'hard',
+    setNumber?: number,
+    totalSets?: number
+  ): Question[] {
+    console.log('Generating enhanced file-based questions...');
+    
+    const questions: Question[] = [];
+    const sections = this.extractSections(fileContent);
+    const keyTopics = this.extractKeyTopics(fileContent);
+    
+    console.log('Found sections:', sections.length);
+    console.log('Key topics:', keyTopics);
+    
+    // Generate questions from different sections to ensure variety
+    const sectionsToUse = sections.length > 0 ? sections : [{ title: 'Main Content', content: fileContent }];
+    
+    for (let i = 0; i < numberOfQuestions && i < sectionsToUse.length * 3; i++) {
+      const sectionIndex = i % sectionsToUse.length;
+      const section = sectionsToUse[sectionIndex];
+      
+      const question = this.generateQuestionFromSection(
+        section,
+        keyTopics,
+        difficulty,
+        i + 1,
+        setNumber
+      );
+      
+      if (question) {
+        questions.push(question);
+      }
+    }
+    
+    // Fill remaining slots with topic-based questions if needed
+    while (questions.length < numberOfQuestions && keyTopics.length > 0) {
+      const topicIndex = questions.length % keyTopics.length;
+      const topic = keyTopics[topicIndex];
+      
+      const question = this.generateTopicBasedQuestion(
+        topic,
+        fileContent,
+        difficulty,
+        questions.length + 1,
+        setNumber
+      );
+      
+      if (question) {
+        questions.push(question);
+      } else {
+        break; // Avoid infinite loop
+      }
+    }
+    
+    console.log(`Generated ${questions.length} enhanced file-based questions`);
+    return questions.slice(0, numberOfQuestions);
+  }
+
+  private extractKeyTopics(content: string): string[] {
+    const words = content.toLowerCase().split(/\s+/);
+    const wordCount: Record<string, number> = {};
+    
+    // Count word frequency, excluding common words
+    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those']);
+    
+    words.forEach(word => {
+      const cleanWord = word.replace(/[^\w]/g, '');
+      if (cleanWord.length > 3 && !commonWords.has(cleanWord)) {
+        wordCount[cleanWord] = (wordCount[cleanWord] || 0) + 1;
+      }
+    });
+    
+    // Get top 10 most frequent words as key topics
+    return Object.entries(wordCount)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([word]) => word);
+  }
+
+  private generateQuestionFromSection(
+    section: { title: string, content: string },
+    keyTopics: string[],
+    difficulty: 'easy' | 'medium' | 'hard',
+    questionNumber: number,
+    setNumber?: number
+  ): Question | null {
+    if (section.content.length < 20) return null;
+    
+    const sentences = section.content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    if (sentences.length === 0) return null;
+    
+    // Select a sentence that contains key information
+    const informativeSentence = sentences.find(s => 
+      keyTopics.some(topic => s.toLowerCase().includes(topic))
+    ) || sentences[0];
+    
+    const questionTypes = this.getQuestionTypes(difficulty);
+    const questionType = questionTypes[questionNumber % questionTypes.length];
+    
+    return this.createQuestionFromSentence(
+      informativeSentence.trim(),
+      section.title,
+      questionType,
+      questionNumber,
+      setNumber
+    );
+  }
+
+  private generateTopicBasedQuestion(
+    topic: string,
+    fileContent: string,
+    difficulty: 'easy' | 'medium' | 'hard',
+    questionNumber: number,
+    setNumber?: number
+  ): Question | null {
+    // Find sentences containing the topic
+    const sentences = fileContent.split(/[.!?]+/).filter(s => 
+      s.toLowerCase().includes(topic) && s.trim().length > 15
+    );
+    
+    if (sentences.length === 0) return null;
+    
+    const sentence = sentences[0].trim();
+    const questionTypes = this.getQuestionTypes(difficulty);
+    const questionType = questionTypes[questionNumber % questionTypes.length];
+    
+    return this.createQuestionFromSentence(
+      sentence,
+      `Topic: ${topic}`,
+      questionType,
+      questionNumber,
+      setNumber
+    );
+  }
+
+  private getQuestionTypes(difficulty: 'easy' | 'medium' | 'hard'): string[] {
+    switch (difficulty) {
+      case 'easy':
+        return ['definition', 'identification', 'simple_fact'];
+      case 'medium':
+        return ['explanation', 'comparison', 'application'];
+      case 'hard':
+        return ['analysis', 'evaluation', 'synthesis'];
+      default:
+        return ['explanation', 'application'];
+    }
+  }
+
+  private createQuestionFromSentence(
+    sentence: string,
+    context: string,
+    questionType: string,
+    questionNumber: number,
+    setNumber?: number
+  ): Question {
+    const setVariation = setNumber ? ` (Set ${setNumber})` : '';
+    
+    // Generate question based on type and sentence content
+    let questionText = '';
+    let options: string[] = [];
+    let correctAnswer = 0;
+    
+    switch (questionType) {
+      case 'definition':
+        questionText = `Based on the content, what is the main concept discussed in: "${sentence.substring(0, 50)}..."?${setVariation}`;
+        options = [
+          this.extractKeyConceptFromSentence(sentence),
+          'A different unrelated concept',
+          'A general business term',
+          'An external reference'
+        ];
+        break;
+        
+      case 'identification':
+        questionText = `According to the document, which statement is most accurate regarding the content?${setVariation}`;
+        options = [
+          sentence.substring(0, 60) + '...',
+          'This is not mentioned in the document',
+          'The opposite of what is stated',
+          'An assumption not supported by the text'
+        ];
+        break;
+        
+      case 'explanation':
+        questionText = `From the provided material, what can be concluded about ${context.toLowerCase()}?${setVariation}`;
+        options = [
+          this.generateCorrectConclusion(sentence),
+          'Something not mentioned in the document',
+          'The opposite conclusion',
+          'An unrelated conclusion'
+        ];
+        break;
+        
+      case 'application':
+        questionText = `Based on the information provided, how would you apply the concepts discussed?${setVariation}`;
+        options = [
+          this.generateCorrectApplication(sentence),
+          'Apply unrelated concepts',
+          'Ignore the provided information',
+          'Use external assumptions'
+        ];
+        break;
+        
+      default:
+        questionText = `According to the document content, what is stated about this topic?${setVariation}`;
+        options = [
+          sentence.substring(0, 50) + '...',
+          'Information not in the document',
+          'Contradictory information',
+          'External assumptions'
+        ];
+    }
+    
+    return {
+      id: this.generateId(),
+      text: questionText,
+      type: 'multiple-choice',
+      options,
+      correctAnswer
+    };
+  }
+
+  private extractKeyConceptFromSentence(sentence: string): string {
+    // Extract the main concept from the sentence
+    const words = sentence.split(' ');
+    const importantWords = words.filter(word => 
+      word.length > 4 && 
+      !['that', 'this', 'with', 'from', 'they', 'them', 'were', 'been', 'have'].includes(word.toLowerCase())
+    );
+    
+    return importantWords.slice(0, 3).join(' ') || sentence.substring(0, 30);
+  }
+
+  private generateCorrectConclusion(sentence: string): string {
+    // Generate a conclusion based on the sentence content
+    if (sentence.includes('important') || sentence.includes('significant')) {
+      return 'It is an important aspect mentioned in the document';
+    }
+    if (sentence.includes('process') || sentence.includes('method')) {
+      return 'It describes a process outlined in the material';
+    }
+    if (sentence.includes('result') || sentence.includes('outcome')) {
+      return 'It represents an outcome discussed in the content';
+    }
+    
+    return 'It is directly supported by the provided information';
+  }
+
+  private generateCorrectApplication(sentence: string): string {
+    // Generate an application based on the sentence content
+    if (sentence.includes('should') || sentence.includes('must')) {
+      return 'Follow the guidelines as specified in the document';
+    }
+    if (sentence.includes('best') || sentence.includes('effective')) {
+      return 'Implement the best practices mentioned';
+    }
+    if (sentence.includes('avoid') || sentence.includes('prevent')) {
+      return 'Avoid the issues highlighted in the material';
+    }
+    
+    return 'Apply the principles discussed in the content';
   }
 
   private generateCourseContent(prompt: string, fileContent?: string): any {
