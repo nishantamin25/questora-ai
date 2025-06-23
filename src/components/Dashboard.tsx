@@ -21,6 +21,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [prompt, setPrompt] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
+  const [unsavedQuestionnaires, setUnsavedQuestionnaires] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
@@ -273,7 +274,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         generatedQuestionnaires.push(questionnaire);
       }
       
-      setQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
+      // Store all generated questionnaires as unsaved
+      setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
       setPrompt('');
       setUploadedFiles([]);
       
@@ -293,7 +295,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const handleUpdateQuestionnaire = (updatedQuestionnaire: any) => {
     try {
       QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
+      
+      // Remove from unsaved questionnaires if it was there
+      setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== updatedQuestionnaire.id));
+      
+      // Reload saved questionnaires from localStorage
       loadQuestionnaires();
+      
       // No success toast needed - keep it simple
     } catch (error) {
       console.error('Error updating questionnaire:', error);
@@ -308,8 +316,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   const handleDeleteQuestionnaire = (questionnaireId: string) => {
     try {
+      // Try to delete from saved questionnaires first
       QuestionnaireService.deleteQuestionnaire(questionnaireId);
+      
+      // Also remove from unsaved questionnaires if it exists there
+      setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== questionnaireId));
+      
+      // Reload saved questionnaires
       loadQuestionnaires();
+      
       toast({
         title: "Success",
         description: "Test deleted successfully!",
@@ -324,8 +339,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
+  // Combine saved and unsaved questionnaires for display
+  const allQuestionnaires = user.role === 'admin' 
+    ? [...unsavedQuestionnaires, ...questionnaires]
+    : questionnaires;
+
   // Ensure we have valid data before rendering
-  const validQuestionnaires = questionnaires.filter(q => q && typeof q === 'object');
+  const validQuestionnaires = allQuestionnaires.filter(q => q && typeof q === 'object');
   console.log('Rendering questionnaires:', validQuestionnaires);
 
   return (
