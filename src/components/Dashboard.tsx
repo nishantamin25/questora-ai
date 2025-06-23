@@ -167,11 +167,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         }
       }
       
+      // Combine file content with options for the service call
+      const extendedPrompt = fileContent ? `${prompt}\n\nFile content: ${fileContent}` : prompt;
+      
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
-        prompt,
-        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
-        fileContent,
-        uploadedFile
+        extendedPrompt,
+        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire }
       );
       
       setQuestionnaires(prev => [questionnaire, ...prev]);
