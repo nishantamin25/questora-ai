@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Save, Edit, Trash2, Play, Square, Clock, Users, Hash, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Save, Edit, Trash2, Play, Square, Clock, Users, Hash, ChevronDown, ChevronRight, Eye, EyeOff, Plus, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
 import SaveTestDialog from './SaveTestDialog';
@@ -44,16 +44,16 @@ interface QuestionnaireDisplayProps {
   isAdmin: boolean;
   onUpdate: (questionnaire: Questionnaire) => void;
   onDelete: (questionnaireId: string) => void;
+  isPartOfSet?: boolean; // New prop to indicate if this is part of a set
 }
 
-const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: QuestionnaireDisplayProps) => {
+const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPartOfSet = false }: QuestionnaireDisplayProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedQuestionnaire, setEditedQuestionnaire] = useState<Questionnaire>(questionnaire);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsVisible, setQuestionsVisible] = useState(false);
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
 
   useEffect(() => {
@@ -64,18 +64,22 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
   }, [questionnaire]);
 
   const handleEditToggle = () => {
-    setIsEditing(!isEditing);
     if (isEditing) {
       // Save changes when exiting edit mode
       const updatedQuestionnaire = { ...editedQuestionnaire, questions: editedQuestions };
       setEditedQuestionnaire(updatedQuestionnaire);
       onUpdate(updatedQuestionnaire);
+      
+      // Show save dialog only if this questionnaire is not saved yet
+      if (!updatedQuestionnaire.isSaved) {
+        setShowSaveDialog(true);
+      }
     }
+    setIsEditing(!isEditing);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditingQuestionId(null);
     setEditedQuestionnaire(questionnaire);
     setEditedQuestions(questionnaire.questions || []);
   };
@@ -90,18 +94,34 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
     setResponses(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const handleQuestionEdit = (questionId: string, field: 'text' | 'options', value: string | string[]) => {
+  const handleQuestionTextEdit = (questionId: string, value: string) => {
     setEditedQuestions(prev => prev.map(q => 
       q.id === questionId 
-        ? { ...q, [field]: value }
+        ? { ...q, text: value }
         : q
     ));
   };
 
-  const handleQuestionOptionEdit = (questionId: string, optionIndex: number, value: string) => {
+  const handleOptionEdit = (questionId: string, optionIndex: number, value: string) => {
     setEditedQuestions(prev => prev.map(q => 
       q.id === questionId 
         ? { ...q, options: q.options?.map((opt, idx) => idx === optionIndex ? value : opt) || [] }
+        : q
+    ));
+  };
+
+  const handleAddOption = (questionId: string) => {
+    setEditedQuestions(prev => prev.map(q => 
+      q.id === questionId 
+        ? { ...q, options: [...(q.options || []), 'New Option'] }
+        : q
+    ));
+  };
+
+  const handleRemoveOption = (questionId: string, optionIndex: number) => {
+    setEditedQuestions(prev => prev.map(q => 
+      q.id === questionId 
+        ? { ...q, options: q.options?.filter((_, idx) => idx !== optionIndex) || [] }
         : q
     ));
   };
@@ -289,10 +309,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => setShowSaveDialog(true)} size="sm" variant="default">
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Test
-                  </Button>
+                  // Only show Save Test button if not part of a set
+                  !isPartOfSet && (
+                    <Button onClick={() => setShowSaveDialog(true)} size="sm" variant="default">
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Test
+                    </Button>
+                  )
                 )}
               </div>
             )}
@@ -341,45 +364,60 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
                 <div className="px-6 pb-6 space-y-6">
                   {editedQuestions.map((question, index) => (
                     <div key={question.id} className="border-b border-slate-100 pb-4 last:border-b-0">
-                      <div className="flex items-start justify-between mb-3">
-                        {isEditing && editingQuestionId === question.id ? (
-                          <div className="flex-1 space-y-2">
+                      <div className="mb-3">
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <Label className="text-slate-700 font-medium">Question {index + 1}</Label>
                             <Textarea
                               value={question.text}
-                              onChange={(e) => handleQuestionEdit(question.id, 'text', e.target.value)}
+                              onChange={(e) => handleQuestionTextEdit(question.id, e.target.value)}
                               className="text-slate-900 font-medium border-slate-300 focus:border-violet-500"
+                              rows={2}
                             />
                           </div>
                         ) : (
-                          <h3 className="text-slate-900 font-medium font-poppins flex-1">
+                          <h3 className="text-slate-900 font-medium font-poppins">
                             {index + 1}. {question.text}
                           </h3>
-                        )}
-                        
-                        {isEditing && (
-                          <Button
-                            onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
-                            size="sm"
-                            variant="outline"
-                            className="ml-2"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
                         )}
                       </div>
                       
                       {question.options && (
                         <>
-                          {isEditing && editingQuestionId === question.id ? (
-                            <div className="space-y-2">
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-slate-700 font-medium">Options</Label>
+                                <Button
+                                  type="button"
+                                  onClick={() => handleAddOption(question.id)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-violet-600 border-violet-300 hover:bg-violet-50"
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Option
+                                </Button>
+                              </div>
                               {question.options.map((option, optionIndex) => (
                                 <div key={optionIndex} className="flex items-center space-x-2">
                                   <span className="text-sm text-slate-500 w-6">{optionIndex + 1}.</span>
                                   <Input
                                     value={option}
-                                    onChange={(e) => handleQuestionOptionEdit(question.id, optionIndex, e.target.value)}
+                                    onChange={(e) => handleOptionEdit(question.id, optionIndex, e.target.value)}
                                     className="flex-1 border-slate-300 focus:border-violet-500"
                                   />
+                                  {question.options && question.options.length > 2 && (
+                                    <Button
+                                      type="button"
+                                      onClick={() => handleRemoveOption(question.id, optionIndex)}
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 border-red-300 hover:bg-red-50"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -436,11 +474,16 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete }: Qu
         )}
       </Card>
 
-      <SaveTestDialog
-        questionnaire={questionnaire}
-        onSave={onUpdate}
-        onCancel={() => setShowSaveDialog(false)}
-      />
+      {showSaveDialog && (
+        <SaveTestDialog
+          questionnaire={editedQuestionnaire}
+          onSave={(savedQuestionnaire) => {
+            onUpdate(savedQuestionnaire);
+            setShowSaveDialog(false);
+          }}
+          onCancel={() => setShowSaveDialog(false)}
+        />
+      )}
     </>
   );
 };
