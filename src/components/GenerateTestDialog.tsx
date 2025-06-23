@@ -36,46 +36,70 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
   const [contentType, setContentType] = useState<'questionnaires' | 'course' | 'both'>('questionnaires');
 
-  // Check if course can be enabled based on uploaded files - more inclusive logic
-  const canEnableCourse = uploadedFiles.length > 0 && uploadedFiles.some(file => {
+  // Comprehensive file validation function
+  const isValidFileForCourse = (file: File): boolean => {
     const fileName = file.name.toLowerCase();
     const fileType = file.type.toLowerCase();
     
-    console.log('Checking file for course capability:', fileName, fileType);
+    console.log('Validating file:', {
+      name: fileName,
+      type: fileType,
+      size: file.size
+    });
     
-    // More inclusive file type checking
+    // Check if file has any content
+    if (file.size === 0) {
+      console.log('File rejected: empty file');
+      return false;
+    }
+    
+    // More comprehensive file type checking
     const isValidFile = (
       // Image files
       fileType.startsWith('image/') ||
-      fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ||
+      fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i) ||
       
       // Video files
       fileType.startsWith('video/') ||
-      fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv)$/i) ||
+      fileName.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i) ||
       
       // Audio files
       fileType.startsWith('audio/') ||
-      fileName.match(/\.(mp3|wav|ogg|m4a|flac)$/i) ||
+      fileName.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i) ||
       
       // Document files
       fileType === 'application/pdf' ||
       fileName.match(/\.pdf$/i) ||
       fileName.match(/\.(doc|docx)$/i) ||
       fileType.includes('document') ||
+      fileType === 'application/msword' ||
+      fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       
       // Text files
       fileType.startsWith('text/') ||
       fileName.match(/\.(txt|md|csv|rtf)$/i) ||
       
-      // Any file with content that we can attempt to read
+      // Any other file that might contain readable content
       file.size > 0
     );
     
-    console.log('File valid for course:', fileName, isValidFile);
+    console.log('File validation result:', fileName, isValidFile);
     return isValidFile;
-  });
+  };
 
-  console.log('Can enable course:', canEnableCourse, 'Files:', uploadedFiles.length);
+  // Check if course can be enabled based on uploaded files
+  const canEnableCourse = uploadedFiles.length > 0 && uploadedFiles.some(file => isValidFileForCourse(file));
+
+  console.log('Course enablement check:', {
+    totalFiles: uploadedFiles.length,
+    canEnableCourse,
+    fileDetails: uploadedFiles.map(f => ({
+      name: f.name,
+      type: f.type,
+      size: f.size,
+      isValid: isValidFileForCourse(f)
+    }))
+  });
 
   // Update checkboxes based on content type selection
   useEffect(() => {
@@ -147,6 +171,15 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
   };
 
   const handleGenerate = () => {
+    console.log('Generate button clicked with state:', {
+      testName: testName.trim(),
+      includeCourse,
+      includeQuestionnaire,
+      uploadedFilesCount: uploadedFiles.length,
+      canEnableCourse,
+      validFiles: uploadedFiles.filter(f => isValidFileForCourse(f)).length
+    });
+
     if (!testName.trim()) {
       toast({
         title: "Error",
@@ -165,11 +198,12 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       return;
     }
 
-    // Additional validation for course generation
-    if (includeCourse && uploadedFiles.length === 0) {
+    // Updated validation for course generation - check for valid files, not just any files
+    if (includeCourse && !canEnableCourse) {
+      console.log('Course generation blocked: no valid files');
       toast({
         title: "Error",
-        description: "Please upload files to generate course content",
+        description: "Please upload valid files (images, videos, documents, text files) to generate course content",
         variant: "destructive"
       });
       return;
@@ -200,7 +234,8 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       timeframe,
       includeCourse,
       includeQuestionnaire,
-      uploadedFilesCount: uploadedFiles.length
+      uploadedFilesCount: uploadedFiles.length,
+      validFilesCount: uploadedFiles.filter(f => isValidFileForCourse(f)).length
     });
 
     onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire);
