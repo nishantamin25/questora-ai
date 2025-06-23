@@ -27,6 +27,8 @@ interface GenerateQuestionnaireOptions {
   difficulty: 'easy' | 'medium' | 'hard';
   numberOfQuestions: number;
   timeframe: number;
+  includeCourse: boolean;
+  includeQuestionnaire: boolean;
 }
 
 class QuestionnaireServiceClass {
