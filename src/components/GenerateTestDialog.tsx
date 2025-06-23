@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Zap, X, Sparkles, Key, Bot } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Zap, X, Sparkles, Key, Bot, GraduationCap, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ChatGPTService } from '@/services/ChatGPTService';
 import ChatGPTKeyDialog from './ChatGPTKeyDialog';
@@ -13,7 +14,7 @@ interface GenerateTestDialogProps {
   open: boolean;
   prompt: string;
   uploadedFile: File | null;
-  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number) => void;
+  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean) => void;
   onCancel: () => void;
 }
 
@@ -21,7 +22,9 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
   const [testName, setTestName] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [numberOfQuestions, setNumberOfQuestions] = useState(15);
-  const [timeframe, setTimeframe] = useState(20); // Default for 15 questions
+  const [timeframe, setTimeframe] = useState(20);
+  const [includeCourse, setIncludeCourse] = useState(false);
+  const [includeQuestionnaire, setIncludeQuestionnaire] = useState(true);
   const [showChatGPTKeyDialog, setShowChatGPTKeyDialog] = useState(false);
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
 
@@ -63,7 +66,16 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
       return;
     }
 
-    if (numberOfQuestions < 10 || numberOfQuestions > 50) {
+    if (!includeCourse && !includeQuestionnaire) {
+      toast({
+        title: "Error",
+        description: "Please select at least one option: Course or Questionnaires",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (includeQuestionnaire && (numberOfQuestions < 10 || numberOfQuestions > 50)) {
       toast({
         title: "Error",
         description: "Number of questions must be between 10 and 50",
@@ -81,7 +93,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
       return;
     }
 
-    onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe);
+    onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire);
   };
 
   const getRecommendedTimeframe = (questions: number): number => {
@@ -103,7 +115,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
               <div className="bg-gradient-to-r from-violet-500 to-purple-500 p-2 rounded-lg">
                 <Zap className="h-5 w-5 text-white" />
               </div>
-              <span>Formulate Questions</span>
+              <span>Generate Content</span>
             </DialogTitle>
           </DialogHeader>
           
@@ -161,14 +173,52 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
               </div>
             </div>
 
+            {/* Content Type Selection */}
             <div className="space-y-4">
               <div>
-                <Label htmlFor="testName" className="text-slate-700 font-medium font-poppins">Test Name</Label>
+                <Label className="text-slate-700 font-medium font-poppins mb-3 block">Content Type</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <Checkbox
+                      id="include-course"
+                      checked={includeCourse}
+                      onCheckedChange={(checked) => setIncludeCourse(checked as boolean)}
+                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                    />
+                    <div className="flex items-center space-x-2">
+                      <GraduationCap className="h-4 w-4 text-blue-600" />
+                      <Label htmlFor="include-course" className="text-slate-700 font-medium cursor-pointer">
+                        Course
+                      </Label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 ml-9">Generate a course that guests must complete before taking the test</p>
+
+                  <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <Checkbox
+                      id="include-questionnaire"
+                      checked={includeQuestionnaire}
+                      onCheckedChange={(checked) => setIncludeQuestionnaire(checked as boolean)}
+                      className="data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600"
+                    />
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4 text-violet-600" />
+                      <Label htmlFor="include-questionnaire" className="text-slate-700 font-medium cursor-pointer">
+                        Questionnaires
+                      </Label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 ml-9">Generate multiple-choice questions for testing</p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="testName" className="text-slate-700 font-medium font-poppins">Content Name</Label>
                 <Input
                   id="testName"
                   value={testName}
                   onChange={(e) => setTestName(e.target.value)}
-                  placeholder="Enter a name for this test"
+                  placeholder="Enter a name for this content"
                   className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
                 />
               </div>
@@ -187,39 +237,43 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
                 </Select>
               </div>
 
-              <div>
-                <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions</Label>
-                <Input
-                  id="numberOfQuestions"
-                  type="number"
-                  min={10}
-                  max={50}
-                  value={numberOfQuestions}
-                  onChange={(e) => setNumberOfQuestions(Number(e.target.value))}
-                  className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                />
-                <p className="text-xs text-slate-500 mt-1">Between 10 and 50 questions</p>
-              </div>
+              {includeQuestionnaire && (
+                <>
+                  <div>
+                    <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions</Label>
+                    <Input
+                      id="numberOfQuestions"
+                      type="number"
+                      min={10}
+                      max={50}
+                      value={numberOfQuestions}
+                      onChange={(e) => setNumberOfQuestions(Number(e.target.value))}
+                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Between 10 and 50 questions</p>
+                  </div>
 
-              <div>
-                <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes)</Label>
-                <Input
-                  id="timeframe"
-                  type="number"
-                  min={5}
-                  max={180}
-                  value={timeframe}
-                  onChange={(e) => setTimeframe(Number(e.target.value))}
-                  className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                />
-                <p className="text-xs text-slate-500 mt-1">Recommended: {getRecommendedTimeframe(numberOfQuestions)} minutes for {numberOfQuestions} questions</p>
-              </div>
+                  <div>
+                    <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes)</Label>
+                    <Input
+                      id="timeframe"
+                      type="number"
+                      min={5}
+                      max={180}
+                      value={timeframe}
+                      onChange={(e) => setTimeframe(Number(e.target.value))}
+                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Recommended: {getRecommendedTimeframe(numberOfQuestions)} minutes for {numberOfQuestions} questions</p>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex space-x-3 pt-4 border-t border-slate-200">
               <Button onClick={handleGenerate} className="bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 flex-1 rounded-lg font-poppins font-medium">
                 <Zap className="h-4 w-4 mr-2" />
-                Formulate Questions
+                Generate Content
               </Button>
               <Button onClick={onCancel} variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-poppins">
                 <X className="h-4 w-4 mr-2" />

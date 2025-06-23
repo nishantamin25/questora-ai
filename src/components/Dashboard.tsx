@@ -60,24 +60,24 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
     const file = e.target.files?.[0];
     if (file) {
-      // Check file extension
-      const allowedExtensions = ['.txt', '.docx', '.doc', '.pdf'];
+      // Check file extension - updated to include images and videos
+      const allowedExtensions = ['.txt', '.docx', '.doc', '.pdf', '.png', '.svg', '.mp4'];
       const fileName = file.name.toLowerCase();
       const isAllowedExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
       
       if (!isAllowedExtension) {
         toast({
           title: "Invalid File Type",
-          description: "Please upload only .txt, .docx, .doc, or .pdf files",
+          description: "Please upload .txt, .docx, .doc, .pdf, .png, .svg, or .mp4 files",
           variant: "destructive"
         });
         return;
       }
 
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit for videos
         toast({
           title: "Error",
-          description: "File size must be less than 10MB",
+          description: "File size must be less than 50MB",
           variant: "destructive"
         });
         return;
@@ -142,7 +142,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setShowGenerateDialog(true);
   };
 
-  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number) => {
+  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean) => {
     setIsGenerating(true);
     setShowGenerateDialog(false);
     
@@ -150,8 +150,13 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       let fileContent = '';
       if (uploadedFile) {
         try {
-          fileContent = await readFileContent(uploadedFile);
-          console.log('File content read successfully:', fileContent.substring(0, 100) + '...');
+          // For images and videos, we'll store the file reference for course generation
+          if (uploadedFile.type.startsWith('image/') || uploadedFile.type.startsWith('video/')) {
+            fileContent = `Media file: ${uploadedFile.name} (${uploadedFile.type})`;
+          } else {
+            fileContent = await readFileContent(uploadedFile);
+          }
+          console.log('File content prepared successfully');
         } catch (error) {
           console.error('Error reading file:', error);
           toast({
@@ -164,8 +169,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       const questionnaire = await QuestionnaireService.generateQuestionnaire(
         prompt,
-        { testName, difficulty, numberOfQuestions, timeframe },
-        fileContent
+        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
+        fileContent,
+        uploadedFile
       );
       
       setQuestionnaires(prev => [questionnaire, ...prev]);
@@ -174,12 +180,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       toast({
         title: "Success",
-        description: "Questionnaire generated successfully! Click the save button to save your test.",
+        description: "Content generated successfully! Click the save button to save your content.",
       });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to generate questionnaire",
+        description: "Failed to generate content",
         variant: "destructive"
       });
     } finally {
@@ -301,17 +307,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             {user.role === 'admin' && !showGenerateDialog && (
               <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
-                  <CardTitle className="text-slate-900 font-poppins">Generate Questionnaire</CardTitle>
+                  <CardTitle className="text-slate-900 font-poppins">Generate Content</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 p-6">
                   <div>
-                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">Describe your questionnaire</Label>
+                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">Describe your content</Label>
                     <div className="relative mt-1">
                       <Textarea
                         id="prompt"
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="e.g., Create a questionnaire about customer satisfaction for an e-commerce website"
+                        placeholder="e.g., Create content about customer satisfaction for an e-commerce website"
                         className="min-h-[120px] bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 pr-12 rounded-lg focus:border-violet-500 focus:ring-violet-500 font-inter"
                       />
                       <div className="absolute bottom-3 right-3 flex items-center space-x-2">
@@ -322,7 +328,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           id="file-upload"
                           type="file"
                           onChange={handleFileUpload}
-                          accept=".txt,.pdf,.doc,.docx"
+                          accept=".txt,.pdf,.doc,.docx,.png,.svg,.mp4"
                           className="hidden"
                         />
                       </div>
@@ -357,7 +363,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     ) : (
                       <div className="flex items-center space-x-2">
                         <Zap className="h-4 w-4" />
-                        <span>Formulate Questions</span>
+                        <span>Generate Content</span>
                       </div>
                     )}
                   </Button>
