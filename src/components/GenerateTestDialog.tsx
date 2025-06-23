@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -5,20 +6,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Zap, X, Sparkles, Key, Bot, GraduationCap, FileText } from 'lucide-react';
+import { Zap, X, Sparkles, Key, Bot, GraduationCap, FileText, ChevronDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ChatGPTService } from '@/services/ChatGPTService';
 import ChatGPTKeyDialog from './ChatGPTKeyDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface GenerateTestDialogProps {
   open: boolean;
   prompt: string;
-  uploadedFile: File | null;
+  uploadedFiles: File[];
   onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean) => void;
   onCancel: () => void;
 }
 
-const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }: GenerateTestDialogProps) => {
+const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel }: GenerateTestDialogProps) => {
   const [testName, setTestName] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [numberOfQuestions, setNumberOfQuestions] = useState(15);
@@ -27,6 +34,25 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
   const [includeQuestionnaire, setIncludeQuestionnaire] = useState(true);
   const [showChatGPTKeyDialog, setShowChatGPTKeyDialog] = useState(false);
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
+
+  // Check if course can be enabled based on uploaded files
+  const canEnableCourse = uploadedFiles.some(file => {
+    const fileName = file.name.toLowerCase();
+    const fileType = file.type.toLowerCase();
+    return (
+      fileType.startsWith('image/') ||
+      fileType.startsWith('video/') ||
+      fileName.endsWith('.pdf') ||
+      fileType === 'application/pdf'
+    );
+  });
+
+  // Reset course checkbox if no compatible files are uploaded
+  useEffect(() => {
+    if (!canEnableCourse && includeCourse) {
+      setIncludeCourse(false);
+    }
+  }, [canEnableCourse, includeCourse]);
 
   // Calculate timeframe based on number of questions using specified mapping
   useEffect(() => {
@@ -161,13 +187,19 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
                   <p className="text-sm text-violet-800 bg-white p-3 rounded-lg border border-violet-200 font-inter">
                     {prompt}
                   </p>
-                  {uploadedFile && (
-                    <p className="text-sm text-slate-700 mt-2">
-                      <strong className="text-violet-800">File:</strong> 
-                      <span className="ml-1 px-2 py-1 bg-violet-100 text-violet-800 rounded text-xs font-medium">
-                        {uploadedFile.name}
-                      </span>
-                    </p>
+                  {uploadedFiles.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm text-slate-700 mb-1">
+                        <strong className="text-violet-800">Files ({uploadedFiles.length}):</strong>
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {uploadedFiles.map((file, index) => (
+                          <span key={index} className="px-2 py-1 bg-violet-100 text-violet-800 rounded text-xs font-medium">
+                            {file.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -178,21 +210,36 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
               <div>
                 <Label className="text-slate-700 font-medium font-poppins mb-3 block">Content Type</Label>
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                  <div className={`flex items-center space-x-3 p-3 border rounded-lg ${
+                    canEnableCourse 
+                      ? 'border-slate-200 hover:bg-slate-50' 
+                      : 'border-slate-100 bg-slate-50'
+                  }`}>
                     <Checkbox
                       id="include-course"
                       checked={includeCourse}
-                      onCheckedChange={(checked) => setIncludeCourse(checked as boolean)}
+                      onCheckedChange={(checked) => canEnableCourse && setIncludeCourse(checked as boolean)}
+                      disabled={!canEnableCourse}
                       className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                     />
                     <div className="flex items-center space-x-2">
-                      <GraduationCap className="h-4 w-4 text-blue-600" />
-                      <Label htmlFor="include-course" className="text-slate-700 font-medium cursor-pointer">
+                      <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-slate-400'}`} />
+                      <Label 
+                        htmlFor="include-course" 
+                        className={`font-medium cursor-pointer ${
+                          canEnableCourse ? 'text-slate-700' : 'text-slate-400'
+                        }`}
+                      >
                         Course
                       </Label>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 ml-9">Generate a course that guests must complete before taking the test</p>
+                  <p className={`text-xs ml-9 ${canEnableCourse ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {canEnableCourse 
+                      ? 'Generate a course that guests must complete before taking the test'
+                      : 'Upload images, videos, or PDFs to enable course generation'
+                    }
+                  </p>
 
                   <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
                     <Checkbox
@@ -213,12 +260,12 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
               </div>
 
               <div>
-                <Label htmlFor="testName" className="text-slate-700 font-medium font-poppins">Content Name</Label>
+                <Label htmlFor="testName" className="text-slate-700 font-medium font-poppins">Test Name</Label>
                 <Input
                   id="testName"
                   value={testName}
                   onChange={(e) => setTestName(e.target.value)}
-                  placeholder="Enter a name for this content"
+                  placeholder="Enter a name for this test"
                   className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
                 />
               </div>
@@ -226,10 +273,10 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
               <div>
                 <Label htmlFor="difficulty" className="text-slate-700 font-medium font-poppins">Difficulty Level</Label>
                 <Select value={difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}>
-                  <SelectTrigger className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg">
+                  <SelectTrigger className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
                     <SelectValue placeholder="Select difficulty" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-50">
                     <SelectItem value="easy">🟢 Easy</SelectItem>
                     <SelectItem value="medium">🟡 Medium</SelectItem>
                     <SelectItem value="hard">🔴 Hard</SelectItem>
@@ -241,29 +288,55 @@ const GenerateTestDialog = ({ open, prompt, uploadedFile, onGenerate, onCancel }
                 <>
                   <div>
                     <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions</Label>
-                    <Input
-                      id="numberOfQuestions"
-                      type="number"
-                      min={10}
-                      max={50}
-                      value={numberOfQuestions}
-                      onChange={(e) => setNumberOfQuestions(Number(e.target.value))}
-                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Between 10 and 50 questions</p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
+                        >
+                          {numberOfQuestions} questions
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-50">
+                        {[10, 15, 20, 25, 30, 35, 40, 45, 50].map((num) => (
+                          <DropdownMenuItem 
+                            key={num} 
+                            onClick={() => setNumberOfQuestions(num)}
+                            className="cursor-pointer hover:bg-slate-50"
+                          >
+                            {num} questions
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <p className="text-xs text-slate-500 mt-1">Choose between 10 and 50 questions</p>
                   </div>
 
                   <div>
                     <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes)</Label>
-                    <Input
-                      id="timeframe"
-                      type="number"
-                      min={5}
-                      max={180}
-                      value={timeframe}
-                      onChange={(e) => setTimeframe(Number(e.target.value))}
-                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
+                        >
+                          {timeframe} minutes
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-50">
+                        {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 90, 120, 150, 180].map((time) => (
+                          <DropdownMenuItem 
+                            key={time} 
+                            onClick={() => setTimeframe(time)}
+                            className="cursor-pointer hover:bg-slate-50"
+                          >
+                            {time} minutes
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <p className="text-xs text-slate-500 mt-1">Recommended: {getRecommendedTimeframe(numberOfQuestions)} minutes for {numberOfQuestions} questions</p>
                   </div>
                 </>

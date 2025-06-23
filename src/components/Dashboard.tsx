@@ -19,7 +19,7 @@ interface DashboardProps {
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [prompt, setPrompt] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -58,40 +58,29 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       return;
     }
 
-    const file = e.target.files?.[0];
-    if (file) {
-      // Check file extension - updated to include images and videos
-      const allowedExtensions = ['.txt', '.docx', '.doc', '.pdf', '.png', '.svg', '.mp4'];
-      const fileName = file.name.toLowerCase();
-      const isAllowedExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
-      
-      if (!isAllowedExtension) {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      // Check file size for each file (50MB limit)
+      const oversizedFiles = files.filter(file => file.size > 50 * 1024 * 1024);
+      if (oversizedFiles.length > 0) {
         toast({
-          title: "Invalid File Type",
-          description: "Please upload .txt, .docx, .doc, .pdf, .png, .svg, or .mp4 files",
+          title: "Error",
+          description: `Files must be less than 50MB: ${oversizedFiles.map(f => f.name).join(', ')}`,
           variant: "destructive"
         });
         return;
       }
 
-      if (file.size > 50 * 1024 * 1024) { // 50MB limit for videos
-        toast({
-          title: "Error",
-          description: "File size must be less than 50MB",
-          variant: "destructive"
-        });
-        return;
-      }
-      setUploadedFile(file);
+      setUploadedFiles(prev => [...prev, ...files]);
       toast({
         title: "Success",
-        description: `File "${file.name}" uploaded successfully`,
+        description: `${files.length} file(s) uploaded successfully`,
       });
     }
   };
 
-  const removeFile = () => {
-    setUploadedFile(null);
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const readFileContent = async (file: File): Promise<string> => {
@@ -148,20 +137,30 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     
     try {
       let fileContent = '';
-      if (uploadedFile) {
+      if (uploadedFiles.length > 0) {
         try {
-          // For images and videos, we'll store the file reference for course generation
-          if (uploadedFile.type.startsWith('image/') || uploadedFile.type.startsWith('video/')) {
-            fileContent = `Media file: ${uploadedFile.name} (${uploadedFile.type})`;
-          } else {
-            fileContent = await readFileContent(uploadedFile);
-          }
+          const fileContents = await Promise.all(
+            uploadedFiles.map(async (file) => {
+              // For images and videos, we'll store the file reference for course generation
+              if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                return `Media file: ${file.name} (${file.type})`;
+              } else {
+                try {
+                  const content = await readFileContent(file);
+                  return `File: ${file.name}\nContent: ${content}`;
+                } catch {
+                  return `File: ${file.name} (could not read content)`;
+                }
+              }
+            })
+          );
+          fileContent = fileContents.join('\n\n');
           console.log('File content prepared successfully');
         } catch (error) {
-          console.error('Error reading file:', error);
+          console.error('Error reading files:', error);
           toast({
             title: "Warning",
-            description: "Could not read file content. Generating questionnaire without file context.",
+            description: "Could not read some file content. Generating questionnaire without file context.",
             variant: "destructive"
           });
         }
@@ -177,7 +176,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       
       setQuestionnaires(prev => [questionnaire, ...prev]);
       setPrompt('');
-      setUploadedFile(null);
+      setUploadedFiles([]);
       
       toast({
         title: "Success",
@@ -299,7 +298,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             <GenerateTestDialog
               open={showGenerateDialog}
               prompt={prompt}
-              uploadedFile={uploadedFile}
+              uploadedFiles={uploadedFiles}
               onGenerate={handleGenerateQuestionnaire}
               onCancel={() => setShowGenerateDialog(false)}
             />
@@ -329,24 +328,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                           id="file-upload"
                           type="file"
                           onChange={handleFileUpload}
-                          accept=".txt,.pdf,.doc,.docx,.png,.svg,.mp4"
+                          multiple
                           className="hidden"
                         />
                       </div>
                     </div>
                     
-                    {uploadedFile && (
-                      <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                        <div className="flex items-center space-x-2">
-                          <Upload className="h-4 w-4 text-violet-600" />
-                          <span className="text-sm text-violet-800 font-medium font-inter">{uploadedFile.name}</span>
-                        </div>
-                        <button
-                          onClick={removeFile}
-                          className="text-slate-400 hover:text-red-500 transition-colors"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                    {uploadedFiles.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {uploadedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                            <div className="flex items-center space-x-2">
+                              <Upload className="h-4 w-4 text-violet-600" />
+                              <span className="text-sm text-violet-800 font-medium font-inter">{file.name}</span>
+                            </div>
+                            <button
+                              onClick={() => removeFile(index)}
+                              className="text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
