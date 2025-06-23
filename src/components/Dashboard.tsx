@@ -284,7 +284,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       const setsText = numberOfSets > 1 ? `${numberOfSets} sets of ` : '';
       toast({
         title: "Success",
-        description: `${setsText}${contentTypes.join(' and ')} generated successfully! Click the save button to save your content.`,
+        description: `${setsText}${contentTypes.join(' and ')} generated successfully!`,
       });
     } catch (error) {
       console.error('Error generating content:', error);

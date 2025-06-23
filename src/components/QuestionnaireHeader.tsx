@@ -1,4 +1,3 @@
-
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -182,9 +181,8 @@ const QuestionnaireHeader = ({
               </>
             ) : (
               !isPartOfSet && (
-                <Button onClick={onSaveTest} size="sm" variant="default">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Test
+                <Button onClick={onSaveTest} size="sm" variant="outline">
+                  <Save className="h-4 w-4" />
                 </Button>
               )
             )}
