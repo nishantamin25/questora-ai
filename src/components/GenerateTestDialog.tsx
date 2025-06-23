@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Zap, X, Key, Bot, GraduationCap, FileText, ChevronDown } from 'lucide-react';
+import { Zap, X, Key, Bot, GraduationCap, FileText, ChevronDown, Hash } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ChatGPTService } from '@/services/ChatGPTService';
 import ChatGPTKeyDialog from './ChatGPTKeyDialog';
@@ -21,7 +20,7 @@ interface GenerateTestDialogProps {
   open: boolean;
   prompt: string;
   uploadedFiles: File[];
-  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean) => void;
+  onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets?: number) => void;
   onCancel: () => void;
 }
 
@@ -32,6 +31,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
   const [timeframe, setTimeframe] = useState(20);
   const [includeCourse, setIncludeCourse] = useState(false);
   const [includeQuestionnaire, setIncludeQuestionnaire] = useState(true);
+  const [numberOfSets, setNumberOfSets] = useState(1);
   const [showChatGPTKeyDialog, setShowChatGPTKeyDialog] = useState(false);
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
   const [contentType, setContentType] = useState<'questionnaires' | 'course' | 'both'>('questionnaires');
@@ -175,6 +175,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       testName: testName.trim(),
       includeCourse,
       includeQuestionnaire,
+      numberOfSets,
       uploadedFilesCount: uploadedFiles.length,
       canEnableCourse,
       validFiles: uploadedFiles.filter(f => isValidFileForCourse(f)).length
@@ -227,6 +228,15 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       return;
     }
 
+    if (includeQuestionnaire && (numberOfSets < 1 || numberOfSets > 10)) {
+      toast({
+        title: "Error",
+        description: "Number of sets must be between 1 and 10",
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.log('Generating with final options:', {
       testName: testName.trim(),
       difficulty,
@@ -234,11 +244,12 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
       timeframe,
       includeCourse,
       includeQuestionnaire,
+      numberOfSets,
       uploadedFilesCount: uploadedFiles.length,
       validFilesCount: uploadedFiles.filter(f => isValidFileForCourse(f)).length
     });
 
-    onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire);
+    onGenerate(testName.trim(), difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets);
   };
 
   const getRecommendedTimeframe = (questions: number): number => {
@@ -365,7 +376,37 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
               {includeQuestionnaire && (
                 <>
                   <div>
-                    <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions</Label>
+                    <Label htmlFor="numberOfSets" className="text-slate-700 font-medium font-poppins">Number of Sets</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="w-full mt-1 justify-between border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Hash className="h-4 w-4 text-violet-600" />
+                            <span>{numberOfSets} set{numberOfSets > 1 ? 's' : ''}</span>
+                          </div>
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-full bg-white border border-slate-200 shadow-lg z-[100]">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                          <DropdownMenuItem 
+                            key={num} 
+                            onClick={() => setNumberOfSets(num)}
+                            className="cursor-pointer hover:bg-slate-50"
+                          >
+                            {num} set{num > 1 ? 's' : ''}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <p className="text-xs text-slate-500 mt-1">Each set will contain unique questions</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="numberOfQuestions" className="text-slate-700 font-medium font-poppins">Number of Questions (per set)</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
@@ -388,11 +429,11 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
                         ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <p className="text-xs text-slate-500 mt-1">Choose between 10 and 50 questions</p>
+                    <p className="text-xs text-slate-500 mt-1">Choose between 10 and 50 questions per set</p>
                   </div>
 
                   <div>
-                    <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes)</Label>
+                    <Label htmlFor="timeframe" className="text-slate-700 font-medium font-poppins">Timeframe (minutes per set)</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 

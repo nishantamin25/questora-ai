@@ -20,6 +20,8 @@ interface Questionnaire {
   difficulty?: 'easy' | 'medium' | 'hard';
   isSaved?: boolean;
   timeframe?: number;
+  setNumber?: number;
+  totalSets?: number;
 }
 
 interface GenerateQuestionnaireOptions {
@@ -72,16 +74,17 @@ class QuestionnaireServiceClass {
     }
   }
 
-  async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Promise<Questionnaire> {
-    console.log('Generating questionnaire with options:', options);
+  async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string, setNumber?: number, totalSets?: number): Promise<Questionnaire> {
+    console.log('Generating questionnaire with options:', options, 'Set:', setNumber, 'of', totalSets);
     console.log('File content provided:', !!fileContent);
     
     // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const questionnaireId = this.generateId();
-    const title = options.testName;
-    const description = this.generateDescription(prompt, fileContent);
+    const setInfo = setNumber && totalSets && totalSets > 1 ? ` - Set ${setNumber}` : '';
+    const title = options.testName + setInfo;
+    const description = this.generateDescription(prompt, fileContent, setNumber, totalSets);
     
     let questions: Question[] = [];
     
@@ -96,7 +99,9 @@ class QuestionnaireServiceClass {
             prompt,
             options.numberOfQuestions,
             options.difficulty,
-            fileContent
+            fileContent,
+            setNumber,
+            totalSets
           );
           
           // Convert ChatGPT questions to our format
@@ -112,12 +117,12 @@ class QuestionnaireServiceClass {
         } catch (error) {
           console.error('ChatGPT generation failed, falling back to template-based generation:', error);
           // Fall back to template-based generation
-          questions = this.generateFallbackQuestions(prompt, options, fileContent);
+          questions = this.generateFallbackQuestions(prompt, options, fileContent, setNumber, totalSets);
         }
       } else {
         console.log('No ChatGPT API key found, using template-based generation');
         // Use template-based generation
-        questions = this.generateFallbackQuestions(prompt, options, fileContent);
+        questions = this.generateFallbackQuestions(prompt, options, fileContent, setNumber, totalSets);
       }
     }
 
@@ -139,6 +144,8 @@ class QuestionnaireServiceClass {
       difficulty: options.difficulty,
       isSaved: false,
       timeframe: options.timeframe,
+      setNumber,
+      totalSets,
       ...(courseContent && { courseContent })
     };
 
@@ -334,15 +341,25 @@ class QuestionnaireServiceClass {
     return 'general';
   }
 
-  private generateDescription(prompt: string, fileContent?: string): string {
+  private generateDescription(prompt: string, fileContent?: string, setNumber?: number, totalSets?: number): string {
     let description = `This questionnaire was generated based on: "${prompt}"`;
     if (fileContent && fileContent.trim().length > 0) {
       description += ` Additional context was provided from uploaded file content.`;
     }
+    if (setNumber && totalSets && totalSets > 1) {
+      description += ` This is set ${setNumber} of ${totalSets} with unique questions.`;
+    }
     return description;
   }
 
-  private generateQuestions(prompt: string, category: string, numberOfQuestions: number, fileContent?: string): Question[] {
+  private generateFallbackQuestions(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
+    // This is the existing question generation logic with set awareness
+    const category = this.categorizePrompt(prompt, fileContent);
+    const questions = this.generateQuestions(prompt, category, options.numberOfQuestions, fileContent, setNumber, totalSets);
+    return questions;
+  }
+
+  private generateQuestions(prompt: string, category: string, numberOfQuestions: number, fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
     const questions: Question[] = [];
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
                          this.questionTemplates['customer satisfaction'];
@@ -352,14 +369,17 @@ class QuestionnaireServiceClass {
     let fileBasedQuestions: Question[] = [];
     
     if (fileContent && fileContent.trim().length > 10) {
-      fileBasedQuestions = this.generateFileBasedQuestions(fileContent, prompt);
+      fileBasedQuestions = this.generateFileBasedQuestions(fileContent, prompt, setNumber);
       baseQuestionCount = Math.max(numberOfQuestions - fileBasedQuestions.length, Math.floor(numberOfQuestions * 0.7));
     }
     
-    // Generate base questions
+    // Shuffle and offset questions based on set number to ensure uniqueness
     const shuffledBaseQuestions = [...baseQuestions].sort(() => Math.random() - 0.5);
+    const startOffset = setNumber ? (setNumber - 1) * numberOfQuestions : 0;
+    
     for (let i = 0; i < Math.min(baseQuestionCount, shuffledBaseQuestions.length); i++) {
-      const questionText = this.adaptQuestionToPrompt(shuffledBaseQuestions[i], prompt, fileContent);
+      const questionIndex = (startOffset + i) % shuffledBaseQuestions.length;
+      const questionText = this.adaptQuestionToPrompt(shuffledBaseQuestions[questionIndex], prompt, fileContent, setNumber);
       const question: Question = {
         id: this.generateId(),
         text: questionText,
@@ -379,20 +399,26 @@ class QuestionnaireServiceClass {
     // Add file-based questions if available
     questions.push(...fileBasedQuestions.slice(0, numberOfQuestions - questions.length));
 
-    // If we still need more questions, generate generic ones
+    // If we still need more questions, generate generic ones with set variation
     while (questions.length < numberOfQuestions) {
       const genericQuestions = [
         'How would you rate your overall experience?',
         'What improvements would you suggest?',
         'How likely are you to participate again?',
         'How clear were the instructions provided?',
-        'How satisfied are you with the support received?'
+        'How satisfied are you with the support received?',
+        'How would you rate the quality of the content?',
+        'How user-friendly did you find the interface?',
+        'How relevant was the information provided?',
+        'How would you rate the response time?',
+        'How professional was the service?'
       ];
       
-      const randomGeneric = genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
+      const questionIndex = (startOffset + questions.length) % genericQuestions.length;
+      const randomGeneric = genericQuestions[questionIndex];
       questions.push({
         id: this.generateId(),
-        text: this.adaptQuestionToPrompt(randomGeneric, prompt, fileContent),
+        text: this.adaptQuestionToPrompt(randomGeneric, prompt, fileContent, setNumber),
         type: 'radio',
         options: ['Poor', 'Fair', 'Good', 'Excellent']
       });
@@ -401,16 +427,17 @@ class QuestionnaireServiceClass {
     return questions.slice(0, numberOfQuestions);
   }
 
-  private generateFileBasedQuestions(fileContent: string, prompt: string): Question[] {
+  private generateFileBasedQuestions(fileContent: string, prompt: string, setNumber?: number): Question[] {
     const questions: Question[] = [];
     
     // Analyze file content to generate relevant questions
     const content = fileContent.toLowerCase();
+    const setVariation = setNumber ? ` (Set ${setNumber} perspective)` : '';
     
     if (content.includes('policy') || content.includes('procedure')) {
       questions.push({
         id: this.generateId(),
-        text: 'Based on the provided policy document, how clear are the outlined procedures?',
+        text: `Based on the provided policy document, how clear are the outlined procedures?${setVariation}`,
         type: 'radio',
         options: ['Very Unclear', 'Somewhat Unclear', 'Clear', 'Very Clear']
       });
@@ -419,7 +446,7 @@ class QuestionnaireServiceClass {
     if (content.includes('training') || content.includes('course') || content.includes('learn')) {
       questions.push({
         id: this.generateId(),
-        text: 'How would you rate the comprehensiveness of the training material provided?',
+        text: `How would you rate the comprehensiveness of the training material provided?${setVariation}`,
         type: 'radio',
         options: ['Poor', 'Fair', 'Good', 'Excellent']
       });
@@ -429,7 +456,7 @@ class QuestionnaireServiceClass {
     if (questions.length === 0) {
       questions.push({
         id: this.generateId(),
-        text: 'Based on the provided document content, how relevant is the information to your needs?',
+        text: `Based on the provided document content, how relevant is the information to your needs?${setVariation}`,
         type: 'radio',
         options: ['Not Relevant', 'Somewhat Relevant', 'Relevant', 'Very Relevant']
       });
@@ -438,7 +465,7 @@ class QuestionnaireServiceClass {
     return questions.slice(0, 3); // Limit to 3 additional questions from file content
   }
 
-  private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string): string {
+  private adaptQuestionToPrompt(baseQuestion: string, prompt: string, fileContent?: string, setNumber?: number): string {
     let adapted = baseQuestion;
     const combinedContent = prompt.toLowerCase() + ' ' + (fileContent?.toLowerCase() || '');
     
@@ -452,13 +479,22 @@ class QuestionnaireServiceClass {
       adapted = adapted.replace(/product\/service|service|product/gi, 'policy');
     }
     
+    // Add subtle variation for different sets
+    if (setNumber && setNumber > 1) {
+      const variations = [
+        '', // no change for set 1
+        ' in your experience',
+        ' from your perspective',
+        ' in your opinion',
+        ' based on your usage'
+      ];
+      const variation = variations[setNumber % variations.length];
+      if (variation && !adapted.includes(variation)) {
+        adapted = adapted.replace('?', `${variation}?`);
+      }
+    }
+    
     return adapted;
-  }
-
-  private generateFallbackQuestions(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Question[] {
-    // This is the existing question generation logic
-    const category = this.categorizePrompt(prompt, fileContent);
-    return this.generateQuestions(prompt, category, options.numberOfQuestions, fileContent);
   }
 
   private generateId(): string {

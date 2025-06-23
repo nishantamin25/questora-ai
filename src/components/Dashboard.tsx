@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -218,7 +217,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setShowGenerateDialog(true);
   };
 
-  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean) => {
+  const handleGenerateQuestionnaire = async (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets: number = 1) => {
     setIsGenerating(true);
     setShowGenerateDialog(false);
     
@@ -253,15 +252,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         }
       }
       
-      console.log('Generating with options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire });
+      console.log('Generating with options:', { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire, numberOfSets });
       
-      const questionnaire = await QuestionnaireService.generateQuestionnaire(
-        prompt,
-        { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
-        fileContent
-      );
+      // Generate multiple sets if requested
+      const generatedQuestionnaires = [];
       
-      setQuestionnaires(prev => [questionnaire, ...prev]);
+      for (let setIndex = 1; setIndex <= numberOfSets; setIndex++) {
+        const questionnaire = await QuestionnaireService.generateQuestionnaire(
+          prompt,
+          { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
+          fileContent,
+          setIndex,
+          numberOfSets
+        );
+        
+        // Add set information to the questionnaire
+        questionnaire.setNumber = setIndex;
+        questionnaire.totalSets = numberOfSets;
+        
+        generatedQuestionnaires.push(questionnaire);
+      }
+      
+      setQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
       setPrompt('');
       setUploadedFiles([]);
       
@@ -269,9 +281,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       if (includeQuestionnaire) contentTypes.push('questionnaire');
       if (includeCourse) contentTypes.push('course');
       
+      const setsText = numberOfSets > 1 ? `${numberOfSets} sets of ` : '';
       toast({
         title: "Success",
-        description: `${contentTypes.join(' and ')} generated successfully! Click the save button to save your content.`,
+        description: `${setsText}${contentTypes.join(' and ')} generated successfully! Click the save button to save your content.`,
       });
     } catch (error) {
       console.error('Error generating content:', error);
