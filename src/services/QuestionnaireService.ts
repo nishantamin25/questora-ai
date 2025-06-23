@@ -83,6 +83,23 @@ class QuestionnaireServiceClass {
     ]
   };
 
+  private cleanupOldQuestionnaires(): void {
+    try {
+      const questionnaires = this.getAllQuestionnaires();
+      // Keep only the 10 most recent questionnaires
+      const recentQuestionnaires = questionnaires
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 10);
+      
+      localStorage.setItem('questionnaires', JSON.stringify(recentQuestionnaires));
+      console.log('Cleaned up old questionnaires, kept:', recentQuestionnaires.length);
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      // If cleanup fails, clear all questionnaires
+      localStorage.removeItem('questionnaires');
+    }
+  }
+
   async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string): Promise<Questionnaire> {
     // Simulate AI processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -143,18 +160,48 @@ class QuestionnaireServiceClass {
   }
 
   saveQuestionnaire(questionnaire: Questionnaire): void {
-    const existingQuestionnaires = this.getAllQuestionnaires();
-    const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
-    updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
-    localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+    try {
+      const existingQuestionnaires = this.getAllQuestionnaires();
+      const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
+      updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
+      
+      localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+      console.log('Questionnaire saved successfully');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.log('Storage quota exceeded, cleaning up old questionnaires...');
+        this.cleanupOldQuestionnaires();
+        
+        // Try saving again after cleanup
+        try {
+          const existingQuestionnaires = this.getAllQuestionnaires();
+          const updatedQuestionnaires = existingQuestionnaires.filter(q => q.id !== questionnaire.id);
+          updatedQuestionnaires.unshift({...questionnaire, isSaved: true});
+          
+          localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+          console.log('Questionnaire saved successfully after cleanup');
+        } catch (retryError) {
+          console.error('Failed to save questionnaire even after cleanup:', retryError);
+          throw new Error('Storage limit reached. Please delete some old tests to save new ones.');
+        }
+      } else {
+        console.error('Error saving questionnaire:', error);
+        throw error;
+      }
+    }
   }
 
   getAllQuestionnaires(): Questionnaire[] {
-    const stored = localStorage.getItem('questionnaires');
-    if (stored) {
-      return JSON.parse(stored);
+    try {
+      const stored = localStorage.getItem('questionnaires');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      return [];
+    } catch (error) {
+      console.error('Error reading questionnaires from localStorage:', error);
+      return [];
     }
-    return [];
   }
 
   getActiveQuestionnaires(): Questionnaire[] {
@@ -162,9 +209,15 @@ class QuestionnaireServiceClass {
   }
 
   deleteQuestionnaire(questionnaireId: string): void {
-    const questionnaires = this.getAllQuestionnaires();
-    const updatedQuestionnaires = questionnaires.filter(q => q.id !== questionnaireId);
-    localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+    try {
+      const questionnaires = this.getAllQuestionnaires();
+      const updatedQuestionnaires = questionnaires.filter(q => q.id !== questionnaireId);
+      localStorage.setItem('questionnaires', JSON.stringify(updatedQuestionnaires));
+      console.log('Questionnaire deleted successfully');
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error);
+      throw error;
+    }
   }
 
   private categorizePrompt(prompt: string, fileContent?: string): string {

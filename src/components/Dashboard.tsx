@@ -183,6 +183,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         description: "Content generated successfully! Click the save button to save your content.",
       });
     } catch (error) {
+      console.error('Error generating questionnaire:', error);
       toast({
         title: "Error",
         description: "Failed to generate content",
@@ -197,11 +198,16 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     try {
       QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
       loadQuestionnaires();
+      toast({
+        title: "Success",
+        description: "Test updated successfully!",
+      });
     } catch (error) {
       console.error('Error updating questionnaire:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update questionnaire";
       toast({
         title: "Error",
-        description: "Failed to update questionnaire",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -211,6 +217,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     try {
       QuestionnaireService.deleteQuestionnaire(questionnaireId);
       loadQuestionnaires();
+      toast({
+        title: "Success",
+        description: "Test deleted successfully!",
+      });
     } catch (error) {
       console.error('Error deleting questionnaire:', error);
       toast({

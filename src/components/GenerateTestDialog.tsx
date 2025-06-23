@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Zap, X, Sparkles, Key, Bot, GraduationCap, FileText, ChevronDown } from 'lucide-react';
+import { Zap, X, Key, Bot, GraduationCap, FileText, ChevronDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ChatGPTService } from '@/services/ChatGPTService';
 import ChatGPTKeyDialog from './ChatGPTKeyDialog';
@@ -34,6 +34,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
   const [includeQuestionnaire, setIncludeQuestionnaire] = useState(true);
   const [showChatGPTKeyDialog, setShowChatGPTKeyDialog] = useState(false);
   const [hasChatGPTKey, setHasChatGPTKey] = useState(false);
+  const [contentType, setContentType] = useState<'questionnaires' | 'course' | 'both'>('questionnaires');
 
   // Check if course can be enabled based on uploaded files
   const canEnableCourse = uploadedFiles.some(file => {
@@ -47,12 +48,30 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
     );
   });
 
-  // Reset course checkbox if no compatible files are uploaded
+  // Update checkboxes based on content type selection
   useEffect(() => {
-    if (!canEnableCourse && includeCourse) {
-      setIncludeCourse(false);
+    switch (contentType) {
+      case 'questionnaires':
+        setIncludeQuestionnaire(true);
+        setIncludeCourse(false);
+        break;
+      case 'course':
+        if (canEnableCourse) {
+          setIncludeQuestionnaire(false);
+          setIncludeCourse(true);
+        } else {
+          // Fallback to questionnaires if course can't be enabled
+          setContentType('questionnaires');
+          setIncludeQuestionnaire(true);
+          setIncludeCourse(false);
+        }
+        break;
+      case 'both':
+        setIncludeQuestionnaire(true);
+        setIncludeCourse(canEnableCourse);
+        break;
     }
-  }, [canEnableCourse, includeCourse]);
+  }, [contentType, canEnableCourse]);
 
   // Calculate timeframe based on number of questions using specified mapping
   useEffect(() => {
@@ -95,7 +114,7 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
     if (!includeCourse && !includeQuestionnaire) {
       toast({
         title: "Error",
-        description: "Please select at least one option: Course or Questionnaires",
+        description: "Please select at least one content type",
         variant: "destructive"
       });
       return;
@@ -179,84 +198,45 @@ const GenerateTestDialog = ({ open, prompt, uploadedFiles, onGenerate, onCancel 
               </div>
             </div>
 
-            <div className="p-4 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl">
-              <div className="flex items-start space-x-3">
-                <Sparkles className="h-5 w-5 text-violet-600 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm text-slate-700 font-medium mb-2">Your Prompt:</p>
-                  <p className="text-sm text-violet-800 bg-white p-3 rounded-lg border border-violet-200 font-inter">
-                    {prompt}
-                  </p>
-                  {uploadedFiles.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-sm text-slate-700 mb-1">
-                        <strong className="text-violet-800">Files ({uploadedFiles.length}):</strong>
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {uploadedFiles.map((file, index) => (
-                          <span key={index} className="px-2 py-1 bg-violet-100 text-violet-800 rounded text-xs font-medium">
-                            {file.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {/* Content Type Selection */}
             <div className="space-y-4">
               <div>
                 <Label className="text-slate-700 font-medium font-poppins mb-3 block">Content Type</Label>
-                <div className="space-y-3">
-                  <div className={`flex items-center space-x-3 p-3 border rounded-lg ${
-                    canEnableCourse 
-                      ? 'border-slate-200 hover:bg-slate-50' 
-                      : 'border-slate-100 bg-slate-50'
-                  }`}>
-                    <Checkbox
-                      id="include-course"
-                      checked={includeCourse}
-                      onCheckedChange={(checked) => canEnableCourse && setIncludeCourse(checked as boolean)}
-                      disabled={!canEnableCourse}
-                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                    />
-                    <div className="flex items-center space-x-2">
-                      <GraduationCap className={`h-4 w-4 ${canEnableCourse ? 'text-blue-600' : 'text-slate-400'}`} />
-                      <Label 
-                        htmlFor="include-course" 
-                        className={`font-medium cursor-pointer ${
-                          canEnableCourse ? 'text-slate-700' : 'text-slate-400'
-                        }`}
-                      >
-                        Course
-                      </Label>
-                    </div>
-                  </div>
-                  <p className={`text-xs ml-9 ${canEnableCourse ? 'text-slate-500' : 'text-slate-400'}`}>
-                    {canEnableCourse 
-                      ? 'Generate a course that guests must complete before taking the test'
-                      : 'Upload images, videos, or PDFs to enable course generation'
-                    }
-                  </p>
-
-                  <div className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                    <Checkbox
-                      id="include-questionnaire"
-                      checked={includeQuestionnaire}
-                      onCheckedChange={(checked) => setIncludeQuestionnaire(checked as boolean)}
-                      className="data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600"
-                    />
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4 text-violet-600" />
-                      <Label htmlFor="include-questionnaire" className="text-slate-700 font-medium cursor-pointer">
-                        Questionnaires
-                      </Label>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500 ml-9">Generate multiple-choice questions for testing</p>
-                </div>
+                <Select value={contentType} onValueChange={(value: 'questionnaires' | 'course' | 'both') => setContentType(value)}>
+                  <SelectTrigger className="w-full border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg bg-white">
+                    <SelectValue placeholder="Select content type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-slate-200 shadow-lg z-50">
+                    <SelectItem value="questionnaires">
+                      <div className="flex items-center space-x-2">
+                        <FileText className="h-4 w-4 text-violet-600" />
+                        <span>Questionnaires Only</span>
+                      </div>
+                    </SelectItem>
+                    {canEnableCourse && (
+                      <SelectItem value="course">
+                        <div className="flex items-center space-x-2">
+                          <GraduationCap className="h-4 w-4 text-blue-600" />
+                          <span>Course Only</span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {canEnableCourse && (
+                      <SelectItem value="both">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex space-x-1">
+                            <GraduationCap className="h-4 w-4 text-blue-600" />
+                            <FileText className="h-4 w-4 text-violet-600" />
+                          </div>
+                          <span>Course + Questionnaires</span>
+                        </div>
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {!canEnableCourse && "Upload images, videos, or PDFs to enable course options"}
+                </p>
               </div>
 
               <div>
