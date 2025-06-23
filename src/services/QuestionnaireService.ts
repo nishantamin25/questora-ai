@@ -1,3 +1,4 @@
+
 import { ConfigService } from './ConfigService';
 import { ChatGPTService } from './ChatGPTService';
 
@@ -297,9 +298,9 @@ class QuestionnaireServiceClass {
     // Check for various header patterns
     return (
       line.startsWith('#') || // Markdown headers
-      line.match(/^[A-Z][^.]*:?$/) || // ALL CAPS or Title Case ending with optional colon
-      line.match(/^\d+\./) || // Numbered sections
-      line.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) || // Title Case
+      !!line.match(/^[A-Z][^.]*:?$/) || // ALL CAPS or Title Case ending with optional colon
+      !!line.match(/^\d+\./) || // Numbered sections
+      !!line.match(/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/) || // Title Case
       (line.length < 80 && line.length > 5 && !line.includes(',') && !line.includes(';'))
     );
   }
