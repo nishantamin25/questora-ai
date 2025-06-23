@@ -9,7 +9,9 @@ import Leaderboard from '@/components/Leaderboard';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
 import GenerateTestDialog from '@/components/GenerateTestDialog';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
+import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 import { toast } from '@/hooks/use-toast';
 
 interface DashboardProps {
@@ -27,9 +29,16 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [showResponses, setShowResponses] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; questionnaireId: string; testName: string }>({
+    open: false,
+    questionnaireId: '',
+    testName: ''
+  });
 
   useEffect(() => {
     loadQuestionnaires();
+    // Clean up old guest assignments periodically
+    GuestAssignmentService.cleanupOldAssignments();
   }, []);
 
   const loadQuestionnaires = () => {
@@ -314,16 +323,26 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const handleDeleteQuestionnaire = (questionnaireId: string) => {
+  const handleDeleteRequest = (questionnaireId: string, testName: string) => {
+    setDeleteDialog({
+      open: true,
+      questionnaireId,
+      testName
+    });
+  };
+
+  const handleDeleteConfirm = () => {
     try {
       // Try to delete from saved questionnaires first
-      QuestionnaireService.deleteQuestionnaire(questionnaireId);
+      QuestionnaireService.deleteQuestionnaire(deleteDialog.questionnaireId);
       
       // Also remove from unsaved questionnaires if it exists there
-      setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== questionnaireId));
+      setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== deleteDialog.questionnaireId));
       
       // Reload saved questionnaires
       loadQuestionnaires();
+      
+      setDeleteDialog({ open: false, questionnaireId: '', testName: '' });
       
       toast({
         title: "Success",
@@ -339,17 +358,71 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
+  const handleDeleteCancel = () => {
+    setDeleteDialog({ open: false, questionnaireId: '', testName: '' });
+  };
+
+  // Filter questionnaires for guests to show only their assigned set
+  const filterQuestionnairesForGuest = (questionnaires: any[]) => {
+    if (user.role === 'admin') {
+      return questionnaires;
+    }
+
+    // Group questionnaires by test name
+    const testGroups: Record<string, any[]> = {};
+    questionnaires.forEach(q => {
+      const testKey = q.testName || q.title;
+      if (!testGroups[testKey]) {
+        testGroups[testKey] = [];
+      }
+      testGroups[testKey].push(q);
+    });
+
+    // For each test group, assign the guest to a specific set
+    const filteredQuestionnaires: any[] = [];
+    Object.entries(testGroups).forEach(([testName, testQuestionnaires]) => {
+      if (testQuestionnaires.length > 1 && testQuestionnaires[0].totalSets > 1) {
+        // This is a multi-set test
+        const totalSets = testQuestionnaires[0].totalSets;
+        const testId = testQuestionnaires[0].id.split('-')[0]; // Use base ID for assignment
+        const assignedSetNumber = GuestAssignmentService.getGuestSetNumber(user.username, testId, totalSets);
+        
+        // Find the questionnaire for the assigned set
+        const assignedQuestionnaire = testQuestionnaires.find(q => q.setNumber === assignedSetNumber);
+        if (assignedQuestionnaire) {
+          filteredQuestionnaires.push(assignedQuestionnaire);
+        }
+      } else {
+        // Single set test, include all
+        filteredQuestionnaires.push(...testQuestionnaires);
+      }
+    });
+
+    return filteredQuestionnaires;
+  };
+
   // Combine saved and unsaved questionnaires for display
   const allQuestionnaires = user.role === 'admin' 
     ? [...unsavedQuestionnaires, ...questionnaires]
     : questionnaires;
 
+  // Filter questionnaires based on user role
+  const filteredQuestionnaires = filterQuestionnairesForGuest(allQuestionnaires);
+
   // Ensure we have valid data before rendering
-  const validQuestionnaires = allQuestionnaires.filter(q => q && typeof q === 'object');
+  const validQuestionnaires = filteredQuestionnaires.filter(q => q && typeof q === 'object');
   console.log('Rendering questionnaires:', validQuestionnaires);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
+      {/* Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={deleteDialog.open}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        testName={deleteDialog.testName}
+      />
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-4 py-3 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -531,7 +604,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     questionnaire={questionnaire}
                     isAdmin={user.role === 'admin'}
                     onUpdate={handleUpdateQuestionnaire}
-                    onDelete={handleDeleteQuestionnaire}
+                    onDelete={(id) => handleDeleteRequest(id, questionnaire.title || questionnaire.testName || 'Test')}
                   />
                 );
               })}
