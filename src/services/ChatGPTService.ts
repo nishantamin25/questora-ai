@@ -29,7 +29,9 @@ class ChatGPTServiceClass {
     prompt: string, 
     numberOfQuestions: number, 
     difficulty: 'easy' | 'medium' | 'hard',
-    fileContent?: string
+    fileContent?: string,
+    setNumber?: number,
+    totalSets?: number
   ): Promise<ChatGPTQuestion[]> {
     const apiKey = this.getApiKey();
     
@@ -38,7 +40,9 @@ class ChatGPTServiceClass {
       numberOfQuestions,
       difficulty,
       hasFileContent: !!fileContent,
-      hasApiKey: !!apiKey
+      hasApiKey: !!apiKey,
+      setNumber,
+      totalSets
     });
 
     if (!apiKey) {
@@ -46,7 +50,7 @@ class ChatGPTServiceClass {
     }
 
     const systemPrompt = this.buildSystemPrompt(difficulty);
-    const userPrompt = this.buildUserPrompt(prompt, numberOfQuestions, fileContent);
+    const userPrompt = this.buildUserPrompt(prompt, numberOfQuestions, fileContent, setNumber, totalSets);
 
     console.log('System prompt:', systemPrompt);
     console.log('User prompt:', userPrompt);
@@ -140,7 +144,7 @@ Response format: Return your response as a JSON array with this exact structure:
 Important: Return ONLY the JSON array, no additional text or formatting.`;
   }
 
-  private buildUserPrompt(prompt: string, numberOfQuestions: number, fileContent?: string): string {
+  private buildUserPrompt(prompt: string, numberOfQuestions: number, fileContent?: string, setNumber?: number, totalSets?: number): string {
     let userPrompt = `Generate ${numberOfQuestions} multiple-choice questions about: "${prompt}"
 
 Please create questions that are:
@@ -148,6 +152,10 @@ Please create questions that are:
 2. Practical and applicable
 3. Testing important concepts and knowledge
 4. Varied in scope (don't repeat similar questions)`;
+
+    if (setNumber && totalSets && totalSets > 1) {
+      userPrompt += `\n\nThis is set ${setNumber} of ${totalSets} question sets. Please ensure the questions are unique and don't overlap with other sets.`;
+    }
 
     if (fileContent && fileContent.trim().length > 10) {
       userPrompt += `\n\nAdditional context from uploaded file:\n"${fileContent.substring(0, 2000)}${fileContent.length > 2000 ? '...' : ''}"
