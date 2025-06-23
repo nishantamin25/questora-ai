@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
-import SaveTestDialog from './SaveTestDialog';
 import CourseDisplay from './CourseDisplay';
 import QuestionnaireHeader from './QuestionnaireHeader';
 import QuestionsSection from './QuestionsSection';
@@ -44,7 +43,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const [isEditing, setIsEditing] = useState(false);
   const [editedQuestionnaire, setEditedQuestionnaire] = useState<Questionnaire>(questionnaire);
   const [responses, setResponses] = useState<Record<string, string>>({});
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsVisible, setQuestionsVisible] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
@@ -62,11 +60,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
       const updatedQuestionnaire = { ...editedQuestionnaire, questions: editedQuestions };
       setEditedQuestionnaire(updatedQuestionnaire);
       onUpdate(updatedQuestionnaire);
-      
-      // Show save dialog only if this questionnaire is not saved yet
-      if (!updatedQuestionnaire.isSaved) {
-        setShowSaveDialog(true);
-      }
     }
     setIsEditing(!isEditing);
   };
@@ -176,66 +169,53 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   };
 
   return (
-    <>
-      <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden mb-4">
-        <CardHeader className="p-6">
-          <QuestionnaireHeader
-            questionnaire={questionnaire}
-            editedQuestionnaire={editedQuestionnaire}
-            isEditing={isEditing}
-            isAdmin={isAdmin}
-            isPartOfSet={isPartOfSet}
-            onQuestionnaireChange={setEditedQuestionnaire}
-            onEditToggle={handleEditToggle}
-            onCancelEdit={handleCancelEdit}
-            onActiveToggle={handleActiveToggle}
-            onDelete={onDelete}
-            onSaveTest={() => setShowSaveDialog(true)}
-          />
-        </CardHeader>
-
-        {/* Course Content Display */}
-        {questionnaire.courseContent && (
-          <div className="border-b border-slate-200">
-            <CourseDisplay 
-              course={convertCourseContent(questionnaire.courseContent)}
-              onCourseComplete={handleCourseComplete}
-            />
-          </div>
-        )}
-
-        {/* Questions Display - Collapsible */}
-        <CardContent>
-          <QuestionsSection
-            questions={editedQuestions}
-            isEditing={isEditing}
-            isAdmin={isAdmin}
-            isActive={questionnaire.isActive || false}
-            questionsVisible={questionsVisible}
-            responses={responses}
-            isSubmitting={isSubmitting}
-            onQuestionsVisibleChange={setQuestionsVisible}
-            onResponseChange={handleResponseChange}
-            onQuestionTextEdit={handleQuestionTextEdit}
-            onOptionEdit={handleOptionEdit}
-            onAddOption={handleAddOption}
-            onRemoveOption={handleRemoveOption}
-            onSubmitResponses={handleSubmitResponses}
-          />
-        </CardContent>
-      </Card>
-
-      {showSaveDialog && (
-        <SaveTestDialog
-          questionnaire={editedQuestionnaire}
-          onSave={(savedQuestionnaire) => {
-            onUpdate(savedQuestionnaire);
-            setShowSaveDialog(false);
-          }}
-          onCancel={() => setShowSaveDialog(false)}
+    <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden mb-4">
+      <CardHeader className="p-6">
+        <QuestionnaireHeader
+          questionnaire={questionnaire}
+          editedQuestionnaire={editedQuestionnaire}
+          isEditing={isEditing}
+          isAdmin={isAdmin}
+          isPartOfSet={isPartOfSet}
+          onQuestionnaireChange={setEditedQuestionnaire}
+          onEditToggle={handleEditToggle}
+          onCancelEdit={handleCancelEdit}
+          onActiveToggle={handleActiveToggle}
+          onDelete={onDelete}
+          onSaveTest={() => {}}
         />
+      </CardHeader>
+
+      {/* Course Content Display */}
+      {questionnaire.courseContent && (
+        <div className="border-b border-slate-200">
+          <CourseDisplay 
+            course={convertCourseContent(questionnaire.courseContent)}
+            onCourseComplete={handleCourseComplete}
+          />
+        </div>
       )}
-    </>
+
+      {/* Questions Display - Collapsible */}
+      <CardContent>
+        <QuestionsSection
+          questions={editedQuestions}
+          isEditing={isEditing}
+          isAdmin={isAdmin}
+          isActive={questionnaire.isActive || false}
+          questionsVisible={questionsVisible}
+          responses={responses}
+          isSubmitting={isSubmitting}
+          onQuestionsVisibleChange={setQuestionsVisible}
+          onResponseChange={handleResponseChange}
+          onQuestionTextEdit={handleQuestionTextEdit}
+          onOptionEdit={handleOptionEdit}
+          onAddOption={handleAddOption}
+          onRemoveOption={handleRemoveOption}
+          onSubmitResponses={handleSubmitResponses}
+        />
+      </CardContent>
+    </Card>
   );
 };
 

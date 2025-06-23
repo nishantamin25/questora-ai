@@ -277,15 +277,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       setPrompt('');
       setUploadedFiles([]);
       
-      const contentTypes = [];
-      if (includeQuestionnaire) contentTypes.push('questionnaire');
-      if (includeCourse) contentTypes.push('course');
-      
-      const setsText = numberOfSets > 1 ? `${numberOfSets} sets of ` : '';
-      toast({
-        title: "Success",
-        description: `${setsText}${contentTypes.join(' and ')} generated successfully!`,
-      });
+      // No success toast needed - keep it simple
     } catch (error) {
       console.error('Error generating content:', error);
       toast({
@@ -302,10 +294,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     try {
       QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
       loadQuestionnaires();
-      toast({
-        title: "Success",
-        description: "Test updated successfully!",
-      });
+      // No success toast needed - keep it simple
     } catch (error) {
       console.error('Error updating questionnaire:', error);
       const errorMessage = error instanceof Error ? error.message : "Failed to update questionnaire";

@@ -1,3 +1,4 @@
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -142,50 +143,47 @@ const QuestionnaireHeader = ({
         
         {isAdmin && (
           <div className="flex items-center space-x-2 ml-4">
-            {questionnaire.isSaved && (
-              <div className="flex items-center space-x-2">
-                <Label htmlFor={`active-${questionnaire.id}`} className="text-sm text-slate-600">
-                  Active
-                </Label>
-                <Switch
-                  id={`active-${questionnaire.id}`}
-                  checked={questionnaire.isActive || false}
-                  onCheckedChange={onActiveToggle}
-                />
-              </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor={`active-${questionnaire.id}`} className="text-sm text-slate-600">
+                Active
+              </Label>
+              <Switch
+                id={`active-${questionnaire.id}`}
+                checked={questionnaire.isActive || false}
+                onCheckedChange={onActiveToggle}
+              />
+            </div>
+            
+            <Button 
+              onClick={onEditToggle} 
+              size="sm" 
+              variant="outline"
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            
+            <Button 
+              onClick={onEditToggle} 
+              size="sm" 
+              variant="outline"
+            >
+              <Save className="h-4 w-4" />
+            </Button>
+            
+            {isEditing && (
+              <Button onClick={onCancelEdit} size="sm" variant="outline">
+                Cancel
+              </Button>
             )}
             
-            {questionnaire.isSaved ? (
-              <>
-                <Button 
-                  onClick={onEditToggle} 
-                  size="sm" 
-                  variant={isEditing ? "default" : "outline"}
-                  className={isEditing ? "bg-green-600 hover:bg-green-700 text-white" : ""}
-                >
-                  {isEditing ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-                </Button>
-                {isEditing && (
-                  <Button onClick={onCancelEdit} size="sm" variant="outline">
-                    Cancel
-                  </Button>
-                )}
-                <Button 
-                  onClick={() => onDelete(questionnaire.id)} 
-                  size="sm" 
-                  variant="outline"
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              !isPartOfSet && (
-                <Button onClick={onSaveTest} size="sm" variant="outline">
-                  <Save className="h-4 w-4" />
-                </Button>
-              )
-            )}
+            <Button 
+              onClick={() => onDelete(questionnaire.id)} 
+              size="sm" 
+              variant="outline"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         )}
       </div>
