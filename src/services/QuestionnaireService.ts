@@ -1,6 +1,6 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { CourseService } from './CourseService';
+import { LanguageService } from './LanguageService';
 
 interface Question {
   id: string;
@@ -58,6 +58,7 @@ class QuestionnaireServiceClass {
 
     const questionnaireId = this.generateId();
     const testId = `${questionnaireId}-set${setNumber}`;
+    const currentLanguage = LanguageService.getCurrentLanguage();
     
     try {
       let questionnaire: Questionnaire = {
@@ -80,6 +81,7 @@ class QuestionnaireServiceClass {
         console.log('Generating questions via ChatGPT...');
         
         try {
+          // Always generate in English first
           const chatGPTQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
@@ -92,7 +94,7 @@ class QuestionnaireServiceClass {
           console.log('ChatGPT returned questions:', chatGPTQuestions.length);
 
           // Convert ChatGPT questions to our format
-          const formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
+          let formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
             id: this.generateId(),
             text: q.question,
             type: 'multiple-choice' as const,
@@ -100,6 +102,29 @@ class QuestionnaireServiceClass {
             correctAnswer: q.correctAnswer,
             explanation: q.explanation
           }));
+
+          // Translate questions if current language is not English
+          if (currentLanguage !== 'en') {
+            console.log(`Translating questions from English to ${currentLanguage}...`);
+            try {
+              formattedQuestions = await LanguageService.translateQuestions(formattedQuestions, currentLanguage);
+              console.log('Questions translated successfully');
+            } catch (error) {
+              console.error('Error translating questions:', error);
+              // Continue with English questions if translation fails
+            }
+          }
+
+          // Translate title and description if not in English
+          if (currentLanguage !== 'en') {
+            try {
+              questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
+              questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
+            } catch (error) {
+              console.error('Error translating questionnaire metadata:', error);
+              // Continue with English metadata if translation fails
+            }
+          }
 
           questionnaire.questions = formattedQuestions;
           console.log('Formatted questions for questionnaire:', formattedQuestions.length);
@@ -120,7 +145,39 @@ class QuestionnaireServiceClass {
 
         try {
           // For course generation, we pass the file content directly
-          const course = await CourseService.generateCourse(prompt, [], fileContent);
+          let course = await CourseService.generateCourse(prompt, [], fileContent);
+          
+          // Translate course content if not in English
+          if (currentLanguage !== 'en' && course) {
+            try {
+              console.log(`Translating course content to ${currentLanguage}...`);
+              
+              // Translate course title and description
+              if (course.title) {
+                course.title = await LanguageService.translateContent(course.title, currentLanguage);
+              }
+              if (course.description) {
+                course.description = await LanguageService.translateContent(course.description, currentLanguage);
+              }
+              
+              // Translate course materials
+              if (course.materials && Array.isArray(course.materials)) {
+                course.materials = await Promise.all(
+                  course.materials.map(async (material: any) => ({
+                    ...material,
+                    title: material.title ? await LanguageService.translateContent(material.title, currentLanguage) : material.title,
+                    content: material.content ? await LanguageService.translateContent(material.content, currentLanguage) : material.content
+                  }))
+                );
+              }
+              
+              console.log('Course content translated successfully');
+            } catch (error) {
+              console.error('Error translating course content:', error);
+              // Continue with English course content if translation fails
+            }
+          }
+          
           questionnaire.course = course;
           console.log('Course generated successfully:', course.id);
         } catch (error) {
@@ -134,7 +191,8 @@ class QuestionnaireServiceClass {
         questionsCount: questionnaire.questions.length,
         hasCourse: !!questionnaire.course,
         setNumber: questionnaire.setNumber,
-        totalSets: questionnaire.totalSets
+        totalSets: questionnaire.totalSets,
+        language: currentLanguage
       });
 
       return questionnaire;

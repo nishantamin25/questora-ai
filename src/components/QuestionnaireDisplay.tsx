@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
+import { LanguageService } from '@/services/LanguageService';
 import CourseDisplay from './CourseDisplay';
 import QuestionnaireHeader from './QuestionnaireHeader';
 import QuestionsSection from './QuestionsSection';
@@ -46,13 +47,107 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsVisible, setQuestionsVisible] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
+  const [translatedQuestionnaire, setTranslatedQuestionnaire] = useState<Questionnaire>(questionnaire);
+  const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     if (questionnaire) {
       setEditedQuestionnaire(questionnaire);
       setEditedQuestions(questionnaire.questions || []);
+      
+      // Translate questionnaire content when component mounts or language changes
+      translateQuestionnaireContent(questionnaire);
     }
   }, [questionnaire]);
+
+  // Monitor language changes and retranslate content
+  useEffect(() => {
+    const currentLanguage = LanguageService.getCurrentLanguage();
+    if (currentLanguage !== 'en' && !isEditing) {
+      translateQuestionnaireContent(questionnaire);
+    } else if (currentLanguage === 'en') {
+      setTranslatedQuestionnaire(questionnaire);
+    }
+  }, []);
+
+  const translateQuestionnaireContent = async (originalQuestionnaire: Questionnaire) => {
+    const currentLanguage = LanguageService.getCurrentLanguage();
+    
+    if (currentLanguage === 'en') {
+      setTranslatedQuestionnaire(originalQuestionnaire);
+      return;
+    }
+
+    setIsTranslating(true);
+    console.log(`Translating questionnaire content to ${currentLanguage}...`);
+
+    try {
+      const translatedQuestionnaire = { ...originalQuestionnaire };
+      
+      // Translate title and description
+      if (originalQuestionnaire.title) {
+        translatedQuestionnaire.title = await LanguageService.translateContent(
+          originalQuestionnaire.title, 
+          currentLanguage
+        );
+      }
+      
+      if (originalQuestionnaire.description) {
+        translatedQuestionnaire.description = await LanguageService.translateContent(
+          originalQuestionnaire.description, 
+          currentLanguage
+        );
+      }
+      
+      // Translate questions
+      if (originalQuestionnaire.questions && originalQuestionnaire.questions.length > 0) {
+        translatedQuestionnaire.questions = await LanguageService.translateQuestions(
+          originalQuestionnaire.questions, 
+          currentLanguage
+        );
+      }
+      
+      // Translate course content if present
+      if (originalQuestionnaire.courseContent) {
+        const courseContent = { ...originalQuestionnaire.courseContent };
+        
+        if (courseContent.title) {
+          courseContent.title = await LanguageService.translateContent(
+            courseContent.title, 
+            currentLanguage
+          );
+        }
+        
+        if (courseContent.description) {
+          courseContent.description = await LanguageService.translateContent(
+            courseContent.description, 
+            currentLanguage
+          );
+        }
+        
+        if (courseContent.modules && Array.isArray(courseContent.modules)) {
+          courseContent.modules = await Promise.all(
+            courseContent.modules.map(async (module: any) => ({
+              ...module,
+              title: module.title ? await LanguageService.translateContent(module.title, currentLanguage) : module.title,
+              content: module.content ? await LanguageService.translateContent(module.content, currentLanguage) : module.content
+            }))
+          );
+        }
+        
+        translatedQuestionnaire.courseContent = courseContent;
+      }
+      
+      setTranslatedQuestionnaire(translatedQuestionnaire);
+      console.log('Questionnaire translation completed successfully');
+    } catch (error) {
+      console.error('Error translating questionnaire:', error);
+      // Fallback to original content if translation fails
+      setTranslatedQuestionnaire(originalQuestionnaire);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const handleEditToggle = () => {
     if (isEditing) {
@@ -168,11 +263,15 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
     });
   };
 
+  // Use translated questionnaire for display, original for editing
+  const displayQuestionnaire = isEditing ? editedQuestionnaire : translatedQuestionnaire;
+  const displayQuestions = isEditing ? editedQuestions : translatedQuestionnaire.questions || [];
+
   return (
     <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden mb-4">
       <CardHeader className="p-6">
         <QuestionnaireHeader
-          questionnaire={questionnaire}
+          questionnaire={displayQuestionnaire}
           editedQuestionnaire={editedQuestionnaire}
           isEditing={isEditing}
           isAdmin={isAdmin}
@@ -184,13 +283,18 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
           onDelete={onDelete}
           onSaveTest={() => {}}
         />
+        {isTranslating && (
+          <div className="text-sm text-slate-500 italic">
+            Translating content...
+          </div>
+        )}
       </CardHeader>
 
       {/* Course Content Display */}
-      {questionnaire.courseContent && (
+      {displayQuestionnaire.courseContent && (
         <div className="border-b border-slate-200">
           <CourseDisplay 
-            course={convertCourseContent(questionnaire.courseContent)}
+            course={convertCourseContent(displayQuestionnaire.courseContent)}
             onCourseComplete={handleCourseComplete}
           />
         </div>
@@ -199,7 +303,7 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
       {/* Questions Display - Collapsible */}
       <CardContent>
         <QuestionsSection
-          questions={editedQuestions}
+          questions={displayQuestions}
           isEditing={isEditing}
           isAdmin={isAdmin}
           isActive={questionnaire.isActive || false}

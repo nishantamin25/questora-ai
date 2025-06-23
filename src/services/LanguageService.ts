@@ -1,4 +1,3 @@
-
 interface Translation {
   [key: string]: string;
 }
@@ -241,7 +240,7 @@ class LanguageServiceClass {
         'dashboard.describeContent': 'તમારી સામગ્રીનું વર્ણન કરો',
         'dashboard.availableTests': 'ઉપલબ્ધ ટેસ્ટ',
         'dashboard.howToAnswer': 'કેવી રીતે જવાબ આપવો',
-        'dashboard.noTests': 'કોઈ સક્રિય ટેસ્ટ ઉપલબ્ધ નથી',
+        'dashboard.noTests': 'કોઈ સક્રિય ટેસ્ટ ઉપલब્ધ નથી',
         'dashboard.noTestsDesc': 'હજી સુધી કોઈ સક્રિય ટેસ્ટ પ્રકાશિત કરવામાં આવ્યા નથી',
         
         'question.selectAnswer': 'જવાબો પસંદ કરો',
@@ -329,15 +328,134 @@ class LanguageServiceClass {
     return currentLang?.translations[key] || key;
   }
 
-  // Method to translate question content
+  // Enhanced method to translate content using OpenAI API
   async translateContent(content: string, targetLanguage: string): Promise<string> {
-    if (targetLanguage === 'en' || !content) {
+    if (targetLanguage === 'en' || !content || !content.trim()) {
       return content;
     }
 
-    // For demo purposes, we'll return the original content
-    // In a real implementation, you would integrate with a translation API
-    return content;
+    try {
+      // Get the API key from ChatGPTService
+      const { ChatGPTService } = await import('./ChatGPTService');
+      const apiKey = ChatGPTService.getApiKey();
+      
+      if (!apiKey) {
+        console.warn('No OpenAI API key available for translation, returning original content');
+        return content;
+      }
+
+      const languageNames = {
+        'hi': 'Hindi',
+        'mr': 'Marathi', 
+        'kn': 'Kannada',
+        'gu': 'Gujarati',
+        'bn': 'Bengali'
+      };
+
+      const targetLanguageName = languageNames[targetLanguage as keyof typeof languageNames] || targetLanguage;
+
+      console.log(`Translating content to ${targetLanguageName}...`);
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4.1-2025-04-14',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a professional translator. Translate the provided text accurately to ${targetLanguageName}. Maintain the original meaning, tone, and context. If the text contains questions, options, or structured content, preserve the structure and formatting. Return only the translated text without any additional comments or explanations.`
+            },
+            {
+              role: 'user',
+              content: content
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: Math.min(4000, content.length * 2),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Translation API error:', error);
+        throw new Error(`Translation failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      const translatedText = data.choices[0]?.message?.content?.trim();
+      
+      if (!translatedText) {
+        throw new Error('No translated content received');
+      }
+
+      console.log(`Translation to ${targetLanguageName} completed successfully`);
+      return translatedText;
+    } catch (error) {
+      console.error('Error translating content:', error);
+      // Return original content if translation fails
+      return content;
+    }
+  }
+
+  // Method to translate question objects
+  async translateQuestion(question: any, targetLanguage: string): Promise<any> {
+    if (targetLanguage === 'en') {
+      return question;
+    }
+
+    try {
+      const translatedQuestion = { ...question };
+      
+      // Translate question text
+      if (question.text) {
+        translatedQuestion.text = await this.translateContent(question.text, targetLanguage);
+      }
+      
+      // Translate options if they exist
+      if (question.options && Array.isArray(question.options)) {
+        const translatedOptions = await Promise.all(
+          question.options.map((option: string) => 
+            this.translateContent(option, targetLanguage)
+          )
+        );
+        translatedQuestion.options = translatedOptions;
+      }
+      
+      // Translate explanation if it exists
+      if (question.explanation) {
+        translatedQuestion.explanation = await this.translateContent(question.explanation, targetLanguage);
+      }
+
+      return translatedQuestion;
+    } catch (error) {
+      console.error('Error translating question:', error);
+      return question; // Return original if translation fails
+    }
+  }
+
+  // Method to translate an array of questions
+  async translateQuestions(questions: any[], targetLanguage: string): Promise<any[]> {
+    if (targetLanguage === 'en' || !questions || questions.length === 0) {
+      return questions;
+    }
+
+    console.log(`Translating ${questions.length} questions to ${targetLanguage}...`);
+    
+    try {
+      const translatedQuestions = await Promise.all(
+        questions.map(question => this.translateQuestion(question, targetLanguage))
+      );
+      
+      console.log(`Successfully translated ${translatedQuestions.length} questions`);
+      return translatedQuestions;
+    } catch (error) {
+      console.error('Error translating questions array:', error);
+      return questions; // Return original if translation fails
+    }
   }
 }
 
