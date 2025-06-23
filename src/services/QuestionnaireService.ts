@@ -1,3 +1,4 @@
+
 import { ConfigService } from './ConfigService';
 import { ChatGPTService } from './ChatGPTService';
 import { FileProcessingService } from './FileProcessingService';
@@ -97,6 +98,61 @@ class QuestionnaireServiceClass {
       'How professional was the service?'
     ]
   };
+
+  getAllQuestionnaires(): Questionnaire[] {
+    try {
+      const stored = localStorage.getItem('questionnaires');
+      if (!stored) return [];
+      
+      const questionnaires = JSON.parse(stored);
+      return Array.isArray(questionnaires) ? questionnaires : [];
+    } catch (error) {
+      console.error('Error loading questionnaires:', error);
+      return [];
+    }
+  }
+
+  getActiveQuestionnaires(): Questionnaire[] {
+    const allQuestionnaires = this.getAllQuestionnaires();
+    return allQuestionnaires.filter(q => q.isActive && q.isSaved);
+  }
+
+  saveQuestionnaire(questionnaire: Questionnaire): void {
+    try {
+      const questionnaires = this.getAllQuestionnaires();
+      const existingIndex = questionnaires.findIndex(q => q.id === questionnaire.id);
+      
+      const updatedQuestionnaire = {
+        ...questionnaire,
+        isSaved: true,
+        isActive: questionnaire.isActive !== undefined ? questionnaire.isActive : false
+      };
+      
+      if (existingIndex >= 0) {
+        questionnaires[existingIndex] = updatedQuestionnaire;
+      } else {
+        questionnaires.push(updatedQuestionnaire);
+      }
+      
+      localStorage.setItem('questionnaires', JSON.stringify(questionnaires));
+      console.log('Questionnaire saved successfully:', updatedQuestionnaire.id);
+    } catch (error) {
+      console.error('Error saving questionnaire:', error);
+      throw new Error('Failed to save questionnaire');
+    }
+  }
+
+  deleteQuestionnaire(id: string): void {
+    try {
+      const questionnaires = this.getAllQuestionnaires();
+      const filteredQuestionnaires = questionnaires.filter(q => q.id !== id);
+      localStorage.setItem('questionnaires', JSON.stringify(filteredQuestionnaires));
+      console.log('Questionnaire deleted successfully:', id);
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error);
+      throw new Error('Failed to delete questionnaire');
+    }
+  }
 
   private cleanupOldQuestionnaires(): void {
     try {
@@ -239,6 +295,71 @@ class QuestionnaireServiceClass {
 
     console.log(`Generated questionnaire with ${questions.length} questions:`, questionnaire);
     return questionnaire;
+  }
+
+  private generateEnhancedQuestions(
+    prompt: string,
+    numberOfQuestions: number,
+    difficulty: 'easy' | 'medium' | 'hard',
+    fileContent: string,
+    setNumber?: number,
+    totalSets?: number
+  ): Question[] {
+    const questions: Question[] = [];
+    const setVariation = setNumber ? ` (Set ${setNumber})` : '';
+    
+    // Enhanced question generation based on file content
+    const content = fileContent.toLowerCase();
+    
+    // Generate different types of questions based on content analysis
+    const contentKeywords = content.split(' ').filter(word => word.length > 3);
+    const uniqueKeywords = [...new Set(contentKeywords)].slice(0, 10);
+    
+    for (let i = 0; i < numberOfQuestions && i < uniqueKeywords.length; i++) {
+      const keyword = uniqueKeywords[i];
+      const questionTypes = [
+        `What is the main concept related to "${keyword}" in the provided content?${setVariation}`,
+        `How would you apply the "${keyword}" concept discussed in the material?${setVariation}`,
+        `Which statement best describes "${keyword}" based on the content?${setVariation}`,
+        `What is the significance of "${keyword}" in the context provided?${setVariation}`
+      ];
+      
+      const questionText = questionTypes[i % questionTypes.length];
+      const options = this.generateOptionsForDifficulty(difficulty);
+      
+      questions.push({
+        id: this.generateId(),
+        text: questionText,
+        type: 'multiple-choice',
+        options,
+        correctAnswer: 0 // First option as correct for enhanced questions
+      });
+    }
+    
+    // Fill remaining slots with template questions if needed
+    if (questions.length < numberOfQuestions) {
+      const remainingQuestions = this.generateTemplateQuestions(
+        prompt,
+        numberOfQuestions - questions.length,
+        difficulty,
+        fileContent,
+        setNumber,
+        totalSets
+      );
+      questions.push(...remainingQuestions);
+    }
+    
+    return questions.slice(0, numberOfQuestions);
+  }
+
+  private generateOptionsForDifficulty(difficulty: 'easy' | 'medium' | 'hard'): string[] {
+    const options = {
+      easy: ['Correct Answer', 'Incorrect Option A', 'Incorrect Option B', 'Incorrect Option C'],
+      medium: ['Detailed Correct Answer', 'Plausible Wrong Answer A', 'Plausible Wrong Answer B', 'Obviously Wrong Answer'],
+      hard: ['Precisely Correct Answer', 'Almost Correct But Wrong', 'Technically Incorrect', 'Completely Wrong Answer']
+    };
+    
+    return options[difficulty];
   }
 
   private generateId(): string {
