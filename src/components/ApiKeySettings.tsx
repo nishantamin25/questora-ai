@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, Key } from 'lucide-react';
 import ChatGPTKeyDialog from './ChatGPTKeyDialog';
 import { ChatGPTService } from '@/services/ChatGPTService';
+import { LanguageService } from '@/services/LanguageService';
 import { toast } from '@/hooks/use-toast';
 
 const ApiKeySettings = () => {
@@ -15,7 +16,7 @@ const ApiKeySettings = () => {
     setShowKeyDialog(false);
     toast({
       title: "Success",
-      description: "OpenAI API key has been saved successfully",
+      description: LanguageService.translate('apiKey.success'),
     });
   };
 
@@ -23,7 +24,7 @@ const ApiKeySettings = () => {
     ChatGPTService.clearApiKey();
     toast({
       title: "API Key Cleared",
-      description: "OpenAI API key has been removed",
+      description: LanguageService.translate('apiKey.cleared'),
     });
   };
 
@@ -34,10 +35,10 @@ const ApiKeySettings = () => {
           onClick={() => setShowKeyDialog(true)}
           variant="outline"
           size="sm"
-          className="flex items-center space-x-2"
+          className="flex items-center space-x-2 border-slate-300 text-slate-700 hover:bg-slate-50"
         >
           <Settings className="h-4 w-4" />
-          <span>{hasApiKey ? 'Update API Key' : 'Setup API Key'}</span>
+          <span>{hasApiKey ? LanguageService.translate('apiKey.update') : LanguageService.translate('apiKey.setup')}</span>
         </Button>
         
         {hasApiKey && (
@@ -45,9 +46,9 @@ const ApiKeySettings = () => {
             onClick={handleClearKey}
             variant="outline"
             size="sm"
-            className="text-red-600 hover:text-red-700"
+            className="text-red-600 hover:text-red-700 border-slate-300 hover:bg-red-50"
           >
-            Clear Key
+            {LanguageService.translate('apiKey.clear')}
           </Button>
         )}
       </div>

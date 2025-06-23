@@ -5,15 +5,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, LogOut, Upload, Zap, Paperclip, X, Trophy, MessageSquare } from 'lucide-react';
+import { Bot, LogOut, Upload, Zap, Paperclip, X, Trophy, MessageSquare, Settings } from 'lucide-react';
 import Leaderboard from '@/components/Leaderboard';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
 import GenerateTestDialog from '@/components/GenerateTestDialog';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
+import SettingsDialog from '@/components/SettingsDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 import { FileProcessingService } from '@/services/FileProcessingService';
+import { LanguageService } from '@/services/LanguageService';
 import { toast } from '@/hooks/use-toast';
 
 interface DashboardProps {
@@ -31,6 +33,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; questionnaireId: string; testName: string }>({
     open: false,
@@ -496,6 +499,13 @@ Note: File processing failed, but file information is available.
         testName={deleteDialog.testName}
       />
 
+      {/* Settings Dialog */}
+      <SettingsDialog
+        open={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
+        userRole={user.role}
+      />
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-4 py-3 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -505,7 +515,7 @@ Note: File processing failed, but file information is available.
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 font-poppins">Questora AI</h1>
-              <p className="text-sm text-slate-600 font-inter">Welcome, {user.username} ({user.role})</p>
+              <p className="text-sm text-slate-600 font-inter">{LanguageService.translate('dashboard.welcome')}, {user.username} ({LanguageService.translate(`dashboard.${user.role}`)})</p>
             </div>
           </div>
           
@@ -519,7 +529,7 @@ Note: File processing failed, but file information is available.
                   className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
                 >
                   <MessageSquare className="h-4 w-4" />
-                  <span>Responses</span>
+                  <span>{LanguageService.translate('nav.responses')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -528,10 +538,19 @@ Note: File processing failed, but file information is available.
                   className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
                 >
                   <Trophy className="h-4 w-4" />
-                  <span>Leaderboard</span>
+                  <span>{LanguageService.translate('nav.leaderboard')}</span>
                 </Button>
               </>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSettingsDialog(true)}
+              className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-violet-300 font-poppins rounded-lg"
+            >
+              <Settings className="h-4 w-4" />
+              <span>{LanguageService.translate('nav.settings')}</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -539,7 +558,7 @@ Note: File processing failed, but file information is available.
               className="flex items-center space-x-2 border-slate-300 bg-white/70 text-slate-700 hover:bg-white hover:border-red-300 hover:text-red-600 font-poppins rounded-lg"
             >
               <LogOut className="h-4 w-4" />
-              <span>Logout</span>
+              <span>{LanguageService.translate('nav.logout')}</span>
             </Button>
           </div>
         </div>
@@ -577,11 +596,11 @@ Note: File processing failed, but file information is available.
             {user.role === 'admin' && !showGenerateDialog && (
               <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
-                  <CardTitle className="text-slate-900 font-poppins">Generate Content</CardTitle>
+                  <CardTitle className="text-slate-900 font-poppins">{LanguageService.translate('dashboard.generateContent')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 p-6">
                   <div>
-                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">Describe your content</Label>
+                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">{LanguageService.translate('dashboard.describeContent')}</Label>
                     <div className="relative mt-1">
                       <Textarea
                         id="prompt"
@@ -645,7 +664,7 @@ Note: File processing failed, but file information is available.
                     {isGenerating ? (
                       <div className="flex items-center space-x-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Generating...</span>
+                        <span>{LanguageService.translate('common.generating')}</span>
                       </div>
                     ) : isProcessingFiles ? (
                       <div className="flex items-center space-x-2">
@@ -655,7 +674,7 @@ Note: File processing failed, but file information is available.
                     ) : (
                       <div className="flex items-center space-x-2">
                         <Zap className="h-4 w-4" />
-                        <span>Generate Content</span>
+                        <span>{LanguageService.translate('common.generate')}</span>
                       </div>
                     )}
                   </Button>
@@ -669,10 +688,10 @@ Note: File processing failed, but file information is available.
                 <CardContent className="p-8 text-center">
                   <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-slate-900 mb-2 font-poppins">
-                    Available Tests
+                    {LanguageService.translate('dashboard.availableTests')}
                   </h3>
                   <p className="text-slate-600 font-inter">
-                    Click on the answer options below to select your responses, then submit when you've answered all questions.
+                    {LanguageService.translate('dashboard.howToAnswer')}
                   </p>
                 </CardContent>
               </Card>
@@ -705,12 +724,12 @@ Note: File processing failed, but file information is available.
                   <CardContent className="p-8 text-center">
                     <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-slate-900 mb-2 font-poppins">
-                      {user.role === 'admin' ? 'No questionnaires yet' : 'No active tests available'}
+                      {user.role === 'admin' ? 'No questionnaires yet' : LanguageService.translate('dashboard.noTests')}
                     </h3>
                     <p className="text-slate-600 font-inter">
                       {user.role === 'admin' 
                         ? "Enter a prompt above to generate your first questionnaire"
-                        : "No active tests have been published yet"
+                        : LanguageService.translate('dashboard.noTestsDesc')
                       }
                     </p>
                   </CardContent>
@@ -724,7 +743,7 @@ Note: File processing failed, but file information is available.
             <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
               <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
                 <CardTitle className="text-slate-900 font-poppins">
-                  {user.role === 'admin' ? 'Admin Tips' : 'How to Answer'}
+                  {user.role === 'admin' ? 'Admin Tips' : LanguageService.translate('dashboard.howToAnswer')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm p-6">
@@ -746,12 +765,12 @@ Note: File processing failed, but file information is available.
                 ) : (
                   <>
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
-                      <p className="font-semibold text-blue-700 font-poppins">Select answers</p>
+                      <p className="font-semibold text-blue-700 font-poppins">{LanguageService.translate('question.selectAnswer')}</p>
                       <p className="text-blue-600 font-inter">Click on any option to select it. Selected options will be highlighted in blue.</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-                      <p className="font-semibold text-green-700 font-poppins">Submit responses</p>
-                      <p className="text-green-600 font-inter">Answer all questions to enable the submit button at the bottom of each questionnaire.</p>
+                      <p className="font-semibold text-green-700 font-poppins">{LanguageService.translate('question.submitResponse')}</p>
+                      <p className="text-green-600 font-inter">{LanguageService.translate('question.answerAll')}</p>
                     </div>
                   </>
                 )}
