@@ -41,6 +41,7 @@ class ChatGPTServiceClass {
       numberOfQuestions,
       difficulty,
       hasFileContent: !!fileContent,
+      fileContentLength: fileContent?.length || 0,
       hasApiKey: !!apiKey,
       setNumber,
       totalSets
@@ -53,8 +54,8 @@ class ChatGPTServiceClass {
     const systemPrompt = this.buildSystemPrompt(difficulty, !!fileContent);
     const userPrompt = this.buildUserPrompt(prompt, numberOfQuestions, fileContent, setNumber, totalSets);
 
-    console.log('System prompt:', systemPrompt);
-    console.log('User prompt:', userPrompt);
+    console.log('System prompt length:', systemPrompt.length);
+    console.log('User prompt length:', userPrompt.length);
 
     try {
       console.log('Making request to OpenAI API...');
@@ -94,7 +95,7 @@ class ChatGPTServiceClass {
       }
 
       const data = await response.json();
-      console.log('OpenAI API response data:', data);
+      console.log('OpenAI API response received, parsing...');
       
       const content = data.choices[0]?.message?.content;
       
@@ -103,11 +104,16 @@ class ChatGPTServiceClass {
         throw new Error('No content received from ChatGPT');
       }
 
-      console.log('ChatGPT raw response content:', content);
+      console.log('ChatGPT raw response length:', content.length);
       const parsedQuestions = this.parseQuestions(content);
-      console.log('Parsed questions:', parsedQuestions);
       
-      return parsedQuestions;
+      // Ensure we have the exact number of questions requested
+      if (parsedQuestions.length !== numberOfQuestions) {
+        console.warn(`Expected ${numberOfQuestions} questions, got ${parsedQuestions.length}`);
+      }
+      
+      console.log('Successfully parsed questions:', parsedQuestions.length);
+      return parsedQuestions.slice(0, numberOfQuestions);
     } catch (error) {
       console.error('ChatGPT API error:', error);
       throw error;
@@ -144,10 +150,19 @@ FILE CONTENT SPECIFIC INSTRUCTIONS:
 - Focus on the specific information, concepts, and details present in the file
 - Ensure questions test understanding of the material as presented in the document
 - Cover different sections or topics from the file to ensure comprehensive coverage
-- Maintain the context and terminology used in the original document`;
+- Maintain the context and terminology used in the original document
+- Extract key concepts, procedures, facts, and relationships from the content
+- Generate questions that would help assess someone's understanding of this specific material`;
     }
 
     systemPrompt += `
+
+QUESTION QUALITY STANDARDS:
+- Questions should be clear and unambiguous
+- Options should be of similar length and complexity
+- Avoid "all of the above" or "none of the above" options
+- Use active voice when possible
+- Test different cognitive levels (recall, comprehension, application, analysis)
 
 Response format: Return your response as a JSON array with this exact structure:
 [
@@ -159,7 +174,7 @@ Response format: Return your response as a JSON array with this exact structure:
   }
 ]
 
-Important: Return ONLY the JSON array, no additional text or formatting.`;
+IMPORTANT: Return ONLY the JSON array, no additional text or formatting.`;
 
     return systemPrompt;
   }
@@ -168,36 +183,48 @@ Important: Return ONLY the JSON array, no additional text or formatting.`;
     let userPrompt = '';
 
     if (fileContent && fileContent.trim().length > 50) {
-      userPrompt = `Generate ${numberOfQuestions} multiple-choice questions based EXCLUSIVELY on the following file content:
+      // Limit content length to avoid token limits
+      const limitedContent = fileContent.length > 3500 
+        ? fileContent.substring(0, 3500) + '...'
+        : fileContent;
+        
+      userPrompt = `Generate exactly ${numberOfQuestions} multiple-choice questions based EXCLUSIVELY on the following content:
 
 CONTENT TO ANALYZE:
-"${fileContent.substring(0, 3000)}${fileContent.length > 3000 ? '...' : ''}"
+"${limitedContent}"
 
 REQUIREMENTS:
-1. All questions must be derived directly from the content above
-2. Do not use external knowledge or make assumptions
-3. Focus on key concepts, important details, and main ideas from the material
-4. Ensure questions test different aspects of the content
-5. Cover various sections/topics present in the material
-6. Test comprehension, analysis, and application of the specific information provided`;
+1. Generate exactly ${numberOfQuestions} questions - no more, no less
+2. All questions must be derived directly from the content above
+3. Do not use external knowledge or make assumptions
+4. Focus on key concepts, important details, and main ideas from the material
+5. Ensure questions test different aspects of the content
+6. Cover various sections/topics present in the material
+7. Test comprehension, analysis, and application of the specific information provided
+8. Make sure each question has exactly 4 options with only one correct answer`;
 
       if (prompt && prompt.trim().length > 0) {
         userPrompt += `\n\nADDITIONAL CONTEXT: "${prompt}"
-Use this context to help focus the questions, but still base all questions on the file content.`;
+Use this context to help focus the questions, but still base all questions on the file content above.`;
       }
     } else {
-      userPrompt = `Generate ${numberOfQuestions} multiple-choice questions about: "${prompt}"
+      userPrompt = `Generate exactly ${numberOfQuestions} multiple-choice questions about: "${prompt}"
 
-Please create questions that are:
-1. Directly relevant to the topic: "${prompt}"
-2. Practical and applicable
-3. Testing important concepts and knowledge
-4. Varied in scope (don't repeat similar questions)`;
+REQUIREMENTS:
+1. Generate exactly ${numberOfQuestions} questions - no more, no less
+2. Questions should be directly relevant to the topic: "${prompt}"
+3. Create practical and applicable questions
+4. Test important concepts and knowledge
+5. Ensure questions are varied in scope (don't repeat similar questions)
+6. Each question must have exactly 4 options with only one correct answer
+7. Focus on comprehension, application, and analysis of the topic`;
     }
 
     if (setNumber && totalSets && totalSets > 1) {
-      userPrompt += `\n\nThis is set ${setNumber} of ${totalSets} question sets. Please ensure the questions are unique and don't overlap with other sets while still covering the content comprehensively.`;
+      userPrompt += `\n\nSET VARIATION: This is set ${setNumber} of ${totalSets} question sets. Please ensure the questions are unique and don't overlap with other sets while still covering the content comprehensively. Vary the question styles and focus areas for this specific set.`;
     }
+
+    userPrompt += `\n\nRemember: Return exactly ${numberOfQuestions} questions in the specified JSON format.`;
 
     return userPrompt;
   }

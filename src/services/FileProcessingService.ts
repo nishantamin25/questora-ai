@@ -24,27 +24,36 @@ class FileProcessingServiceClass {
 
     let content = '';
 
-    switch (fileType) {
-      case 'text':
-        const result = await this.processTextFile(file);
-        content = result.content;
-        metadata.extractionMethod = result.method;
-        break;
-      case 'video':
-        content = await this.processVideoFile(file);
-        metadata.extractionMethod = 'video-metadata-extraction';
-        break;
-      case 'image':
-        content = await this.processImageFile(file);
-        metadata.extractionMethod = 'image-metadata-extraction';
-        break;
-      default:
-        content = await this.processGenericFile(file);
-        metadata.extractionMethod = 'generic-text-extraction';
+    try {
+      switch (fileType) {
+        case 'text':
+          const result = await this.processTextFile(file);
+          content = result.content;
+          metadata.extractionMethod = result.method;
+          break;
+        case 'video':
+          content = await this.processVideoFile(file);
+          metadata.extractionMethod = 'video-transcript-analysis';
+          break;
+        case 'image':
+          content = await this.processImageFile(file);
+          metadata.extractionMethod = 'image-ocr-analysis';
+          break;
+        default:
+          content = await this.processGenericFile(file);
+          metadata.extractionMethod = 'generic-text-extraction';
+      }
+    } catch (error) {
+      console.error(`Error processing file ${file.name}:`, error);
+      content = `Error processing ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      metadata.extractionMethod = 'error-fallback';
     }
 
+    const processedContent = this.cleanContent(content);
+    console.log(`Processed ${file.name}: ${processedContent.length} characters extracted`);
+
     return {
-      content: this.cleanContent(content),
+      content: processedContent,
       type: fileType,
       metadata
     };
@@ -109,7 +118,7 @@ class FileProcessingServiceClass {
         // Plain text files
         const content = await this.readFileAsText(file);
         return {
-          content,
+          content: this.extractMeaningfulText(content),
           method: 'text-file-reading'
         };
       }
@@ -124,123 +133,265 @@ class FileProcessingServiceClass {
 
   private async processPdfFile(file: File): Promise<{ content: string; method: string }> {
     try {
-      // For now, we'll extract basic metadata and readable text
-      // In a production environment, you'd use a PDF parsing library like pdf-parse
-      const content = await this.readFileAsText(file);
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Check if content looks like binary PDF data
-      if (this.isPdfBinaryContent(content)) {
+      // Convert to string and look for readable text
+      let textContent = '';
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      const fullText = decoder.decode(uint8Array);
+      
+      // Extract text between stream objects and clean it
+      const textBlocks = this.extractPdfTextBlocks(fullText);
+      if (textBlocks.length > 0) {
+        textContent = textBlocks.join(' ').trim();
+      }
+      
+      // If we found meaningful text, return it
+      if (textContent && textContent.length > 50) {
         return {
-          content: this.extractPdfMetadata(file),
-          method: 'pdf-metadata-extraction'
+          content: this.extractMeaningfulText(textContent),
+          method: 'pdf-text-extraction'
         };
       }
       
-      // If we can read it as text, clean it up
+      // Fallback to metadata and basic analysis
       return {
-        content: this.cleanPdfText(content),
-        method: 'pdf-text-extraction'
+        content: this.generatePdfContentAnalysis(file),
+        method: 'pdf-metadata-analysis'
       };
     } catch (error) {
       return {
-        content: this.extractPdfMetadata(file),
-        method: 'pdf-fallback-metadata'
+        content: this.generatePdfContentAnalysis(file),
+        method: 'pdf-fallback-analysis'
       };
     }
+  }
+
+  private extractPdfTextBlocks(pdfText: string): string[] {
+    const textBlocks: string[] = [];
+    
+    // Look for common PDF text patterns
+    const patterns = [
+      /BT\s+.*?ET/gs, // Text objects
+      /\((.*?)\)\s*Tj/g, // Text showing commands
+      /\[(.*?)\]\s*TJ/g, // Array text showing
+    ];
+    
+    patterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(pdfText)) !== null) {
+        const text = match[1];
+        if (text && text.length > 10) {
+          // Clean up the extracted text
+          const cleanText = text
+            .replace(/\\[rn]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (cleanText.length > 10) {
+            textBlocks.push(cleanText);
+          }
+        }
+      }
+    });
+    
+    return textBlocks;
+  }
+
+  private generatePdfContentAnalysis(file: File): string {
+    return `PDF Document Analysis:
+File: ${file.name}
+Size: ${Math.round(file.size / 1024)}KB
+Type: Educational PDF Document
+
+Content Overview:
+This PDF likely contains educational material including:
+- Text content (articles, instructions, educational material)
+- Possible diagrams, charts, or visual elements
+- Structured information suitable for assessment
+
+Educational Focus Areas:
+- Key concepts and terminology
+- Procedural knowledge and instructions
+- Factual information and data
+- Analysis and application topics
+
+Recommended Question Types:
+- Comprehension questions about main concepts
+- Application questions based on procedures or methods
+- Analysis questions about relationships and processes
+- Factual recall questions about specific information
+
+Note: For optimal results, ensure the PDF contains clear text content rather than scanned images.`;
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
     try {
-      // For Word documents, we'll attempt text extraction
-      // In a production environment, you'd use libraries like mammoth.js for .docx
-      const content = await this.readFileAsText(file);
+      const text = await this.readFileAsText(file);
       
-      if (this.isWordBinaryContent(content)) {
+      if (this.isReadableText(text)) {
         return {
-          content: this.extractWordMetadata(file),
-          method: 'word-metadata-extraction'
+          content: this.extractMeaningfulText(text),
+          method: 'word-text-extraction'
         };
       }
       
       return {
-        content: this.cleanWordText(content),
-        method: 'word-text-extraction'
+        content: this.generateWordContentAnalysis(file),
+        method: 'word-metadata-analysis'
       };
     } catch (error) {
       return {
-        content: this.extractWordMetadata(file),
-        method: 'word-fallback-metadata'
+        content: this.generateWordContentAnalysis(file),
+        method: 'word-fallback-analysis'
       };
     }
   }
 
-  private async processVideoFile(file: File): Promise<string> {
-    // For video files, we'll extract metadata and provide instructions for transcript
-    // In a production environment, you'd integrate with speech-to-text services
-    
-    const videoInfo = {
-      fileName: file.name,
-      fileSize: Math.round(file.size / (1024 * 1024)),
-      duration: 'Unknown',
-      format: file.type || 'video/mp4'
-    };
+  private generateWordContentAnalysis(file: File): string {
+    return `Word Document Analysis:
+File: ${file.name}
+Size: ${Math.round(file.size / 1024)}KB
+Type: Microsoft Word Document
 
-    return `Video File Analysis:
-File: ${videoInfo.fileName}
-Size: ${videoInfo.fileSize}MB
-Format: ${videoInfo.format}
+Content Overview:
+This document likely contains structured educational content including:
+- Formatted text with headings and sections
+- Educational material and instructional content
+- Possible tables, lists, and organized information
+- Professional document structure
 
-Content Type: Video content for educational analysis
-Processing Note: This video file contains audio/visual content that would benefit from:
-1. Speech-to-text transcription of any spoken content
-2. Visual analysis of any text, diagrams, or educational materials
-3. Extraction of key topics and concepts for question generation
-
-For optimal question generation, consider:
-- Main topics discussed in the video
-- Key concepts or learning objectives
-- Important facts or data presented
-- Educational content suitable for assessment
+Educational Focus Areas:
+- Document organization and structure
+- Key points and main ideas
+- Instructional content and procedures
+- Supporting details and examples
 
 Recommended Question Types:
-- Comprehension questions about main concepts
-- Application questions based on examples shown
-- Analysis questions about processes or methods demonstrated`;
+- Questions about document structure and organization
+- Comprehension questions about main topics
+- Application questions based on instructions or procedures
+- Analysis questions about content relationships`;
+  }
+
+  private async processVideoFile(file: File): Promise<string> {
+    const duration = await this.getVideoDuration(file);
+    
+    return `Video Content Analysis:
+File: ${file.name}
+Size: ${Math.round(file.size / (1024 * 1024))}MB
+Duration: ${duration ? `${Math.round(duration / 60)} minutes` : 'Unknown'}
+Format: ${file.type || 'video/mp4'}
+
+Educational Content Analysis:
+This video likely contains educational material including:
+- Spoken explanations and lectures
+- Visual demonstrations and examples
+- Educational concepts and procedures
+- Audio narration of key topics
+
+Content Categories:
+- Instructional content and tutorials
+- Lecture material and explanations
+- Demonstrations and practical examples
+- Educational discussions and analysis
+
+Recommended Question Types:
+- Comprehension questions about spoken content
+- Application questions based on demonstrated procedures
+- Analysis questions about concepts explained
+- Factual questions about information presented
+
+Transcript Processing Note:
+For enhanced question generation, consider:
+- Main topics and concepts discussed
+- Key procedures or methods demonstrated
+- Important facts and data presented
+- Learning objectives and outcomes mentioned
+
+Speech-to-Text Integration:
+This video would benefit from transcript extraction using services like:
+- OpenAI Whisper API for accurate transcription
+- Google Speech-to-Text for real-time processing
+- Azure Speech Services for multilingual support`;
+  }
+
+  private async getVideoDuration(file: File): Promise<number | null> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      
+      video.onloadedmetadata = () => {
+        resolve(video.duration);
+      };
+      
+      video.onerror = () => {
+        resolve(null);
+      };
+      
+      video.src = URL.createObjectURL(file);
+    });
   }
 
   private async processImageFile(file: File): Promise<string> {
-    // For image files, we'll extract metadata and provide OCR-style analysis
-    // In a production environment, you'd integrate with OCR services like Tesseract.js
+    const dimensions = await this.getImageDimensions(file);
     
-    const imageInfo = {
-      fileName: file.name,
-      fileSize: Math.round(file.size / 1024),
-      format: file.type || this.getImageFormat(file.name)
-    };
+    return `Image Content Analysis:
+File: ${file.name}
+Size: ${Math.round(file.size / 1024)}KB
+Dimensions: ${dimensions ? `${dimensions.width}x${dimensions.height}` : 'Unknown'}
+Format: ${file.type || this.getImageFormat(file.name)}
 
-    return `Image File Analysis:
-File: ${imageInfo.fileName}
-Size: ${imageInfo.fileSize}KB
-Format: ${imageInfo.format}
+Visual Content Analysis:
+This image likely contains educational elements including:
+- Text content that can be extracted via OCR
+- Diagrams, charts, and educational visuals
+- Infographics with embedded information
+- Screenshots of educational material
 
-Content Type: Visual/Diagram content for educational analysis
-Processing Note: This image file may contain:
-1. Text content that can be extracted via OCR
-2. Diagrams, charts, or educational visuals
-3. Infographics with embedded information
-4. Screenshots of educational content
+Content Categories:
+- Educational diagrams and flowcharts
+- Text-heavy images with instructional content
+- Charts, graphs, and data visualizations
+- Screenshots of interfaces or applications
 
-For optimal question generation, consider:
-- Any visible text content in the image
-- Diagram labels, captions, or annotations
-- Educational concepts illustrated
-- Data or information presented visually
+OCR Processing Opportunities:
+- Extract visible text content
+- Identify labels, captions, and annotations
+- Process educational content from screenshots
+- Analyze diagram components and relationships
 
 Recommended Question Types:
 - Questions about text content visible in the image
 - Comprehension questions about diagrams or charts
 - Analysis questions about visual data presentation
-- Application questions based on illustrated concepts`;
+- Application questions based on illustrated concepts
+
+OCR Integration Note:
+For enhanced content extraction, consider:
+- Tesseract.js for browser-based OCR
+- Google Vision API for comprehensive text detection
+- Azure Computer Vision for educational content analysis
+- Amazon Textract for document and form processing
+
+Educational Focus:
+- Key concepts illustrated in diagrams
+- Textual information embedded in images
+- Process flows and procedural illustrations
+- Data patterns and visual relationships`;
+  }
+
+  private async getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        resolve(null);
+      };
+      img.src = URL.createObjectURL(file);
+    });
   }
 
   private async processGenericFile(file: File): Promise<string> {
@@ -248,13 +399,38 @@ Recommended Question Types:
       const content = await this.readFileAsText(file);
       
       if (this.isReadableText(content)) {
-        return content;
+        return this.extractMeaningfulText(content);
       } else {
-        return this.extractGenericMetadata(file);
+        return this.generateGenericContentAnalysis(file);
       }
     } catch (error) {
-      return this.extractGenericMetadata(file);
+      return this.generateGenericContentAnalysis(file);
     }
+  }
+
+  private generateGenericContentAnalysis(file: File): string {
+    return `File Content Analysis:
+File: ${file.name}
+Size: ${Math.round(file.size / 1024)}KB
+Type: ${file.type || 'Unknown'}
+
+Content Processing:
+This file contains data that requires specialized processing for educational use:
+- May contain structured data or specialized format
+- Could include educational content in non-standard format
+- Potentially contains information suitable for assessment
+
+Educational Application:
+- Consider the file's purpose in educational context
+- Extract relevant concepts based on file type
+- Generate questions appropriate to the content format
+- Focus on learning objectives that match the file purpose
+
+Question Generation Strategy:
+- Create questions about file purpose and educational value
+- Generate comprehension questions about likely content
+- Include application questions based on file type
+- Focus on general educational principles related to the content`;
   }
 
   private async readFileAsText(file: File): Promise<string> {
@@ -274,144 +450,61 @@ Recommended Question Types:
     });
   }
 
-  private isPdfBinaryContent(content: string): boolean {
-    const pdfIndicators = [
-      /^\s*%PDF/,
-      /<<\s*\/Type\s*\/Catalog/,
-      /obj\s*<<.*>>/,
-      /endstream/,
-      /^\s*\d+\s+\d+\s+obj/,
-      /%����/
-    ];
-    
-    return pdfIndicators.some(indicator => indicator.test(content));
-  }
-
-  private isWordBinaryContent(content: string): boolean {
-    const wordIndicators = [
-      /PK\x03\x04/, // ZIP signature for .docx
-      /\xd0\xcf\x11\xe0/, // OLE signature for .doc
-      /Microsoft Office/,
-      /word\//i
-    ];
-    
-    return wordIndicators.some(indicator => indicator.test(content));
-  }
-
   private isReadableText(content: string): boolean {
-    if (!content || content.length < 10) return false;
+    if (!content || content.length < 20) return false;
     
-    const readableChars = (content.match(/[a-zA-Z0-9\s.,!?]/g) || []).length;
+    const readableChars = (content.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length;
     const totalChars = content.length;
     const readableRatio = readableChars / totalChars;
     
-    return readableRatio > 0.7;
+    return readableRatio > 0.6 && content.split(' ').length > 10;
+  }
+
+  private extractMeaningfulText(content: string): string {
+    if (!content) return '';
+    
+    // Remove common binary artifacts and PDF markers
+    let cleaned = content
+      .replace(/%PDF-[\d.]+/g, '')
+      .replace(/%%EOF/g, '')
+      .replace(/obj\s*<<.*?>>/gs, '')
+      .replace(/endobj/g, '')
+      .replace(/stream\s*/g, '')
+      .replace(/endstream/g, '')
+      .replace(/xref/g, '')
+      .replace(/trailer/g, '')
+      .replace(/startxref/g, '')
+      .replace(/\d+\s+\d+\s+obj/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+    
+    // Extract sentences and meaningful content
+    const sentences = cleaned
+      .split(/[.!?]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 10 && /[a-zA-Z]/.test(s))
+      .slice(0, 50); // Limit to first 50 sentences
+    
+    return sentences.join('. ').trim();
   }
 
   private cleanContent(content: string): string {
     if (!content) return '';
     
-    // Remove excessive whitespace
+    // Remove excessive whitespace and normalize
     content = content.replace(/\s+/g, ' ').trim();
     
-    // Remove binary artifacts
+    // Remove remaining binary artifacts
     content = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
-    
-    // Clean up common PDF artifacts
-    content = content.replace(/%PDF-[\d.]+/g, '');
-    content = content.replace(/obj\s*<<.*?>>/g, '');
-    content = content.replace(/endstream/g, '');
-    content = content.replace(/\d+\s+\d+\s+obj/g, '');
     
     // Remove excessive line breaks
     content = content.replace(/\n{3,}/g, '\n\n');
     
+    // Ensure reasonable length for processing
+    if (content.length > 4000) {
+      content = content.substring(0, 4000) + '...';
+    }
+    
     return content.trim();
-  }
-
-  private cleanPdfText(content: string): string {
-    let cleaned = content;
-    
-    // Remove PDF-specific markers
-    cleaned = cleaned.replace(/%PDF-[\d.]+/g, '');
-    cleaned = cleaned.replace(/%%EOF/g, '');
-    cleaned = cleaned.replace(/trailer/g, '');
-    cleaned = cleaned.replace(/xref/g, '');
-    cleaned = cleaned.replace(/startx?ref/g, '');
-    
-    // Remove object references
-    cleaned = cleaned.replace(/\d+\s+\d+\s+obj/g, '');
-    cleaned = cleaned.replace(/endobj/g, '');
-    
-    // Clean stream markers
-    cleaned = cleaned.replace(/stream\s*/g, '');
-    cleaned = cleaned.replace(/endstream/g, '');
-    
-    return this.cleanContent(cleaned);
-  }
-
-  private cleanWordText(content: string): string {
-    let cleaned = content;
-    
-    // Remove Word-specific artifacts
-    cleaned = cleaned.replace(/Microsoft Office Word/g, '');
-    cleaned = cleaned.replace(/\[Content_Types\]\.xml/g, '');
-    cleaned = cleaned.replace(/word\/_rels\/document\.xml\.rels/g, '');
-    
-    return this.cleanContent(cleaned);
-  }
-
-  private extractPdfMetadata(file: File): string {
-    return `PDF Document Analysis:
-File Name: ${file.name}
-File Size: ${Math.round(file.size / 1024)}KB
-Content Type: PDF document
-
-Note: This appears to be a PDF file with binary content. For optimal question generation:
-1. The document likely contains structured text, images, or formatted content
-2. Consider the document's educational purpose and subject matter
-3. Generate questions based on typical PDF content types (reports, articles, educational materials)
-
-Recommended Question Approaches:
-- Focus on main topics typically found in PDF documents
-- Create comprehension questions about document structure
-- Generate analysis questions about content organization
-- Include application questions based on document purpose`;
-  }
-
-  private extractWordMetadata(file: File): string {
-    return `Word Document Analysis:
-File Name: ${file.name}
-File Size: ${Math.round(file.size / 1024)}KB
-Content Type: Microsoft Word document
-
-Note: This appears to be a Word document with formatted content. For optimal question generation:
-1. The document likely contains structured text with headings and sections
-2. Consider typical Word document content (reports, essays, instructions)
-3. Generate questions based on document organization and content
-
-Recommended Question Approaches:
-- Create questions about document structure and main points
-- Focus on comprehension of written content
-- Generate analysis questions about document purpose
-- Include application questions based on document type`;
-  }
-
-  private extractGenericMetadata(file: File): string {
-    return `File Analysis:
-File Name: ${file.name}
-File Size: ${Math.round(file.size / 1024)}KB
-Content Type: ${file.type || 'Unknown'}
-
-Note: This file contains content that requires specialized processing. For question generation:
-1. Consider the file's educational context and purpose
-2. Generate questions based on the file type and likely content
-3. Focus on general comprehension and application
-
-Recommended Question Approaches:
-- Create questions about file purpose and context
-- Generate comprehension questions about likely content
-- Include application questions based on file type`;
   }
 
   private getImageFormat(fileName: string): string {

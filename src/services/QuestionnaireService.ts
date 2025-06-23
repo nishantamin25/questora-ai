@@ -1,4 +1,3 @@
-
 import { ConfigService } from './ConfigService';
 import { ChatGPTService } from './ChatGPTService';
 import { FileProcessingService } from './FileProcessingService';
@@ -176,27 +175,32 @@ class QuestionnaireServiceClass {
 
   async generateQuestionnaire(prompt: string, options: GenerateQuestionnaireOptions, fileContent?: string, setNumber?: number, totalSets?: number): Promise<Questionnaire> {
     console.log('Generating questionnaire with options:', options, 'Set:', setNumber, 'of', totalSets);
-    console.log('Raw file content provided:', !!fileContent, 'Length:', fileContent?.length);
+    console.log('File content provided:', !!fileContent, 'Length:', fileContent?.length);
     
     let processedFileContent = '';
     let isFileContentUsable = false;
     
-    if (fileContent && fileContent.trim().length > 0) {
+    // Process file content if provided
+    if (fileContent && fileContent.trim().length > 50) {
       console.log('Processing file content for questionnaire generation...');
       
       try {
-        const processedFile = await FileProcessingService.processFile(new File([fileContent], 'uploadedFile'));
+        // Create a temporary file object for processing
+        const tempFile = new File([fileContent], 'uploadedContent.txt', { type: 'text/plain' });
+        const processedFile = await FileProcessingService.processFile(tempFile);
         processedFileContent = processedFile.content;
-        isFileContentUsable = processedFileContent.length > 100; // Increased threshold
-        console.log('File content is educational and usable. Processed length:', processedFileContent.length);
+        isFileContentUsable = processedFileContent.length > 100;
+        console.log('File content processed successfully. Length:', processedFileContent.length);
       } catch (error) {
         console.error('Error processing file content:', error);
-        processedFileContent = '';
-        isFileContentUsable = false;
+        // Use raw content as fallback
+        processedFileContent = fileContent;
+        isFileContentUsable = fileContent.length > 100;
       }
     }
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Add processing delay to simulate generation
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     const questionnaireId = this.generateId();
     const setInfo = setNumber && totalSets && totalSets > 1 ? ` - Set ${setNumber}` : '';
@@ -207,6 +211,8 @@ class QuestionnaireServiceClass {
     
     if (options.includeQuestionnaire) {
       const chatGptApiKey = ChatGPTService.getApiKey();
+      
+      // Try ChatGPT first if API key is available
       if (chatGptApiKey && (isFileContentUsable || prompt.trim())) {
         try {
           console.log('Using ChatGPT to generate questions...');
@@ -230,51 +236,52 @@ class QuestionnaireServiceClass {
           console.log(`Successfully generated ${questions.length} questions with ChatGPT`);
         } catch (error) {
           console.error('ChatGPT generation failed, falling back to enhanced generation:', error);
-          questions = this.generateTemplateQuestions(
+          questions = [];
+        }
+      }
+      
+      // Fallback to enhanced generation if ChatGPT failed or no API key
+      if (questions.length === 0) {
+        if (isFileContentUsable) {
+          console.log('Using enhanced file-based generation');
+          questions = this.generateEnhancedQuestions(
             prompt,
-            options.numberOfQuestions,
-            options.difficulty,
+            options.numberOfQuestions, 
+            options.difficulty, 
+            processedFileContent,
+            setNumber, 
+            totalSets
+          );
+        } else {
+          console.log('Using template-based generation');
+          questions = this.generateTemplateQuestions(
+            prompt, 
+            options.numberOfQuestions, 
+            options.difficulty, 
             undefined,
-            setNumber,
+            setNumber, 
             totalSets
           );
         }
-      } else if (isFileContentUsable) {
-        console.log('Using enhanced file-based generation (no ChatGPT API key)');
-        questions = this.generateEnhancedQuestions(
-          prompt,
-          options.numberOfQuestions, 
-          options.difficulty, 
-          processedFileContent,
-          setNumber, 
-          totalSets
-        );
-      } else {
-        console.log('Using template-based generation (no usable file content)');
-        questions = this.generateTemplateQuestions(
-          prompt, 
-          options.numberOfQuestions, 
-          options.difficulty, 
-          undefined,
-          setNumber, 
-          totalSets
-        );
       }
       
+      // Ensure we have exactly the requested number of questions
       if (questions.length < options.numberOfQuestions) {
-        console.log(`Generated ${questions.length} questions, need ${options.numberOfQuestions}. Filling remaining slots.`);
+        console.log(`Generated ${questions.length} questions, need ${options.numberOfQuestions}. Generating additional questions.`);
         const additionalQuestions = this.generateTemplateQuestions(
           prompt,
           options.numberOfQuestions - questions.length,
           options.difficulty,
-          undefined,
+          isFileContentUsable ? processedFileContent : undefined,
           setNumber,
           totalSets
         );
         questions.push(...additionalQuestions);
+      } else if (questions.length > options.numberOfQuestions) {
+        console.log(`Generated ${questions.length} questions, trimming to ${options.numberOfQuestions}.`);
+        questions = questions.slice(0, options.numberOfQuestions);
       }
       
-      questions = questions.slice(0, options.numberOfQuestions);
       console.log(`Final question count: ${questions.length}`);
     }
 
@@ -308,24 +315,35 @@ class QuestionnaireServiceClass {
     const questions: Question[] = [];
     const setVariation = setNumber ? ` (Set ${setNumber})` : '';
     
-    // Enhanced question generation based on file content
-    const content = fileContent.toLowerCase();
+    // Analyze content to extract key concepts
+    const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    const concepts = this.extractKeyConceptsFromContent(fileContent);
     
-    // Generate different types of questions based on content analysis
-    const contentKeywords = content.split(' ').filter(word => word.length > 3);
-    const uniqueKeywords = [...new Set(contentKeywords)].slice(0, 10);
+    console.log(`Extracted ${concepts.length} key concepts from content`);
     
-    for (let i = 0; i < numberOfQuestions && i < uniqueKeywords.length; i++) {
-      const keyword = uniqueKeywords[i];
-      const questionTypes = [
-        `What is the main concept related to "${keyword}" in the provided content?${setVariation}`,
-        `How would you apply the "${keyword}" concept discussed in the material?${setVariation}`,
-        `Which statement best describes "${keyword}" based on the content?${setVariation}`,
-        `What is the significance of "${keyword}" in the context provided?${setVariation}`
-      ];
+    // Generate questions based on content analysis
+    for (let i = 0; i < numberOfQuestions && i < Math.max(concepts.length, sentences.length); i++) {
+      let questionText = '';
+      let options: string[] = [];
       
-      const questionText = questionTypes[i % questionTypes.length];
-      const options = this.generateOptionsForDifficulty(difficulty);
+      if (i < concepts.length) {
+        const concept = concepts[i];
+        const questionTypes = [
+          `Based on the content, what is the main purpose of "${concept}"?${setVariation}`,
+          `According to the material, how would you apply "${concept}" in practice?${setVariation}`,
+          `Which statement best describes "${concept}" as presented in the content?${setVariation}`,
+          `What is the significance of "${concept}" in the context of the material?${setVariation}`
+        ];
+        
+        questionText = questionTypes[i % questionTypes.length];
+        options = this.generateContentBasedOptions(concept, difficulty, fileContent);
+      } else {
+        // Generate questions from sentences if we run out of concepts
+        const sentence = sentences[i % sentences.length];
+        const key = this.extractKeyFromSentence(sentence);
+        questionText = `Based on the content provided, what can be concluded about ${key}?${setVariation}`;
+        options = this.generateOptionsForDifficulty(difficulty);
+      }
       
       questions.push({
         id: this.generateId(),
@@ -336,20 +354,92 @@ class QuestionnaireServiceClass {
       });
     }
     
-    // Fill remaining slots with template questions if needed
-    if (questions.length < numberOfQuestions) {
-      const remainingQuestions = this.generateTemplateQuestions(
+    // Fill remaining slots if needed
+    while (questions.length < numberOfQuestions) {
+      const remainingCount = numberOfQuestions - questions.length;
+      const additionalQuestions = this.generateTemplateQuestions(
         prompt,
-        numberOfQuestions - questions.length,
+        remainingCount,
         difficulty,
         fileContent,
         setNumber,
         totalSets
       );
-      questions.push(...remainingQuestions);
+      questions.push(...additionalQuestions.slice(0, remainingCount));
     }
     
     return questions.slice(0, numberOfQuestions);
+  }
+
+  private extractKeyConceptsFromContent(content: string): string[] {
+    const words = content.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 4);
+    
+    // Count word frequency
+    const wordCount: Record<string, number> = {};
+    words.forEach(word => {
+      wordCount[word] = (wordCount[word] || 0) + 1;
+    });
+    
+    // Sort by frequency and return top concepts
+    const sortedWords = Object.entries(wordCount)
+      .sort(([,a], [,b]) => b - a)
+      .map(([word]) => word)
+      .filter(word => !this.isCommonWord(word))
+      .slice(0, 15);
+    
+    return sortedWords;
+  }
+
+  private isCommonWord(word: string): boolean {
+    const commonWords = [
+      'this', 'that', 'with', 'have', 'will', 'from', 'they', 'know', 'want', 
+      'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here',
+      'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than',
+      'them', 'well', 'were', 'work', 'your', 'about', 'after', 'again',
+      'before', 'being', 'could', 'every', 'first', 'found', 'great', 'group',
+      'hand', 'high', 'however', 'important', 'information', 'into', 'large',
+      'last', 'little', 'most', 'move', 'must', 'need', 'never', 'number',
+      'only', 'other', 'people', 'place', 'point', 'right', 'same', 'seem',
+      'several', 'should', 'since', 'small', 'still', 'through', 'under',
+      'used', 'using', 'water', 'while', 'without', 'world', 'would', 'years'
+    ];
+    return commonWords.includes(word.toLowerCase());
+  }
+
+  private generateContentBasedOptions(concept: string, difficulty: 'easy' | 'medium' | 'hard', content: string): string[] {
+    const options = [];
+    
+    // Generate a correct answer based on the concept and difficulty
+    switch (difficulty) {
+      case 'easy':
+        options.push(`${concept} is a key concept discussed in the material`);
+        options.push(`${concept} is not mentioned in the content`);
+        options.push(`${concept} is only briefly referenced`);
+        options.push(`${concept} is an unrelated topic`);
+        break;
+      case 'medium':
+        options.push(`${concept} plays a significant role in the context provided`);
+        options.push(`${concept} is mentioned but not explained in detail`);
+        options.push(`${concept} is contradicted by other information`);
+        options.push(`${concept} is irrelevant to the main discussion`);
+        break;
+      case 'hard':
+        options.push(`${concept} is fundamental to understanding the core principles discussed`);
+        options.push(`${concept} represents a secondary consideration in the analysis`);
+        options.push(`${concept} conflicts with the primary methodology presented`);
+        options.push(`${concept} is an outdated approach according to the material`);
+        break;
+    }
+    
+    return options;
+  }
+
+  private extractKeyFromSentence(sentence: string): string {
+    const words = sentence.split(' ').filter(word => word.length > 4);
+    return words[0] || 'this topic';
   }
 
   private generateOptionsForDifficulty(difficulty: 'easy' | 'medium' | 'hard'): string[] {
