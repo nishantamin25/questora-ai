@@ -164,12 +164,26 @@ class QuestionnaireServiceClass {
         } catch (error) {
           console.error('ChatGPT generation failed, falling back to template-based generation:', error);
           // Fall back to template-based generation
-          questions = this.generateQuestions(prompt, options.numberOfQuestions, options.difficulty, fileContent, setNumber, totalSets);
+          questions = this.generateQuestions(
+            prompt, 
+            options.numberOfQuestions, 
+            options.difficulty, 
+            fileContent, 
+            setNumber, 
+            totalSets
+          );
         }
       } else {
         console.log('No ChatGPT API key found, using template-based generation');
         // Use template-based generation
-        questions = this.generateQuestions(prompt, options.numberOfQuestions, options.difficulty, fileContent, setNumber, totalSets);
+        questions = this.generateQuestions(
+          prompt, 
+          options.numberOfQuestions, 
+          options.difficulty, 
+          fileContent, 
+          setNumber, 
+          totalSets
+        );
       }
     }
 
@@ -399,7 +413,14 @@ class QuestionnaireServiceClass {
     return description;
   }
 
-  private generateQuestions(prompt: string, numberOfQuestions: number, difficulty: 'easy' | 'medium' | 'hard', fileContent?: string, setNumber?: number, totalSets?: number): Question[] {
+  private generateQuestions(
+    prompt: string, 
+    numberOfQuestions: number, 
+    difficulty: 'easy' | 'medium' | 'hard', 
+    fileContent?: string, 
+    setNumber?: number, 
+    totalSets?: number
+  ): Question[] {
     const questions: Question[] = [];
     const category = this.categorizePrompt(prompt, fileContent);
     const baseQuestions = this.questionTemplates[category as keyof typeof this.questionTemplates] || 
