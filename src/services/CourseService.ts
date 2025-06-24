@@ -1,4 +1,3 @@
-
 import { FileProcessingService } from './FileProcessingService';
 import { PDFGenerationService } from './PDFGenerationService';
 import { ChatGPTService } from './ChatGPTService';
@@ -250,12 +249,15 @@ Respond with structured educational content based solely on the provided documen
     
     for (const breakPattern of sectionBreaks) {
       const newChunks: string[] = [];
-      for (const chunk of chunks) {
-        // Fix: Simplify the split operation without unnecessary type checks
+      
+      // Process each chunk individually to avoid type inference issues
+      chunks.forEach(chunk => {
         const parts = chunk.split(breakPattern);
-        const filteredParts = parts.filter(part => part.trim().length > 100);
-        newChunks.push(...filteredParts);
-      }
+        const validParts = parts.filter(part => part && part.trim().length > 100);
+        newChunks.push(...validParts);
+      });
+      
+      // Only use the new chunks if they provide better segmentation
       if (newChunks.length > chunks.length && newChunks.length <= 5) {
         chunks = newChunks;
       }
