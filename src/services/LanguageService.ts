@@ -245,7 +245,7 @@ class LanguageServiceClass {
         
         'question.selectAnswer': 'જવાબો પસંદ કરો',
         'question.submitResponse': 'જવાબો સબમિટ કરો',
-        'question.answerAll': 'દરેક પ્રશ્નાવલીના તળિયે સબમિટ બટન સક્રિય કરवા માટે બધા પ્રશ્નોના જવાબ આપો.',
+        'question.answerAll': 'દરેક પ્રશ્નાવલીના તળિયે સબમિટ બટન સક્રિય કરવા માટે બધા પ્રશ્નોના જવાબ આપો.',
       }
     },
     bn: {
@@ -296,6 +296,10 @@ class LanguageServiceClass {
     }
   };
   private languageChangeListeners: Array<(newLanguage: string) => void> = [];
+  
+  // Add translation cache and request deduplication
+  private translationCache = new Map<string, string>();
+  private pendingTranslations = new Map<string, Promise<string>>();
   
   constructor() {
     // Load saved language from localStorage
@@ -366,6 +370,35 @@ class LanguageServiceClass {
       return content;
     }
 
+    // Create cache key for deduplication
+    const cacheKey = `${content}-${targetLanguage}`;
+    
+    // Check cache first
+    if (this.translationCache.has(cacheKey)) {
+      console.log('🎯 Using cached translation');
+      return this.translationCache.get(cacheKey)!;
+    }
+    
+    // Check if translation is already in progress
+    if (this.pendingTranslations.has(cacheKey)) {
+      console.log('⏳ Translation already in progress, waiting...');
+      return this.pendingTranslations.get(cacheKey)!;
+    }
+
+    // Start new translation
+    const translationPromise = this.performTranslation(content, targetLanguage, cacheKey);
+    this.pendingTranslations.set(cacheKey, translationPromise);
+    
+    try {
+      const result = await translationPromise;
+      return result;
+    } finally {
+      // Clean up pending translation
+      this.pendingTranslations.delete(cacheKey);
+    }
+  }
+
+  private async performTranslation(content: string, targetLanguage: string, cacheKey: string): Promise<string> {
     try {
       // Get the API key from ChatGPTService
       const { ChatGPTService } = await import('./ChatGPTService');
@@ -386,7 +419,7 @@ class LanguageServiceClass {
 
       const targetLanguageName = languageNames[targetLanguage as keyof typeof languageNames] || targetLanguage;
 
-      console.log(`Translating content to ${targetLanguageName}...`);
+      console.log(`🌐 Translating content to ${targetLanguageName}...`);
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -424,7 +457,10 @@ class LanguageServiceClass {
         throw new Error('No translated content received');
       }
 
-      console.log(`Translation to ${targetLanguageName} completed successfully`);
+      // Cache the successful translation
+      this.translationCache.set(cacheKey, translatedText);
+      
+      console.log(`✅ Translation to ${targetLanguageName} completed successfully`);
       return translatedText;
     } catch (error) {
       console.error('Error translating content:', error);
@@ -473,14 +509,14 @@ class LanguageServiceClass {
       return questions;
     }
 
-    console.log(`Translating ${questions.length} questions to ${targetLanguage}...`);
+    console.log(`🔤 Translating ${questions.length} questions to ${targetLanguage}...`);
     
     try {
       const translatedQuestions = await Promise.all(
         questions.map(question => this.translateQuestion(question, targetLanguage))
       );
       
-      console.log(`Successfully translated ${translatedQuestions.length} questions`);
+      console.log(`✅ Successfully translated ${translatedQuestions.length} questions`);
       return translatedQuestions;
     } catch (error) {
       console.error('Error translating questions array:', error);
