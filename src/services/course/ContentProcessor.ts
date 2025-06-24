@@ -26,8 +26,8 @@ export class ContentProcessor {
   }
 
   static async createCourseSectionsFromRealContent(content: string, sourceName: string): Promise<CourseMaterial[]> {
-    const sections: CourseMaterial[] = [];
-    
+    const sections: CourseMaterial[] = []; // Explicitly typed as CourseMaterial[]
+
     try {
       console.log('Creating course sections from REAL content:', content.substring(0, 200) + '...');
       
@@ -78,7 +78,7 @@ Respond with structured educational content based solely on the provided documen
       return this.extractSectionsDirectly(content, sourceName);
     }
 
-    return sections.slice(0, 3);
+    return sections.slice(0, 3); // Returning only up to 3 sections
   }
 
   private static containsRealInformation(structuredContent: string, originalContent: string): boolean {
@@ -100,8 +100,8 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private static extractSectionsDirectly(content: string, sourceName: string): CourseMaterial[] {
-    const sections: CourseMaterial[] = [];
-    
+    const sections: CourseMaterial[] = []; // Explicitly typed as CourseMaterial[]
+
     // Split content into meaningful chunks based on structure
     const chunks = this.splitContentIntoMeaningfulChunks(content);
     
@@ -115,7 +115,7 @@ Respond with structured educational content based solely on the provided documen
       }
     });
     
-    return sections.slice(0, 3);
+    return sections.slice(0, 3); // Returning only up to 3 sections
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
