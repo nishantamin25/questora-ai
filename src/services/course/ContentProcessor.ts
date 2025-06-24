@@ -119,8 +119,8 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define regex patterns with explicit typing
-    const patterns = [
+    // Define regex patterns with explicit RegExp typing
+    const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
       /\n\s*[A-Z][A-Z\s]+\n/g,               // ALL CAPS headings
