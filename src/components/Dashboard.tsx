@@ -18,6 +18,7 @@ import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 import { FileProcessingService } from '@/services/FileProcessingService';
 import { LanguageService } from '@/services/LanguageService';
 import { toast } from '@/hooks/use-toast';
+import CourseHeader from '@/components/CourseHeader';
 
 interface DashboardProps {
   user: any;
@@ -43,16 +44,16 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     questionnaireId: '',
     testName: ''
   });
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [editedCourse, setEditedCourse] = useState<any>(null);
 
   useEffect(() => {
     loadQuestionnaires();
     loadCourses();
     loadCompletedCourses();
-    // Clean up old guest assignments periodically
     GuestAssignmentService.cleanupOldAssignments();
   }, []);
 
-  // Process files immediately when they are uploaded
   useEffect(() => {
     if (uploadedFiles.length > 0) {
       processFilesForContent(uploadedFiles);
@@ -68,7 +69,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         console.log('Admin questionnaires loaded:', allQuestionnaires);
         setQuestionnaires(Array.isArray(allQuestionnaires) ? allQuestionnaires : []);
       } else {
-        // For guests, only show active and saved questionnaires
         const activeQuestionnaires = QuestionnaireService.getActiveQuestionnaires();
         console.log('Guest questionnaires loaded:', activeQuestionnaires);
         setQuestionnaires(Array.isArray(activeQuestionnaires) ? activeQuestionnaires : []);
@@ -106,7 +106,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     newCompleted.add(courseId);
     setCompletedCourses(newCompleted);
     
-    // Save to localStorage
     localStorage.setItem(`completed_courses_${user.username}`, JSON.stringify(Array.from(newCompleted)));
     
     console.log(`Course ${courseId} completed by ${user.username}`, newCompleted);
@@ -153,7 +152,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     console.log('Files uploaded:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
 
     try {
-      // Check file size for each file (50MB limit)
       const oversizedFiles = files.filter(file => file.size > 50 * 1024 * 1024);
       if (oversizedFiles.length > 0) {
         toast({
@@ -164,7 +162,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         return;
       }
 
-      // Validate file types
       const supportedTypes = getSupportedFileTypes();
       const allSupportedExtensions = Object.values(supportedTypes).flat();
       
@@ -187,7 +184,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         });
       }
 
-      // Add supported files
       const supportedFiles = files.filter(file => !unsupportedFiles.includes(file));
       if (supportedFiles.length > 0) {
         setUploadedFiles(prev => {
@@ -209,7 +205,6 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         variant: "destructive"
       });
     } finally {
-      // Clear the input
       if (e.target) {
         e.target.value = '';
       }
@@ -339,7 +334,6 @@ Note: File processing failed, but file information is available.
     });
     
     try {
-      // Use the already processed file content
       const fileContentToUse = processedFileContent.trim();
       
       if (uploadedFiles.length > 0 && !fileContentToUse) {
@@ -359,7 +353,6 @@ Note: File processing failed, but file information is available.
         contentPreview: fileContentToUse.substring(0, 200) + '...'
       });
       
-      // Generate course first if requested and file content is available
       let generatedCourse = null;
       if (includeCourse && (fileContentToUse.length > 50 || uploadedFiles.length > 0)) {
         console.log('Generating course...');
@@ -369,11 +362,10 @@ Note: File processing failed, but file information is available.
           fileContentToUse
         );
         CourseService.saveCourse(generatedCourse);
-        loadCourses(); // Reload courses to show the new one
+        loadCourses();
         console.log('Course generated and saved:', generatedCourse.id);
       }
       
-      // Generate multiple questionnaire sets if requested
       const generatedQuestionnaires = [];
       
       if (includeQuestionnaire) {
@@ -383,16 +375,14 @@ Note: File processing failed, but file information is available.
           const questionnaire = await QuestionnaireService.generateQuestionnaire(
             prompt,
             { testName, difficulty, numberOfQuestions, timeframe, includeCourse: false, includeQuestionnaire: true },
-            fileContentToUse, // Pass the processed content directly
+            fileContentToUse,
             setIndex,
             numberOfSets
           );
           
-          // Add set information to the questionnaire
           questionnaire.setNumber = setIndex;
           questionnaire.totalSets = numberOfSets;
           
-          // Link course to questionnaire if course was generated
           if (generatedCourse) {
             questionnaire.course = generatedCourse;
           }
@@ -405,7 +395,6 @@ Note: File processing failed, but file information is available.
         }
       }
       
-      // Store all generated questionnaires as unsaved
       if (generatedQuestionnaires.length > 0) {
         setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
       }
@@ -414,7 +403,6 @@ Note: File processing failed, but file information is available.
       setUploadedFiles([]);
       setProcessedFileContent('');
       
-      // Success message
       let successMessage = '';
       if (generatedCourse && generatedQuestionnaires.length > 0) {
         successMessage = `Generated course and ${generatedQuestionnaires.length} questionnaire set(s) with file content analysis`;
@@ -453,14 +441,8 @@ Note: File processing failed, but file information is available.
   const handleUpdateQuestionnaire = (updatedQuestionnaire: any) => {
     try {
       QuestionnaireService.saveQuestionnaire(updatedQuestionnaire);
-      
-      // Remove from unsaved questionnaires if it was there
       setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== updatedQuestionnaire.id));
-      
-      // Reload saved questionnaires from localStorage
       loadQuestionnaires();
-      
-      // No success toast needed - keep it simple
     } catch (error) {
       console.error('Error updating questionnaire:', error);
       const errorMessage = error instanceof Error ? error.message : "Failed to update questionnaire";
@@ -482,17 +464,10 @@ Note: File processing failed, but file information is available.
 
   const handleDeleteConfirm = () => {
     try {
-      // Try to delete from saved questionnaires first
       QuestionnaireService.deleteQuestionnaire(deleteDialog.questionnaireId);
-      
-      // Also remove from unsaved questionnaires if it exists there
       setUnsavedQuestionnaires(prev => prev.filter(q => q.id !== deleteDialog.questionnaireId));
-      
-      // Reload saved questionnaires
       loadQuestionnaires();
-      
       setDeleteDialog({ open: false, questionnaireId: '', testName: '' });
-      
       toast({
         title: "Success",
         description: "Test deleted successfully!",
@@ -511,13 +486,11 @@ Note: File processing failed, but file information is available.
     setDeleteDialog({ open: false, questionnaireId: '', testName: '' });
   };
 
-  // Filter questionnaires for guests to show only their assigned set
   const filterQuestionnairesForGuest = (questionnaires: any[]) => {
     if (user.role === 'admin') {
       return questionnaires;
     }
 
-    // Group questionnaires by test name
     const testGroups: Record<string, any[]> = {};
     questionnaires.forEach(q => {
       const testKey = q.testName || q.title;
@@ -527,22 +500,17 @@ Note: File processing failed, but file information is available.
       testGroups[testKey].push(q);
     });
 
-    // For each test group, assign the guest to a specific set
     const filteredQuestionnaires: any[] = [];
     Object.entries(testGroups).forEach(([testName, testQuestionnaires]) => {
       if (testQuestionnaires.length > 1 && testQuestionnaires[0].totalSets > 1) {
-        // This is a multi-set test
         const totalSets = testQuestionnaires[0].totalSets;
-        const testId = testQuestionnaires[0].id.split('-')[0]; // Use base ID for assignment
+        const testId = testQuestionnaires[0].id.split('-')[0];
         const assignedSetNumber = GuestAssignmentService.getGuestSetNumber(user.username, testId, totalSets);
-        
-        // Find the questionnaire for the assigned set
         const assignedQuestionnaire = testQuestionnaires.find(q => q.setNumber === assignedSetNumber);
         if (assignedQuestionnaire) {
           filteredQuestionnaires.push(assignedQuestionnaire);
         }
       } else {
-        // Single set test, include all
         filteredQuestionnaires.push(...testQuestionnaires);
       }
     });
@@ -550,32 +518,24 @@ Note: File processing failed, but file information is available.
     return filteredQuestionnaires;
   };
 
-  // Combine saved and unsaved questionnaires for display
   const allQuestionnaires = user.role === 'admin' 
     ? [...unsavedQuestionnaires, ...questionnaires]
     : questionnaires;
 
-  // Filter questionnaires based on user role
   const filteredQuestionnaires = filterQuestionnairesForGuest(allQuestionnaires);
-
-  // Ensure we have valid data before rendering
   const validQuestionnaires = filteredQuestionnaires.filter(q => q && typeof q === 'object');
 
-  // Define accessible questionnaires for guests (show only if course is completed)
   const accessibleQuestionnaires = user.role === 'admin' 
     ? validQuestionnaires 
     : validQuestionnaires.filter(q => {
-        // If questionnaire has a linked course, check if it's completed
         if (q.course && q.course.id) {
           return completedCourses.has(q.course.id);
         }
-        // If no linked course, it's accessible
         return true;
       });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
-      {/* Confirmation Dialog */}
       <ConfirmDeleteDialog
         open={deleteDialog.open}
         onConfirm={handleDeleteConfirm}
@@ -583,14 +543,12 @@ Note: File processing failed, but file information is available.
         testName={deleteDialog.testName}
       />
 
-      {/* Settings Dialog */}
       <SettingsDialog
         open={showSettingsDialog}
         onClose={() => setShowSettingsDialog(false)}
         userRole={user.role}
       />
 
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-4 py-3 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -650,23 +608,19 @@ Note: File processing failed, but file information is available.
 
       <div className="max-w-6xl mx-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
           <div className="lg:col-span-2">
-            {/* Admin Response Management */}
             {user.role === 'admin' && showResponses && (
               <div className="mb-6">
                 <ResponseManagement />
               </div>
             )}
 
-            {/* Admin Leaderboard */}
             {user.role === 'admin' && showLeaderboard && (
               <div className="mb-6">
                 <Leaderboard />
               </div>
             )}
 
-            {/* Generation Dialog */}
             <GenerateTestDialog
               open={showGenerateDialog}
               prompt={prompt}
@@ -676,7 +630,6 @@ Note: File processing failed, but file information is available.
               onCancel={() => setShowGenerateDialog(false)}
             />
 
-            {/* Input Area - Only for Admin */}
             {user.role === 'admin' && !showGenerateDialog && (
               <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
@@ -766,7 +719,6 @@ Note: File processing failed, but file information is available.
               </Card>
             )}
 
-            {/* Access restriction message for guest users */}
             {user.role === 'guest' && (
               <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardContent className="p-8 text-center">
@@ -781,7 +733,6 @@ Note: File processing failed, but file information is available.
               </Card>
             )}
 
-            {/* Courses for Guests */}
             {user.role === 'guest' && courses.length > 0 && (
               <div className="space-y-4 mb-6">
                 {courses.map((course) => (
@@ -795,25 +746,47 @@ Note: File processing failed, but file information is available.
               </div>
             )}
 
-            {/* Courses for Admin */}
             {user.role === 'admin' && courses.length > 0 && (
               <div className="space-y-4 mb-6">
                 <h3 className="text-lg font-semibold text-slate-900 font-poppins">Generated Courses</h3>
-                {courses.map((course) => (
-                  <CourseDisplay
-                    key={course.id}
-                    course={course}
-                    onCourseComplete={handleCourseComplete}
-                    userRole={user.role}
-                  />
-                ))}
+                {courses.map((course) => {
+                  const isEditing = editingCourseId === course.id;
+                  const courseToEdit = isEditing ? editedCourse : course;
+                  
+                  return (
+                    <Card key={course.id} className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden">
+                      <CardHeader className="p-6">
+                        <CourseHeader
+                          course={course}
+                          editedCourse={courseToEdit || course}
+                          isEditing={isEditing}
+                          isAdmin={user.role === 'admin'}
+                          onCourseChange={setEditedCourse}
+                          onEditToggle={() => handleCourseEditToggle(course.id)}
+                          onCancelEdit={handleCourseCancelEdit}
+                          onActiveToggle={handleCourseActiveToggle}
+                          onDelete={handleCourseDelete}
+                          onSaveCourse={() => handleCourseSave(courseToEdit || course)}
+                        />
+                      </CardHeader>
+                      
+                      {!isEditing && (
+                        <div className="border-t border-slate-200">
+                          <CourseDisplay
+                            course={course}
+                            onCourseComplete={handleCourseComplete}
+                            userRole={user.role}
+                          />
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             )}
 
-            {/* Questionnaires */}
             <div className="space-y-4">
               {accessibleQuestionnaires.map((questionnaire, index) => {
-                // Ensure we have a valid questionnaire object with required properties
                 if (!questionnaire || typeof questionnaire !== 'object') {
                   console.warn('Invalid questionnaire at index', index, questionnaire);
                   return null;
@@ -832,7 +805,6 @@ Note: File processing failed, but file information is available.
                 );
               })}
               
-              {/* Show locked questionnaires for guests */}
               {user.role === 'guest' && validQuestionnaires.length > accessibleQuestionnaires.length && (
                 <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                   <CardContent className="p-6">
@@ -867,7 +839,6 @@ Note: File processing failed, but file information is available.
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="lg:col-span-1">
             <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
               <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
