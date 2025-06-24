@@ -1,4 +1,3 @@
-
 import { CourseMaterial } from './CourseTypes';
 import { ChatGPTService } from '../ChatGPTService';
 
@@ -119,7 +118,7 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define regex patterns with explicit RegExp typing
+    // Define regex patterns
     const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
@@ -127,37 +126,36 @@ Respond with structured educational content based solely on the provided documen
       /\n\s*[A-Z][^.]*:\s*\n/g               // Headings ending with colon
     ];
     
-    let chunks: string[] = [content];
+    let currentChunks: string[] = [content];
     
     // Process each pattern individually
     for (const pattern of patterns) {
-      const newChunks: string[] = [];
+      const processedChunks: string[] = [];
       
-      // Process each chunk
-      for (const chunk of chunks) {
-        // Split the chunk by the pattern and explicitly type the result
-        const parts: string[] = chunk.split(pattern);
+      // Process each current chunk with the current pattern
+      for (const chunk of currentChunks) {
+        const splitParts: string[] = chunk.split(pattern);
         
-        // Add valid parts to newChunks
-        parts.forEach(part => {
-          if (part && typeof part === 'string' && part.trim().length > 100) {
-            newChunks.push(part);
-          }
-        });
+        // Filter and add valid parts
+        const validParts = splitParts.filter((part: string) => 
+          part && part.trim().length > 100
+        );
+        
+        processedChunks.push(...validParts);
       }
       
       // Only use the new chunks if they provide better segmentation
-      if (newChunks.length > chunks.length && newChunks.length <= 5) {
-        chunks = newChunks;
+      if (processedChunks.length > currentChunks.length && processedChunks.length <= 5) {
+        currentChunks = processedChunks;
       }
     }
     
     // If no good natural breaks found, split by length
-    if (chunks.length === 1 && chunks[0].length > 2000) {
-      chunks = this.splitContentIntoChunks(content, 1500);
+    if (currentChunks.length === 1 && currentChunks[0].length > 2000) {
+      currentChunks = this.splitContentIntoChunks(content, 1500);
     }
     
-    return chunks;
+    return currentChunks;
   }
 
   private static extractRealSectionTitle(section: string, index: number, sourceName: string): string {
