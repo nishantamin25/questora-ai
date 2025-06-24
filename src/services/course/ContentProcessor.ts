@@ -119,7 +119,7 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define regex patterns
+    // Define regex patterns with explicit typing
     const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
@@ -137,13 +137,15 @@ Respond with structured educational content based solely on the provided documen
       // Process each current chunk with the current pattern
       for (let j = 0; j < currentChunks.length; j++) {
         const chunk = currentChunks[j];
-        const splitParts: string[] = chunk.split(pattern);
-        
-        // Filter and add valid parts
-        for (let k = 0; k < splitParts.length; k++) {
-          const part = splitParts[k];
-          if (part && typeof part === 'string' && part.trim().length > 100) {
-            newChunks.push(part);
+        if (typeof chunk === 'string') {
+          const splitParts = chunk.split(pattern);
+          
+          // Filter and add valid parts
+          for (let k = 0; k < splitParts.length; k++) {
+            const part = splitParts[k];
+            if (part && typeof part === 'string' && part.trim().length > 100) {
+              newChunks.push(part);
+            }
           }
         }
       }
@@ -155,7 +157,7 @@ Respond with structured educational content based solely on the provided documen
     }
     
     // If no good natural breaks found, split by length
-    if (currentChunks.length === 1 && currentChunks[0].length > 2000) {
+    if (currentChunks.length === 1 && currentChunks[0] && currentChunks[0].length > 2000) {
       currentChunks = this.splitContentIntoChunks(content, 1500);
     }
     
