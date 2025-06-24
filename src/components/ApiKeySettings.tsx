@@ -9,7 +9,7 @@ import { toast } from '@/hooks/use-toast';
 
 const ApiKeySettings = () => {
   const [showKeyDialog, setShowKeyDialog] = useState(false);
-  const hasApiKey = !!ChatGPTService.getApiKey();
+  const hasApiKey = ChatGPTService.hasApiKey();
 
   const handleKeySet = (apiKey: string) => {
     ChatGPTService.setApiKey(apiKey);

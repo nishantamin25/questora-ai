@@ -561,6 +561,18 @@ Note: File processing failed, but file information is available.
   // Ensure we have valid data before rendering
   const validQuestionnaires = filteredQuestionnaires.filter(q => q && typeof q === 'object');
 
+  // Define accessible questionnaires for guests (show only if course is completed)
+  const accessibleQuestionnaires = user.role === 'admin' 
+    ? validQuestionnaires 
+    : validQuestionnaires.filter(q => {
+        // If questionnaire has a linked course, check if it's completed
+        if (q.course && q.course.id) {
+          return completedCourses.has(q.course.id);
+        }
+        // If no linked course, it's accessible
+        return true;
+      });
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
       {/* Confirmation Dialog */}

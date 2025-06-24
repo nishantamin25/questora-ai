@@ -1,3 +1,4 @@
+
 import { LanguageService } from './LanguageService';
 
 class ChatGPTServiceClass {
@@ -210,6 +211,22 @@ class ChatGPTServiceClass {
       console.error('Error generating content:', error);
       throw new Error('Failed to generate content with ChatGPT');
     }
+  }
+
+  // Public method to get API key status
+  public hasApiKey(): boolean {
+    const apiKey = localStorage.getItem('openai_api_key');
+    return !!apiKey;
+  }
+
+  // Public method to set API key
+  public setApiKey(apiKey: string): void {
+    localStorage.setItem('openai_api_key', apiKey);
+  }
+
+  // Public method to clear API key
+  public clearApiKey(): void {
+    localStorage.removeItem('openai_api_key');
   }
 
   private getApiKey(): string {

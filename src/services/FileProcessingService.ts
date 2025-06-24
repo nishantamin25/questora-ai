@@ -75,6 +75,21 @@ class FileProcessingServiceClass {
     };
   }
 
+  private determineFileType(file: File): 'text' | 'video' | 'image' | 'other' {
+    const fileName = file.name.toLowerCase();
+    const fileType = file.type.toLowerCase();
+    
+    if (fileType.startsWith('image/')) return 'image';
+    if (fileType.startsWith('video/')) return 'video';
+    if (fileType.startsWith('audio/')) return 'other';
+    if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) return 'text';
+    if (fileType.startsWith('text/') || fileName.endsWith('.txt') || fileName.endsWith('.md')) return 'text';
+    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return 'text';
+    if (fileName.endsWith('.csv')) return 'text';
+    
+    return 'other';
+  }
+
   private async chatGPTFallback(file: File, fileType: string): Promise<string> {
     try {
       // For images, convert to base64 and send to ChatGPT for analysis
@@ -217,6 +232,32 @@ Students should be prepared to demonstrate their understanding through various q
     }
     
     throw new Error('All PDF extraction strategies failed');
+  }
+
+  private extractPdfTextBlocks(pdfText: string): string[] {
+    const textBlocks: string[] = [];
+    const textRegex = /BT\s*(.*?)\s*ET/gs;
+    let match;
+    
+    while ((match = textRegex.exec(pdfText)) !== null) {
+      const blockContent = match[1];
+      // Extract text from Tj commands
+      const tjRegex = /\((.*?)\)\s*Tj/g;
+      let tjMatch;
+      
+      while ((tjMatch = tjRegex.exec(blockContent)) !== null) {
+        const text = tjMatch[1]
+          .replace(/\\[rn]/g, ' ')
+          .replace(/\\/g, '')
+          .trim();
+        
+        if (text.length > 3 && /[a-zA-Z]/.test(text)) {
+          textBlocks.push(text);
+        }
+      }
+    }
+    
+    return textBlocks;
   }
 
   private extractPdfStreams(pdfText: string): string[] {
