@@ -1,12 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
 import { LanguageService } from '@/services/LanguageService';
-import { QuestionnaireService } from '@/services/QuestionnaireService';
-import { CourseService } from '@/services/CourseService';
-import { AuthService } from '@/services/AuthService';
 import CourseDisplay from './CourseDisplay';
 import QuestionnaireHeader from './QuestionnaireHeader';
 import QuestionsSection from './QuestionsSection';
@@ -33,8 +29,6 @@ interface Questionnaire {
   setNumber?: number;
   totalSets?: number;
   courseContent?: any;
-  courseId?: string;
-  requiresCourseCompletion?: boolean;
 }
 
 interface QuestionnaireDisplayProps {
@@ -52,8 +46,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsVisible, setQuestionsVisible] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
-  const [courseAccessBlocked, setCourseAccessBlocked] = useState(false);
-  const [course, setCourse] = useState<any>(null);
   
   // SIMPLIFIED STATE: Only what we need for display
   const [displayContent, setDisplayContent] = useState({
@@ -74,39 +66,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   
   const currentLanguageRef = useRef(LanguageService.getCurrentLanguage());
   const translationControllerRef = useRef<AbortController | null>(null);
-  
-  const currentUser = AuthService.getCurrentUser();
-
-  // Check course completion and access
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!isAdmin && questionnaire.requiresCourseCompletion && questionnaire.courseId) {
-        // Load the course
-        const courseData = CourseService.getCourseById(questionnaire.courseId);
-        setCourse(courseData);
-        
-        // Check if course is completed
-        const accessCheck = QuestionnaireService.canAccessQuestionnaire(questionnaire.id, currentUser?.role || 'guest');
-        
-        if (!accessCheck.canAccess) {
-          setCourseAccessBlocked(true);
-          setQuestionsVisible(false);
-          
-          if (accessCheck.reason) {
-            toast({
-              title: "Course Required",
-              description: accessCheck.reason,
-              variant: "default"
-            });
-          }
-        } else {
-          setCourseAccessBlocked(false);
-        }
-      }
-    };
-
-    checkAccess();
-  }, [questionnaire, isAdmin, currentUser]);
 
   // ATOMIC TRANSLATION FUNCTION - preserves content during translation
   const translateContent = useCallback(async (targetLanguage: string) => {
@@ -374,17 +333,9 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   };
 
   const handleCourseComplete = (courseId: string) => {
-    console.log('🎉 Course completed:', courseId);
-    
-    // Mark course as completed
-    CourseService.markCourseCompleted(courseId);
-    
-    // Remove access block
-    setCourseAccessBlocked(false);
-    
     toast({
-      title: "🎉 Course Completed!",
-      description: "Excellent work! You can now access the assessment test.",
+      title: "Course Completed!",
+      description: "You can now access the questionnaire.",
     });
   };
 
@@ -398,72 +349,14 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const renderQuestions = isEditing ? editedQuestions : displayContent.questions;
   const renderCourseContent = displayContent.courseContent;
 
-  // Determine what to show based on course completion requirement  
-  const shouldShowCourse = !isAdmin && questionnaire.requiresCourseCompletion && questionnaire.courseId && course;
-  const shouldBlockQuestions = !isAdmin && courseAccessBlocked;
-
-  // Course access blocking UI
-  const renderCourseRequirement = () => {
-    if (!shouldShowCourse) return null;
-
-    return (
-      <div className="border-b border-slate-200">
-        <div className="p-6 bg-blue-50 border-l-4 border-blue-400">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">
-            📚 Course Required
-          </h3>
-          <p className="text-blue-700 mb-4">
-            You must complete the course below before you can access the test questions.
-          </p>
-          {courseAccessBlocked && (
-            <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3 mb-4">
-              <p className="text-yellow-800 font-medium">
-                ⚠️ Test questions are locked until course completion
-              </p>
-            </div>
-          )}
-        </div>
-        
-        <CourseDisplay 
-          course={convertCourseContent(course)}
-          onCourseComplete={handleCourseComplete}
-        />
-      </div>
-    );
-  };
-
-  // Test access denied UI
-  const renderAccessDenied = () => {
-    if (!shouldBlockQuestions) return null;
-
-    return (
-      <CardContent>
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <div className="text-6xl mb-4">🔒</div>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
-            Test Locked
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Complete the course above to unlock the test questions.
-          </p>
-          <div className="bg-blue-100 border border-blue-200 rounded-lg p-4 mx-auto max-w-md">
-            <p className="text-blue-800 text-sm">
-              💡 <strong>How to unlock:</strong> Read through all course materials and click "Complete Course" when finished.
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    );
-  };
-
+  // Debug logging
   console.log(`🎯 QuestionnaireDisplay render:`, {
     questionnaireId: questionnaire.id,
-    isAdmin,
-    shouldShowCourse,
-    shouldBlockQuestions,
-    courseAccessBlocked,
-    hasCourse: !!course,
-    questionsCount: renderQuestions.length
+    language: currentLanguageRef.current,
+    isTranslating: displayContent.isTranslating,
+    questionsCount: renderQuestions.length,
+    hasQuestions: renderQuestions.length > 0,
+    isEditing
   });
 
   return (
@@ -489,30 +382,33 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         )}
       </CardHeader>
 
-      {/* Show course requirement section */}
-      {renderCourseRequirement()}
-
-      {/* Show questions or access denied */}
-      {shouldBlockQuestions ? renderAccessDenied() : (
-        <CardContent>
-          <QuestionsSection
-            questions={renderQuestions}
-            isEditing={isEditing}
-            isAdmin={isAdmin}
-            isActive={questionnaire.isActive || false}
-            questionsVisible={questionsVisible}
-            responses={responses}
-            isSubmitting={isSubmitting}
-            onQuestionsVisibleChange={setQuestionsVisible}
-            onResponseChange={handleResponseChange}
-            onQuestionTextEdit={handleQuestionTextEdit}
-            onOptionEdit={handleOptionEdit}
-            onAddOption={handleAddOption}
-            onRemoveOption={handleRemoveOption}
-            onSubmitResponses={handleSubmitResponses}
+      {renderCourseContent && (
+        <div className="border-b border-slate-200">
+          <CourseDisplay 
+            course={convertCourseContent(renderCourseContent)}
+            onCourseComplete={handleCourseComplete}
           />
-        </CardContent>
+        </div>
       )}
+
+      <CardContent>
+        <QuestionsSection
+          questions={renderQuestions}
+          isEditing={isEditing}
+          isAdmin={isAdmin}
+          isActive={questionnaire.isActive || false}
+          questionsVisible={questionsVisible}
+          responses={responses}
+          isSubmitting={isSubmitting}
+          onQuestionsVisibleChange={setQuestionsVisible}
+          onResponseChange={handleResponseChange}
+          onQuestionTextEdit={handleQuestionTextEdit}
+          onOptionEdit={handleOptionEdit}
+          onAddOption={handleAddOption}
+          onRemoveOption={handleRemoveOption}
+          onSubmitResponses={handleSubmitResponses}
+        />
+      </CardContent>
     </Card>
   );
 };
