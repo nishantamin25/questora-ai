@@ -129,7 +129,7 @@ class LanguageServiceClass {
         
         'apiKey.setup': 'API की सेटअप करा',
         'apiKey.update': 'API की अपडेट करा',
-        'apiKey.clear': 'की क्लिअर करा',
+        'apiKey.clear': 'की क्लियर करा',
         'apiKey.success': 'OpenAI API की यशस्वीरित्या सेव्ह झाली आहे',
         'apiKey.cleared': 'OpenAI API की काढून टाकली आहे',
         
@@ -153,7 +153,7 @@ class LanguageServiceClass {
         
         'question.selectAnswer': 'उत्तरे निवडा',
         'question.submitResponse': 'उत्तरे सबमिट करा',
-        'question.answerAll': 'प्रत्येक प्रश्नावलीच्या तळाशी सबमिट बटण सक्षम करण्यासाठी सर्व प्रश्नांची उत्तरे द्या.',
+        'question.answerAll': 'प्रत्येक प्रश्नावलीच्या तळाशी सबमिट बटन सक्षम करण्यासाठी सर्व प्रश्नांची उत्तरे द्या.',
       }
     },
     kn: {
@@ -245,7 +245,7 @@ class LanguageServiceClass {
         
         'question.selectAnswer': 'જવાબો પસંદ કરો',
         'question.submitResponse': 'જવાબો સબમિટ કરો',
-        'question.answerAll': 'દરેક પ્રશ્નાવલીના તળિયે સબમિટ બટન સક્રિય કરવા માટે બધા પ્રશ્નોના જવાબ આપો.',
+        'question.answerAll': 'દરેક પ્રશ્નાવલીના તળિયે સબમિટ બટન સક્રિય કરवા માટે બધા પ્રશ્નોના જવાબ આપો.',
       }
     },
     bn: {
@@ -295,7 +295,8 @@ class LanguageServiceClass {
       }
     }
   };
-
+  private languageChangeListeners: Array<(newLanguage: string) => void> = [];
+  
   constructor() {
     // Load saved language from localStorage
     const savedLanguage = localStorage.getItem('selectedLanguage');
@@ -309,10 +310,42 @@ class LanguageServiceClass {
   }
 
   setLanguage(languageCode: string): void {
-    if (this.languages[languageCode]) {
+    if (this.languages[languageCode] && this.currentLanguage !== languageCode) {
+      const oldLanguage = this.currentLanguage;
       this.currentLanguage = languageCode;
       localStorage.setItem('selectedLanguage', languageCode);
+      
+      console.log(`Language changed from ${oldLanguage} to ${languageCode}`);
+      
+      // Notify all listeners about the language change
+      this.languageChangeListeners.forEach(listener => {
+        try {
+          listener(languageCode);
+        } catch (error) {
+          console.error('Error in language change listener:', error);
+        }
+      });
+      
+      // Dispatch a custom event for language change
+      window.dispatchEvent(new CustomEvent('languageChanged', { 
+        detail: { 
+          oldLanguage, 
+          newLanguage: languageCode 
+        } 
+      }));
     }
+  }
+
+  onLanguageChange(callback: (newLanguage: string) => void): () => void {
+    this.languageChangeListeners.push(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      const index = this.languageChangeListeners.indexOf(callback);
+      if (index > -1) {
+        this.languageChangeListeners.splice(index, 1);
+      }
+    };
   }
 
   getAvailableLanguages(): Array<{ code: string; name: string; nativeName: string }> {
@@ -328,7 +361,6 @@ class LanguageServiceClass {
     return currentLang?.translations[key] || key;
   }
 
-  // Enhanced method to translate content using OpenAI API
   async translateContent(content: string, targetLanguage: string): Promise<string> {
     if (targetLanguage === 'en' || !content || !content.trim()) {
       return content;
@@ -401,7 +433,6 @@ class LanguageServiceClass {
     }
   }
 
-  // Method to translate question objects
   async translateQuestion(question: any, targetLanguage: string): Promise<any> {
     if (targetLanguage === 'en') {
       return question;
@@ -437,7 +468,6 @@ class LanguageServiceClass {
     }
   }
 
-  // Method to translate an array of questions
   async translateQuestions(questions: any[], targetLanguage: string): Promise<any[]> {
     if (targetLanguage === 'en' || !questions || questions.length === 0) {
       return questions;

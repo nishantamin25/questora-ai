@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
@@ -47,63 +46,66 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsVisible, setQuestionsVisible] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
-  const [translatedQuestionnaire, setTranslatedQuestionnaire] = useState<Questionnaire>(questionnaire);
+  const [translatedContent, setTranslatedContent] = useState<{
+    title: string;
+    description: string;
+    questions: Question[];
+    courseContent?: any;
+  }>({
+    title: questionnaire.title,
+    description: questionnaire.description,
+    questions: questionnaire.questions || [],
+    courseContent: questionnaire.courseContent
+  });
+  
+  const [currentTranslationLanguage, setCurrentTranslationLanguage] = useState<string>('en');
   const [isTranslating, setIsTranslating] = useState(false);
 
-  useEffect(() => {
-    if (questionnaire) {
-      setEditedQuestionnaire(questionnaire);
-      setEditedQuestions(questionnaire.questions || []);
-      
-      // Translate questionnaire content when component mounts or language changes
-      translateQuestionnaireContent(questionnaire);
-    }
-  }, [questionnaire]);
-
-  // Monitor language changes and retranslate content
-  useEffect(() => {
-    const currentLanguage = LanguageService.getCurrentLanguage();
-    if (currentLanguage !== 'en' && !isEditing) {
-      translateQuestionnaireContent(questionnaire);
-    } else if (currentLanguage === 'en') {
-      setTranslatedQuestionnaire(questionnaire);
-    }
-  }, []);
-
-  const translateQuestionnaireContent = async (originalQuestionnaire: Questionnaire) => {
-    const currentLanguage = LanguageService.getCurrentLanguage();
-    
-    if (currentLanguage === 'en') {
-      setTranslatedQuestionnaire(originalQuestionnaire);
+  const translateContentToLanguage = useCallback(async (originalQuestionnaire: Questionnaire, targetLanguage: string) => {
+    if (targetLanguage === 'en') {
+      // If switching back to English, use original content
+      setTranslatedContent({
+        title: originalQuestionnaire.title,
+        description: originalQuestionnaire.description,
+        questions: originalQuestionnaire.questions || [],
+        courseContent: originalQuestionnaire.courseContent
+      });
+      setCurrentTranslationLanguage('en');
       return;
     }
 
     setIsTranslating(true);
-    console.log(`Translating questionnaire content to ${currentLanguage}...`);
+    console.log(`Translating questionnaire content to ${targetLanguage}...`);
 
     try {
-      const translatedQuestionnaire = { ...originalQuestionnaire };
+      const newTranslatedContent = {
+        title: originalQuestionnaire.title,
+        description: originalQuestionnaire.description,
+        questions: originalQuestionnaire.questions || [],
+        courseContent: originalQuestionnaire.courseContent
+      };
       
       // Translate title and description
       if (originalQuestionnaire.title) {
-        translatedQuestionnaire.title = await LanguageService.translateContent(
+        newTranslatedContent.title = await LanguageService.translateContent(
           originalQuestionnaire.title, 
-          currentLanguage
+          targetLanguage
         );
       }
       
       if (originalQuestionnaire.description) {
-        translatedQuestionnaire.description = await LanguageService.translateContent(
+        newTranslatedContent.description = await LanguageService.translateContent(
           originalQuestionnaire.description, 
-          currentLanguage
+          targetLanguage
         );
       }
       
-      // Translate questions
+      // Translate questions if they exist
       if (originalQuestionnaire.questions && originalQuestionnaire.questions.length > 0) {
-        translatedQuestionnaire.questions = await LanguageService.translateQuestions(
+        console.log(`Translating ${originalQuestionnaire.questions.length} questions...`);
+        newTranslatedContent.questions = await LanguageService.translateQuestions(
           originalQuestionnaire.questions, 
-          currentLanguage
+          targetLanguage
         );
       }
       
@@ -114,14 +116,14 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         if (courseContent.title) {
           courseContent.title = await LanguageService.translateContent(
             courseContent.title, 
-            currentLanguage
+            targetLanguage
           );
         }
         
         if (courseContent.description) {
           courseContent.description = await LanguageService.translateContent(
             courseContent.description, 
-            currentLanguage
+            targetLanguage
           );
         }
         
@@ -129,25 +131,73 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
           courseContent.modules = await Promise.all(
             courseContent.modules.map(async (module: any) => ({
               ...module,
-              title: module.title ? await LanguageService.translateContent(module.title, currentLanguage) : module.title,
-              content: module.content ? await LanguageService.translateContent(module.content, currentLanguage) : module.content
+              title: module.title ? await LanguageService.translateContent(module.title, targetLanguage) : module.title,
+              content: module.content ? await LanguageService.translateContent(module.content, targetLanguage) : module.content
             }))
           );
         }
         
-        translatedQuestionnaire.courseContent = courseContent;
+        newTranslatedContent.courseContent = courseContent;
       }
       
-      setTranslatedQuestionnaire(translatedQuestionnaire);
-      console.log('Questionnaire translation completed successfully');
+      // Update translated content state
+      setTranslatedContent(newTranslatedContent);
+      setCurrentTranslationLanguage(targetLanguage);
+      
+      console.log(`Translation to ${targetLanguage} completed successfully`);
     } catch (error) {
       console.error('Error translating questionnaire:', error);
-      // Fallback to original content if translation fails
-      setTranslatedQuestionnaire(originalQuestionnaire);
+      
+      // On error, keep existing translated content instead of reverting to original
+      toast({
+        title: "Translation Error",
+        description: "Failed to translate content. Keeping current language version.",
+        variant: "destructive"
+      });
     } finally {
       setIsTranslating(false);
     }
-  };
+  }, []);
+
+  // Initialize with questionnaire data
+  useEffect(() => {
+    if (questionnaire) {
+      setEditedQuestionnaire(questionnaire);
+      setEditedQuestions(questionnaire.questions || []);
+      
+      // Initialize translated content with original data
+      setTranslatedContent({
+        title: questionnaire.title,
+        description: questionnaire.description,
+        questions: questionnaire.questions || [],
+        courseContent: questionnaire.courseContent
+      });
+      
+      // Translate to current language on mount
+      const currentLanguage = LanguageService.getCurrentLanguage();
+      if (currentLanguage !== 'en') {
+        translateContentToLanguage(questionnaire, currentLanguage);
+      } else {
+        setCurrentTranslationLanguage('en');
+      }
+    }
+  }, [questionnaire, translateContentToLanguage]);
+
+  // Listen for language changes using the LanguageService listener
+  useEffect(() => {
+    const unsubscribe = LanguageService.onLanguageChange((newLanguage: string) => {
+      console.log(`QuestionnaireDisplay: Language changed to ${newLanguage}`);
+      
+      // Only translate if we have content and language actually changed
+      if (newLanguage !== currentTranslationLanguage && (questionnaire.questions?.length > 0 || questionnaire.courseContent)) {
+        console.log(`Translating existing content from ${currentTranslationLanguage} to ${newLanguage}...`);
+        translateContentToLanguage(questionnaire, newLanguage);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return unsubscribe;
+  }, [currentTranslationLanguage, questionnaire, translateContentToLanguage]);
 
   const handleEditToggle = () => {
     if (isEditing) {
@@ -263,9 +313,15 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
     });
   };
 
-  // Use translated questionnaire for display, original for editing
-  const displayQuestionnaire = isEditing ? editedQuestionnaire : translatedQuestionnaire;
-  const displayQuestions = isEditing ? editedQuestions : translatedQuestionnaire.questions || [];
+  // Use appropriate content based on editing state
+  const displayQuestionnaire = isEditing ? editedQuestionnaire : {
+    ...questionnaire,
+    title: translatedContent.title,
+    description: translatedContent.description
+  };
+  
+  const displayQuestions = isEditing ? editedQuestions : translatedContent.questions;
+  const displayCourseContent = translatedContent.courseContent;
 
   return (
     <Card className="bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden mb-4">
@@ -285,16 +341,16 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         />
         {isTranslating && (
           <div className="text-sm text-slate-500 italic">
-            Translating content...
+            Translating content to {LanguageService.getCurrentLanguage()}...
           </div>
         )}
       </CardHeader>
 
       {/* Course Content Display */}
-      {displayQuestionnaire.courseContent && (
+      {displayCourseContent && (
         <div className="border-b border-slate-200">
           <CourseDisplay 
-            course={convertCourseContent(displayQuestionnaire.courseContent)}
+            course={convertCourseContent(displayCourseContent)}
             onCourseComplete={handleCourseComplete}
           />
         </div>
