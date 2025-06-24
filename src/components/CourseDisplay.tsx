@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,23 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { GraduationCap, Play, CheckCircle, Clock, FileText, Image, Video, Download, Edit, Save, X } from 'lucide-react';
 import { PDFGenerationService } from '@/services/PDFGenerationService';
 import { CourseService } from '@/services/CourseService';
+import { Course } from '@/services/course/CourseTypes';
 import { toast } from '@/hooks/use-toast';
 
 interface CourseDisplayProps {
-  course: {
-    id: string;
-    name: string;
-    description: string;
-    materials: Array<{
-      type: 'text' | 'image' | 'video';
-      content: string;
-      title: string;
-    }>;
-    estimatedTime: number;
-    pdfUrl?: string;
-  };
+  course: Course;
   onCourseComplete: (courseId: string) => void;
-  onCourseUpdate?: (updatedCourse: any) => void;
+  onCourseUpdate?: (updatedCourse: Course) => void;
   userRole?: 'admin' | 'guest';
 }
 
