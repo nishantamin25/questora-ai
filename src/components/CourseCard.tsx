@@ -39,8 +39,13 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
 
   const handleEdit = () => {
     if (isEditing) {
+      // Save the basic course info changes
       onUpdate(editedCourse);
       setIsEditing(false);
+      toast({
+        title: "Course Updated",
+        description: "Course information has been updated successfully.",
+      });
     } else {
       setIsEditing(true);
       setEditedCourse({ ...course });
@@ -60,6 +65,11 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
       setShowDeleteConfirm(true);
       setTimeout(() => setShowDeleteConfirm(false), 3000);
     }
+  };
+
+  const handleCourseUpdate = (updatedCourse: any) => {
+    // Update the entire course including materials
+    onUpdate(updatedCourse);
   };
 
   const handleDownloadPDF = () => {
@@ -145,14 +155,6 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
-                      onClick={() => onUpdate(course)}
-                      variant="outline"
-                      size="sm"
-                      className="border-slate-300 hover:border-green-300"
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                    <Button
                       onClick={handleDelete}
                       variant="outline"
                       size="sm"
@@ -183,7 +185,9 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
         isOpen={showCoursePopup}
         onClose={() => setShowCoursePopup(false)}
         onComplete={onComplete}
+        onUpdate={handleCourseUpdate}
         isCompleted={isCompleted}
+        isAdmin={isAdmin}
       />
     </>
   );
