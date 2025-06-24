@@ -1,3 +1,4 @@
+
 import { FileProcessingService } from './FileProcessingService';
 import { PDFGenerationService } from './PDFGenerationService';
 import { ChatGPTService } from './ChatGPTService';
@@ -237,8 +238,8 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Try to identify natural section breaks
-    const sectionBreaks = [
+    // Define regex patterns with explicit typing to avoid TypeScript inference issues
+    const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
       /\n\s*[A-Z][A-Z\s]+\n/g,               // ALL CAPS headings
@@ -247,15 +248,17 @@ Respond with structured educational content based solely on the provided documen
     
     let chunks: string[] = [content];
     
-    for (const breakPattern of sectionBreaks) {
+    // Process each pattern individually to avoid type issues
+    for (let i = 0; i < patterns.length; i++) {
+      const pattern = patterns[i];
       const newChunks: string[] = [];
       
-      // Process each chunk individually to avoid type inference issues
-      chunks.forEach(chunk => {
-        const parts = chunk.split(breakPattern);
+      for (let j = 0; j < chunks.length; j++) {
+        const chunk = chunks[j];
+        const parts = chunk.split(pattern);
         const validParts = parts.filter(part => part && part.trim().length > 100);
         newChunks.push(...validParts);
-      });
+      }
       
       // Only use the new chunks if they provide better segmentation
       if (newChunks.length > chunks.length && newChunks.length <= 5) {
