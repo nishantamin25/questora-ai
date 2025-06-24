@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,10 +8,12 @@ import { Bot, LogOut, Upload, Zap, Paperclip, X, Trophy, MessageSquare, Settings
 import Leaderboard from '@/components/Leaderboard';
 import ResponseManagement from '@/components/ResponseManagement';
 import QuestionnaireDisplay from '@/components/QuestionnaireDisplay';
+import CourseDisplay from '@/components/CourseDisplay';
 import GenerateTestDialog from '@/components/GenerateTestDialog';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import SettingsDialog from '@/components/SettingsDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
+import { CourseService } from '@/services/CourseService';
 import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 import { FileProcessingService } from '@/services/FileProcessingService';
 import { LanguageService } from '@/services/LanguageService';
@@ -29,6 +30,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [processedFileContent, setProcessedFileContent] = useState<string>('');
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
   const [unsavedQuestionnaires, setUnsavedQuestionnaires] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [completedCourses, setCompletedCourses] = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showResponses, setShowResponses] = useState(false);
@@ -43,6 +46,8 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   useEffect(() => {
     loadQuestionnaires();
+    loadCourses();
+    loadCompletedCourses();
     // Clean up old guest assignments periodically
     GuestAssignmentService.cleanupOldAssignments();
   }, []);
@@ -72,6 +77,39 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       console.error('Error loading questionnaires:', error);
       setQuestionnaires([]);
     }
+  };
+
+  const loadCourses = () => {
+    try {
+      const allCourses = CourseService.getAllCourses();
+      console.log('Courses loaded:', allCourses);
+      setCourses(Array.isArray(allCourses) ? allCourses : []);
+    } catch (error) {
+      console.error('Error loading courses:', error);
+      setCourses([]);
+    }
+  };
+
+  const loadCompletedCourses = () => {
+    try {
+      const completed = localStorage.getItem(`completed_courses_${user.username}`);
+      if (completed) {
+        setCompletedCourses(new Set(JSON.parse(completed)));
+      }
+    } catch (error) {
+      console.error('Error loading completed courses:', error);
+    }
+  };
+
+  const handleCourseComplete = (courseId: string) => {
+    const newCompleted = new Set(completedCourses);
+    newCompleted.add(courseId);
+    setCompletedCourses(newCompleted);
+    
+    // Save to localStorage
+    localStorage.setItem(`completed_courses_${user.username}`, JSON.stringify(Array.from(newCompleted)));
+    
+    console.log(`Course ${courseId} completed by ${user.username}`, newCompleted);
   };
 
   const getSupportedFileTypes = () => {
@@ -229,7 +267,7 @@ Note: File processing failed, but file information is available.
       
       toast({
         title: "Files Processed",
-        description: `${files.length} file(s) processed successfully. Content is ready for course generation.`,
+        description: `${files.length} file(s) processed successfully. Content is ready for course and test generation.`,
       });
     } catch (error) {
       console.error('Error during batch file processing:', error);
@@ -321,41 +359,74 @@ Note: File processing failed, but file information is available.
         contentPreview: fileContentToUse.substring(0, 200) + '...'
       });
       
-      // Generate multiple sets if requested
+      // Generate course first if requested and file content is available
+      let generatedCourse = null;
+      if (includeCourse && (fileContentToUse.length > 50 || uploadedFiles.length > 0)) {
+        console.log('Generating course...');
+        generatedCourse = await CourseService.generateCourse(
+          prompt,
+          uploadedFiles,
+          fileContentToUse
+        );
+        CourseService.saveCourse(generatedCourse);
+        loadCourses(); // Reload courses to show the new one
+        console.log('Course generated and saved:', generatedCourse.id);
+      }
+      
+      // Generate multiple questionnaire sets if requested
       const generatedQuestionnaires = [];
       
-      for (let setIndex = 1; setIndex <= numberOfSets; setIndex++) {
-        console.log(`Generating set ${setIndex} of ${numberOfSets}...`);
-        
-        const questionnaire = await QuestionnaireService.generateQuestionnaire(
-          prompt,
-          { testName, difficulty, numberOfQuestions, timeframe, includeCourse, includeQuestionnaire },
-          fileContentToUse, // Pass the processed content directly
-          setIndex,
-          numberOfSets
-        );
-        
-        // Add set information to the questionnaire
-        questionnaire.setNumber = setIndex;
-        questionnaire.totalSets = numberOfSets;
-        
-        generatedQuestionnaires.push(questionnaire);
-        console.log(`Generated set ${setIndex} successfully:`, {
-          id: questionnaire.id,
-          questionsCount: questionnaire.questions?.length || 0
-        });
+      if (includeQuestionnaire) {
+        for (let setIndex = 1; setIndex <= numberOfSets; setIndex++) {
+          console.log(`Generating questionnaire set ${setIndex} of ${numberOfSets}...`);
+          
+          const questionnaire = await QuestionnaireService.generateQuestionnaire(
+            prompt,
+            { testName, difficulty, numberOfQuestions, timeframe, includeCourse: false, includeQuestionnaire: true },
+            fileContentToUse, // Pass the processed content directly
+            setIndex,
+            numberOfSets
+          );
+          
+          // Add set information to the questionnaire
+          questionnaire.setNumber = setIndex;
+          questionnaire.totalSets = numberOfSets;
+          
+          // Link course to questionnaire if course was generated
+          if (generatedCourse) {
+            questionnaire.course = generatedCourse;
+          }
+          
+          generatedQuestionnaires.push(questionnaire);
+          console.log(`Generated questionnaire set ${setIndex} successfully:`, {
+            id: questionnaire.id,
+            questionsCount: questionnaire.questions?.length || 0
+          });
+        }
       }
       
       // Store all generated questionnaires as unsaved
-      setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
+      if (generatedQuestionnaires.length > 0) {
+        setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
+      }
+      
       setPrompt('');
       setUploadedFiles([]);
       setProcessedFileContent('');
       
       // Success message
-      const successMessage = uploadedFiles.length > 0 
-        ? `Generated ${numberOfSets} questionnaire set(s) with file content analysis from ${uploadedFiles.length} file(s)`
-        : `Generated ${numberOfSets} questionnaire set(s) successfully`;
+      let successMessage = '';
+      if (generatedCourse && generatedQuestionnaires.length > 0) {
+        successMessage = `Generated course and ${generatedQuestionnaires.length} questionnaire set(s) with file content analysis`;
+      } else if (generatedCourse) {
+        successMessage = 'Generated course with file content analysis';
+      } else if (generatedQuestionnaires.length > 0) {
+        successMessage = `Generated ${generatedQuestionnaires.length} questionnaire set(s)`;
+      }
+      
+      if (uploadedFiles.length > 0) {
+        successMessage += ` from ${uploadedFiles.length} file(s)`;
+      }
         
       toast({
         title: "Success",
@@ -363,7 +434,8 @@ Note: File processing failed, but file information is available.
       });
       
       console.log('Generation completed successfully:', {
-        generatedCount: generatedQuestionnaires.length,
+        courseGenerated: !!generatedCourse,
+        questionnaireCount: generatedQuestionnaires.length,
         withFileContent: !!fileContentToUse
       });
     } catch (error) {
@@ -697,9 +769,38 @@ Note: File processing failed, but file information is available.
               </Card>
             )}
 
+            {/* Courses for Guests */}
+            {user.role === 'guest' && courses.length > 0 && (
+              <div className="space-y-4 mb-6">
+                {courses.map((course) => (
+                  <CourseDisplay
+                    key={course.id}
+                    course={course}
+                    onCourseComplete={handleCourseComplete}
+                    userRole={user.role}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Courses for Admin */}
+            {user.role === 'admin' && courses.length > 0 && (
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold text-slate-900 font-poppins">Generated Courses</h3>
+                {courses.map((course) => (
+                  <CourseDisplay
+                    key={course.id}
+                    course={course}
+                    onCourseComplete={handleCourseComplete}
+                    userRole={user.role}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Questionnaires */}
             <div className="space-y-4">
-              {validQuestionnaires.map((questionnaire, index) => {
+              {accessibleQuestionnaires.map((questionnaire, index) => {
                 // Ensure we have a valid questionnaire object with required properties
                 if (!questionnaire || typeof questionnaire !== 'object') {
                   console.warn('Invalid questionnaire at index', index, questionnaire);
@@ -719,16 +820,32 @@ Note: File processing failed, but file information is available.
                 );
               })}
               
-              {validQuestionnaires.length === 0 && (
+              {/* Show locked questionnaires for guests */}
+              {user.role === 'guest' && validQuestionnaires.length > accessibleQuestionnaires.length && (
+                <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
+                  <CardContent className="p-6">
+                    <div className="text-center">
+                      <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
+                        <h4 className="font-medium text-orange-800 mb-2">🔒 Additional Tests Available</h4>
+                        <p className="text-orange-700 text-sm">
+                          Complete the course above to unlock additional tests.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {validQuestionnaires.length === 0 && courses.length === 0 && (
                 <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                   <CardContent className="p-8 text-center">
                     <Bot className="h-12 w-12 text-violet-400 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-slate-900 mb-2 font-poppins">
-                      {user.role === 'admin' ? 'No questionnaires yet' : LanguageService.translate('dashboard.noTests')}
+                      {user.role === 'admin' ? 'No content yet' : LanguageService.translate('dashboard.noTests')}
                     </h3>
                     <p className="text-slate-600 font-inter">
                       {user.role === 'admin' 
-                        ? "Enter a prompt above to generate your first questionnaire"
+                        ? "Upload files and enter a prompt above to generate your first course and questionnaire"
                         : LanguageService.translate('dashboard.noTestsDesc')
                       }
                     </p>
@@ -754,8 +871,8 @@ Note: File processing failed, but file information is available.
                       <p className="text-blue-600 font-inter">Click the paperclip icon to upload documents, images, or videos for content analysis</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-                      <p className="font-semibold text-green-700 font-poppins">Save tests</p>
-                      <p className="text-green-600 font-inter">After generating, click the save button to name your test and set difficulty</p>
+                      <p className="font-semibold text-green-700 font-poppins">Generate courses</p>
+                      <p className="text-green-600 font-inter">Enable course generation to create structured learning materials with PDF download</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg">
                       <p className="font-semibold text-purple-700 font-poppins">View responses</p>
@@ -765,8 +882,8 @@ Note: File processing failed, but file information is available.
                 ) : (
                   <>
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
-                      <p className="font-semibold text-blue-700 font-poppins">{LanguageService.translate('question.selectAnswer')}</p>
-                      <p className="text-blue-600 font-inter">Click on any option to select it. Selected options will be highlighted in blue.</p>
+                      <p className="font-semibold text-blue-700 font-poppins">Complete courses first</p>
+                      <p className="text-blue-600 font-inter">You must complete the course before you can access the test</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
                       <p className="font-semibold text-green-700 font-poppins">{LanguageService.translate('question.submitResponse')}</p>

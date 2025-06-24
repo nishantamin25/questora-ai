@@ -1,4 +1,5 @@
 import { FileProcessingService } from './FileProcessingService';
+import { PDFGenerationService } from './PDFGenerationService';
 
 interface CourseMaterial {
   type: 'text' | 'image' | 'video';
@@ -14,6 +15,7 @@ interface Course {
   estimatedTime: number;
   createdAt: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  pdfUrl?: string;
 }
 
 class CourseServiceClass {
@@ -58,8 +60,8 @@ class CourseServiceClass {
                 content: processedFile.content
               });
             } else {
-              // Text-based content - split into multiple materials
-              const textChunks = this.splitContentIntoChunks(processedFile.content, 800);
+              // Text-based content - split into multiple materials for better course structure
+              const textChunks = this.splitContentIntoChunks(processedFile.content, 1200);
               textChunks.forEach((chunk, index) => {
                 materials.push({
                   type: 'text',
@@ -82,7 +84,7 @@ class CourseServiceClass {
       // Use provided file content string if no files but content exists
       else if (fileContent && fileContent.trim().length > 50) {
         console.log('Using provided file content for course generation');
-        const textChunks = this.splitContentIntoChunks(fileContent, 800);
+        const textChunks = this.splitContentIntoChunks(fileContent, 1200);
         textChunks.forEach((chunk, index) => {
           materials.push({
             type: 'text',
@@ -148,11 +150,22 @@ You are now well-prepared to take the assessment test and demonstrate your under
         difficulty: 'medium'
       };
 
+      // Generate PDF for the course
+      try {
+        const pdfUrl = PDFGenerationService.generateCoursePDF(course);
+        course.pdfUrl = pdfUrl;
+        console.log('Course PDF generated successfully');
+      } catch (error) {
+        console.error('Error generating course PDF:', error);
+        // Continue without PDF if generation fails
+      }
+
       console.log('Generated course successfully:', {
         id: course.id,
         materialsCount: course.materials.length,
         estimatedTime: course.estimatedTime,
-        fileCount: files.length
+        fileCount: files.length,
+        hasPDF: !!course.pdfUrl
       });
 
       return course;

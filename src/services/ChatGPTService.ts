@@ -1,70 +1,144 @@
-interface ChatGPTQuestion {
-  question: string;
-  options: string[];
-  correctAnswer: number;
-  explanation?: string;
-}
-
-interface ChatGPTResponse {
-  questions: ChatGPTQuestion[];
-}
+import { LanguageService } from './LanguageService';
 
 class ChatGPTServiceClass {
-  private apiKey: string = '';
-
-  setApiKey(apiKey: string) {
-    this.apiKey = apiKey;
-    localStorage.setItem('chatgpt_api_key', apiKey);
-    console.log('OpenAI API key updated');
-  }
-
-  getApiKey(): string {
-    if (!this.apiKey) {
-      this.apiKey = localStorage.getItem('chatgpt_api_key') || '';
-    }
-    return this.apiKey;
-  }
-
-  clearApiKey() {
-    this.apiKey = '';
-    localStorage.removeItem('chatgpt_api_key');
-    console.log('OpenAI API key cleared');
-  }
+  private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
   async generateQuestions(
-    prompt: string, 
-    numberOfQuestions: number, 
+    prompt: string,
+    numberOfQuestions: number,
     difficulty: 'easy' | 'medium' | 'hard',
-    fileContent?: string,
-    setNumber?: number,
-    totalSets?: number
-  ): Promise<ChatGPTQuestion[]> {
+    fileContent: string = '',
+    setNumber: number = 1,
+    totalSets: number = 1
+  ): Promise<any[]> {
     const apiKey = this.getApiKey();
-    
-    console.log('ChatGPT generation started:', {
-      prompt,
-      numberOfQuestions,
-      difficulty,
-      hasFileContent: !!fileContent,
-      fileContentLength: fileContent?.length || 0,
-      hasApiKey: !!apiKey,
-      setNumber,
-      totalSets
-    });
+    const language = LanguageService.getCurrentLanguage();
 
-    if (!apiKey) {
-      throw new Error('OpenAI API key is required');
+    let fullPrompt = `Generate ${numberOfQuestions} ${difficulty} difficulty multiple-choice questions about: ${prompt}.`;
+
+    if (fileContent) {
+      fullPrompt += ` The questions should be based on the following content: ${fileContent}.`;
     }
 
-    const systemPrompt = this.buildSystemPrompt(difficulty, !!fileContent);
-    const userPrompt = this.buildUserPrompt(prompt, numberOfQuestions, fileContent, setNumber, totalSets);
+    if (totalSets > 1) {
+      fullPrompt += ` This is set ${setNumber} of ${totalSets}, so ensure the questions are unique and do not overlap with other sets.`;
+    }
 
-    console.log('System prompt length:', systemPrompt.length);
-    console.log('User prompt length:', userPrompt.length);
+    fullPrompt += ` Each question should have 4 options and indicate the correct answer (0, 1, 2, or 3). Also, include a brief explanation for each answer. The response should be a JSON array of question objects.`;
+
+    if (language !== 'en') {
+      fullPrompt += ` Translate the questions and explanations to ${language}.`;
+    }
 
     try {
-      console.log('Making request to OpenAI API...');
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(this.OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a quiz question generator. Generate multiple-choice questions with 4 options, a correct answer, and an explanation.'
+            },
+            {
+              role: 'user',
+              content: fullPrompt
+            }
+          ],
+          max_tokens: 2000,
+          temperature: 0.7,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!response.ok) {
+        console.error('OpenAI API Error:', response.status, response.statusText);
+        const errorData = await response.json();
+        console.error('OpenAI API Error Details:', errorData);
+        throw new Error(`OpenAI API request failed with status ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        console.warn('No content received from OpenAI. Full response:', data);
+        throw new Error('No content received from OpenAI');
+      }
+
+      try {
+        const questions = JSON.parse(content);
+        if (!Array.isArray(questions)) {
+          console.error('Invalid questions format. Expected an array. Received:', questions);
+          throw new Error('Invalid questions format from OpenAI');
+        }
+        return questions;
+      } catch (parseError) {
+        console.error('Error parsing JSON from OpenAI:', parseError);
+        console.error('Content received from OpenAI:', content);
+        throw new Error('Failed to parse questions from OpenAI response');
+      }
+    } catch (error) {
+      console.error('Error generating questions:', error);
+      throw error;
+    }
+  }
+
+  async analyzeImage(base64Image: string, prompt: string): Promise<string> {
+    const apiKey = this.getApiKey();
+    
+    try {
+      const response = await fetch(this.OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: prompt
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64Image}`
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 1500,
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0]?.message?.content || 'Unable to analyze image content.';
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      throw new Error('Failed to analyze image with ChatGPT');
+    }
+  }
+
+  async enhanceTextContent(textContent: string): Promise<string> {
+    const apiKey = this.getApiKey();
+    
+    try {
+      const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -73,221 +147,78 @@ class ChatGPTServiceClass {
         body: JSON.stringify({
           model: 'gpt-4.1-2025-04-14',
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
+            {
+              role: 'system',
+              content: 'You are an educational content enhancer. Extract, clean, and enhance the provided text content to make it suitable for educational course generation and assessment. Focus on creating clear, structured educational material.'
+            },
+            {
+              role: 'user',
+              content: `Please enhance this text content for educational use. Extract key information, organize it logically, and expand on important concepts to create comprehensive educational material:\n\n${textContent}`
+            }
           ],
-          temperature: 0.7,
-          max_tokens: 4000,
-        }),
+          max_tokens: 2000,
+          temperature: 0.5
+        })
       });
 
-      console.log('OpenAI API response status:', response.status);
-
       if (!response.ok) {
-        const error = await response.json();
-        console.error('OpenAI API error details:', error);
-        
-        // Check for specific error types
-        if (error.error?.code === 'insufficient_quota') {
-          throw new Error('Your OpenAI API key has exceeded its quota. Please check your OpenAI account billing and ensure you have sufficient credits.');
-        }
-        
-        if (error.error?.code === 'invalid_api_key') {
-          // Clear the invalid key
-          this.clearApiKey();
-          throw new Error('Invalid OpenAI API key. The key has been cleared. Please check your API key and enter a valid one.');
-        }
-
-        if (error.error?.code === 'model_not_found') {
-          throw new Error('The requested model is not available. Please check your OpenAI account access.');
-        }
-
-        if (error.error?.code === 'rate_limit_exceeded') {
-          throw new Error('Rate limit exceeded. Please wait a moment and try again.');
-        }
-        
-        throw new Error(error.error?.message || 'Failed to generate questions with OpenAI');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('OpenAI API response received, parsing...');
-      
-      const content = data.choices[0]?.message?.content;
-      
-      if (!content) {
-        console.error('No content in ChatGPT response');
-        throw new Error('No content received from OpenAI');
-      }
-
-      console.log('ChatGPT raw response length:', content.length);
-      const parsedQuestions = this.parseQuestions(content);
-      
-      // Ensure we have the exact number of questions requested
-      if (parsedQuestions.length !== numberOfQuestions) {
-        console.warn(`Expected ${numberOfQuestions} questions, got ${parsedQuestions.length}`);
-      }
-      
-      console.log('Successfully parsed questions:', parsedQuestions.length);
-      return parsedQuestions.slice(0, numberOfQuestions);
+      return data.choices[0]?.message?.content || textContent;
     } catch (error) {
-      console.error('ChatGPT API error:', error);
-      throw error;
+      console.error('Error enhancing text content:', error);
+      throw new Error('Failed to enhance text content with ChatGPT');
     }
   }
 
-  private buildSystemPrompt(difficulty: 'easy' | 'medium' | 'hard', hasFileContent: boolean): string {
-    const difficultyInstructions = {
-      easy: 'Create simple, straightforward questions that test basic understanding and recall of the material.',
-      medium: 'Create moderately challenging questions that require some analysis and application of the concepts from the content.',
-      hard: 'Create complex questions that require deep thinking, analysis, and synthesis of the information provided.'
-    };
-
-    let systemPrompt = `You are an expert question generator specializing in creating content-based assessments. Your task is to create high-quality multiple-choice questions based EXCLUSIVELY on the provided content.
-
-CRITICAL REQUIREMENTS:
-- ${difficultyInstructions[difficulty]}
-- Each question must have exactly 4 options (A, B, C, D)
-- Only one option should be correct
-- ALL questions must be directly derived from the provided material
-- DO NOT include external knowledge or assumptions
-- Questions should test comprehension, analysis, and application of the specific content provided
-- Avoid trick questions or overly technical jargon unless present in the source material
-- Make incorrect options plausible but clearly distinguishable from the correct answer
-- Ensure questions cover different sections/topics from the provided content
-- Focus on key concepts, important facts, and main ideas from the material`;
-
-    if (hasFileContent) {
-      systemPrompt += `
-
-FILE CONTENT SPECIFIC INSTRUCTIONS:
-- Base ALL questions exclusively on the uploaded file content
-- Do not reference external sources or general knowledge
-- Focus on the specific information, concepts, and details present in the file
-- Ensure questions test understanding of the material as presented in the document
-- Cover different sections or topics from the file to ensure comprehensive coverage
-- Maintain the context and terminology used in the original document
-- Extract key concepts, procedures, facts, and relationships from the content
-- Generate questions that would help assess someone's understanding of this specific material`;
-    }
-
-    systemPrompt += `
-
-QUESTION QUALITY STANDARDS:
-- Questions should be clear and unambiguous
-- Options should be of similar length and complexity
-- Avoid "all of the above" or "none of the above" options
-- Use active voice when possible
-- Test different cognitive levels (recall, comprehension, application, analysis)
-
-Response format: Return your response as a JSON array with this exact structure:
-[
-  {
-    "question": "Question text here",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctAnswer": 0,
-    "explanation": "Brief explanation of why this is correct based on the provided content"
-  }
-]
-
-IMPORTANT: Return ONLY the JSON array, no additional text or formatting.`;
-
-    return systemPrompt;
-  }
-
-  private buildUserPrompt(prompt: string, numberOfQuestions: number, fileContent?: string, setNumber?: number, totalSets?: number): string {
-    let userPrompt = '';
-
-    if (fileContent && fileContent.trim().length > 50) {
-      // Limit content length to avoid token limits
-      const limitedContent = fileContent.length > 3500 
-        ? fileContent.substring(0, 3500) + '...'
-        : fileContent;
-        
-      userPrompt = `Generate exactly ${numberOfQuestions} multiple-choice questions based EXCLUSIVELY on the following content:
-
-CONTENT TO ANALYZE:
-"${limitedContent}"
-
-REQUIREMENTS:
-1. Generate exactly ${numberOfQuestions} questions - no more, no less
-2. All questions must be derived directly from the content above
-3. Do not use external knowledge or make assumptions
-4. Focus on key concepts, important details, and main ideas from the material
-5. Ensure questions test different aspects of the content
-6. Cover various sections/topics present in the material
-7. Test comprehension, analysis, and application of the specific information provided
-8. Make sure each question has exactly 4 options with only one correct answer`;
-
-      if (prompt && prompt.trim().length > 0) {
-        userPrompt += `\n\nADDITIONAL CONTEXT: "${prompt}"
-Use this context to help focus the questions, but still base all questions on the file content above.`;
-      }
-    } else {
-      userPrompt = `Generate exactly ${numberOfQuestions} multiple-choice questions about: "${prompt}"
-
-REQUIREMENTS:
-1. Generate exactly ${numberOfQuestions} questions - no more, no less
-2. Questions should be directly relevant to the topic: "${prompt}"
-3. Create practical and applicable questions
-4. Test important concepts and knowledge
-5. Ensure questions are varied in scope (don't repeat similar questions)
-6. Each question must have exactly 4 options with only one correct answer
-7. Focus on comprehension, application, and analysis of the topic`;
-    }
-
-    if (setNumber && totalSets && totalSets > 1) {
-      userPrompt += `\n\nSET VARIATION: This is set ${setNumber} of ${totalSets} question sets. Please ensure the questions are unique and don't overlap with other sets while still covering the content comprehensively. Vary the question styles and focus areas for this specific set.`;
-    }
-
-    userPrompt += `\n\nRemember: Return exactly ${numberOfQuestions} questions in the specified JSON format.`;
-
-    return userPrompt;
-  }
-
-  private parseQuestions(content: string): ChatGPTQuestion[] {
+  async generateContent(prompt: string): Promise<string> {
+    const apiKey = this.getApiKey();
+    
     try {
-      console.log('Parsing ChatGPT response...');
-      
-      // Clean the content - remove any markdown formatting or extra text
-      let cleanContent = content.trim();
-      
-      // Find JSON array in the content
-      const jsonStart = cleanContent.indexOf('[');
-      const jsonEnd = cleanContent.lastIndexOf(']') + 1;
-      
-      if (jsonStart === -1 || jsonEnd === 0) {
-        console.error('No JSON array found in response');
-        throw new Error('No JSON array found in response');
-      }
-      
-      cleanContent = cleanContent.substring(jsonStart, jsonEnd);
-      console.log('Extracted JSON content:', cleanContent);
-      
-      const parsed = JSON.parse(cleanContent);
-      
-      if (!Array.isArray(parsed)) {
-        console.error('Response is not an array');
-        throw new Error('Response is not an array');
+      const response = await fetch(this.OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4.1-2025-04-14',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment. Focus on providing substantial content that covers key concepts, practical applications, and learning objectives.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 2000,
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Validate and clean the questions
-      return parsed.map((item, index) => {
-        if (!item.question || !Array.isArray(item.options) || item.options.length !== 4) {
-          console.error(`Invalid question format at index ${index}:`, item);
-          throw new Error(`Invalid question format at index ${index}`);
-        }
-        
-        return {
-          question: item.question,
-          options: item.options,
-          correctAnswer: item.correctAnswer || 0,
-          explanation: item.explanation || ''
-        };
-      });
+      const data = await response.json();
+      return data.choices[0]?.message?.content || 'Unable to generate content.';
     } catch (error) {
-      console.error('Error parsing ChatGPT response:', error);
-      throw new Error('Failed to parse questions from ChatGPT response');
+      console.error('Error generating content:', error);
+      throw new Error('Failed to generate content with ChatGPT');
     }
+  }
+
+  private getApiKey(): string {
+    const apiKey = localStorage.getItem('openai_api_key');
+    if (!apiKey) {
+      console.warn('No OpenAI API key found in localStorage. Please set it in the settings.');
+      return '';
+    }
+    return apiKey;
   }
 }
 
