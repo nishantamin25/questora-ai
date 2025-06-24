@@ -111,6 +111,86 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     console.log(`Course ${courseId} completed by ${user.username}`, newCompleted);
   };
 
+  // Course management functions
+  const handleCourseEditToggle = (courseId: string) => {
+    if (editingCourseId === courseId) {
+      // Save the changes
+      if (editedCourse) {
+        try {
+          CourseService.saveCourse(editedCourse);
+          loadCourses();
+          toast({
+            title: "Success",
+            description: "Course updated successfully!",
+          });
+        } catch (error) {
+          console.error('Error saving course:', error);
+          toast({
+            title: "Error",
+            description: "Failed to save course changes",
+            variant: "destructive"
+          });
+        }
+      }
+      setEditingCourseId(null);
+      setEditedCourse(null);
+    } else {
+      // Start editing
+      const courseToEdit = courses.find(c => c.id === courseId);
+      if (courseToEdit) {
+        setEditingCourseId(courseId);
+        setEditedCourse({ ...courseToEdit });
+      }
+    }
+  };
+
+  const handleCourseCancelEdit = () => {
+    setEditingCourseId(null);
+    setEditedCourse(null);
+  };
+
+  const handleCourseActiveToggle = (checked: boolean) => {
+    if (editedCourse) {
+      setEditedCourse({ ...editedCourse, isActive: checked });
+    }
+  };
+
+  const handleCourseDelete = (courseId: string) => {
+    try {
+      CourseService.deleteCourse(courseId);
+      loadCourses();
+      toast({
+        title: "Success",
+        description: "Course deleted successfully!",
+      });
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete course",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCourseSave = (course: any) => {
+    try {
+      CourseService.saveCourse(course);
+      loadCourses();
+      toast({
+        title: "Success",
+        description: "Course saved successfully!",
+      });
+    } catch (error) {
+      console.error('Error saving course:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save course",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getSupportedFileTypes = () => {
     return {
       text: ['.txt', '.md', '.csv', '.pdf', '.doc', '.docx'],
