@@ -136,7 +136,7 @@ class FileProcessingServiceClass {
     // Remove control characters but keep basic punctuation
     cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
     
-    // Extract text from PDF text operators
+    // Extract text from PDF text operators - fix the regex patterns
     cleaned = cleaned.replace(/\(([^)]*)\)\s*T[jJ]/g, '$1 ');
     cleaned = cleaned.replace(/\(([^)]*)\)\s*Tj/g, '$1 ');
     
@@ -257,8 +257,8 @@ class FileProcessingServiceClass {
         .replace(/\\t/g, '\t')
         .replace(/\\b/g, '\b')
         .replace(/\\f/g, '\f')
-        .replace(/\\(/g, '(')
-        .replace(/\\)/g, ')')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
         .replace(/\\\\/g, '\\');
       
       if (text.trim() && text.length > 0) {
