@@ -3,52 +3,157 @@ class PDFGenerationServiceClass {
   generateCoursePDF(course: any): string {
     const { name, description, materials, estimatedTime } = course;
     
-    // Create structured PDF content
+    // Create clean, structured PDF content
     let pdfContent = `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>${name}</title>
+    <title>${this.escapeHtml(name)}</title>
+    <meta charset="UTF-8">
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-        .title { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 10px; }
-        .subtitle { font-size: 14px; color: #666; }
-        .section { margin-bottom: 25px; }
-        .section-title { font-size: 18px; font-weight: bold; color: #444; margin-bottom: 15px; border-left: 4px solid #0066cc; padding-left: 10px; }
-        .material { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; }
-        .material-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }
-        .material-content { font-size: 14px; line-height: 1.8; text-align: justify; }
-        .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 12px; color: #666; }
-        @media print { body { margin: 20px; } }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 40px; 
+            line-height: 1.8; 
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .header { 
+            text-align: center; 
+            border-bottom: 3px solid #2563eb; 
+            padding-bottom: 30px; 
+            margin-bottom: 40px; 
+        }
+        .title { 
+            font-size: 28px; 
+            font-weight: bold; 
+            color: #1e40af; 
+            margin-bottom: 15px; 
+        }
+        .subtitle { 
+            font-size: 16px; 
+            color: #6b7280; 
+            margin-bottom: 10px;
+        }
+        .section { 
+            margin-bottom: 40px; 
+            page-break-inside: avoid;
+        }
+        .section-title { 
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #1f2937; 
+            margin-bottom: 20px; 
+            border-left: 5px solid #3b82f6; 
+            padding-left: 15px; 
+        }
+        .material { 
+            margin-bottom: 25px; 
+            padding: 20px; 
+            background-color: #f8fafc; 
+            border-radius: 8px; 
+            border: 1px solid #e2e8f0;
+        }
+        .material-title { 
+            font-size: 18px; 
+            font-weight: 600; 
+            color: #374151; 
+            margin-bottom: 15px; 
+        }
+        .material-content { 
+            font-size: 15px; 
+            line-height: 1.7; 
+            text-align: justify; 
+            color: #4b5563;
+        }
+        .material-content p {
+            margin-bottom: 12px;
+        }
+        .footer { 
+            text-align: center; 
+            margin-top: 50px; 
+            padding-top: 30px; 
+            border-top: 2px solid #e5e7eb; 
+            font-size: 14px; 
+            color: #9ca3af; 
+        }
+        .course-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #eff6ff;
+            border-radius: 8px;
+        }
+        .info-item {
+            text-align: center;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e40af;
+        }
+        @media print { 
+            body { margin: 20px; }
+            .section { page-break-inside: avoid; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="title">${name}</div>
+        <div class="title">${this.escapeHtml(name)}</div>
         <div class="subtitle">Educational Course Material</div>
-        <div class="subtitle">Estimated Duration: ${estimatedTime} minutes</div>
+        <div class="course-info">
+            <div class="info-item">
+                <div class="info-label">Duration</div>
+                <div class="info-value">${estimatedTime} minutes</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Sections</div>
+                <div class="info-value">${materials.length}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Level</div>
+                <div class="info-value">Comprehensive</div>
+            </div>
+        </div>
     </div>
     
     <div class="section">
         <div class="section-title">Course Overview</div>
-        <div class="material-content">${description}</div>
+        <div class="material">
+            <div class="material-content">${this.formatContent(description)}</div>
+        </div>
     </div>`;
 
-    // Add course materials
+    // Add course materials with clean formatting
     materials.forEach((material: any, index: number) => {
+      const cleanTitle = this.escapeHtml(material.title || `Section ${index + 1}`);
+      const cleanContent = this.formatContent(material.content || '');
+      
       pdfContent += `
     <div class="section">
-        <div class="section-title">Section ${index + 1}: ${material.title}</div>
+        <div class="section-title">${cleanTitle}</div>
         <div class="material">
-            <div class="material-content">${this.formatContent(material.content)}</div>
+            <div class="material-content">${cleanContent}</div>
         </div>
     </div>`;
     });
 
     pdfContent += `
     <div class="footer">
-        Generated by Questora AI | Course completion required before assessment
+        <div>Generated by Questora AI Learning Platform</div>
+        <div style="margin-top: 10px; font-size: 12px;">
+            Course completion is required before taking assessments
+        </div>
     </div>
 </body>
 </html>`;
@@ -56,28 +161,57 @@ class PDFGenerationServiceClass {
     return this.convertToPDFDataUrl(pdfContent);
   }
 
+  private escapeHtml(text: string): string {
+    if (!text) return '';
+    
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   private formatContent(content: string): string {
-    // Format content for better PDF display
-    return content
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/^/, '<p>')
-      .replace(/$/, '</p>')
-      .replace(/<p><\/p>/g, '')
+    if (!content) return '';
+    
+    // Clean and format content for better PDF display
+    let formatted = content
+      .trim()
+      // Remove any remaining binary artifacts
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+      // Remove repeated sequences
+      .replace(/(\b\w{1,3}\b)\s+(\1\s+){2,}/g, '$1 ')
+      // Normalize whitespace
+      .replace(/\s+/g, ' ')
+      // Split into paragraphs
+      .split(/\n\n+/)
+      .map(paragraph => paragraph.trim())
+      .filter(paragraph => paragraph.length > 0)
+      .map(paragraph => {
+        // Format each paragraph
+        return `<p>${this.escapeHtml(paragraph)}</p>`;
+      })
+      .join('');
+
+    // Handle bullet points and formatting
+    formatted = formatted
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/•\s*/g, '• ')
+      .replace(/\n\s*[•-]\s*/g, '<br>• ');
+
+    return formatted || '<p>Content will be available after processing.</p>';
   }
 
   private convertToPDFDataUrl(htmlContent: string): string {
-    // Create a data URL that can be used for PDF download
-    const blob = new Blob([htmlContent], { type: 'text/html' });
+    // Create a clean HTML blob for PDF generation
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     return URL.createObjectURL(blob);
   }
 
   downloadPDF(dataUrl: string, filename: string): void {
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `${filename}.html`; // Will be opened as PDF in browser
+    link.download = `${filename.replace(/[^a-z0-9]/gi, '_')}.html`;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
