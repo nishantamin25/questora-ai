@@ -42,7 +42,7 @@ const CoursePopup = ({ course, isOpen, onClose, onComplete, isCompleted = false 
           {course.materials.map((material, index) => (
             <div key={index} className="border-b border-slate-200 pb-8 last:border-b-0">
               <h3 className="text-lg font-medium text-slate-900 mb-4">
-                {index + 1}. {material.title}
+                {material.title}
               </h3>
               <div className="prose prose-slate max-w-none">
                 {material.content.split('\n').map((paragraph, pIndex) => (
