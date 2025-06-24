@@ -238,7 +238,7 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define regex patterns
+    // Define regex patterns with explicit typing
     const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
@@ -248,24 +248,31 @@ Respond with structured educational content based solely on the provided documen
     
     let chunks: string[] = [content];
     
-    // Process each pattern individually
-    patterns.forEach(pattern => {
+    // Process each pattern individually with explicit typing
+    for (let i = 0; i < patterns.length; i++) {
+      const pattern = patterns[i];
       const newChunks: string[] = [];
       
-      chunks.forEach(chunk => {
-        // Split and filter in separate steps to avoid type inference issues
-        const splitResult = chunk.split(pattern);
-        const filteredParts = splitResult.filter(part => {
-          return typeof part === 'string' && part.trim().length > 100;
-        });
-        newChunks.push(...filteredParts);
-      });
+      for (let j = 0; j < chunks.length; j++) {
+        const chunk = chunks[j];
+        
+        // Split the chunk and ensure we get string array
+        const splitParts: string[] = chunk.split(pattern);
+        
+        // Filter parts with explicit type checking
+        for (let k = 0; k < splitParts.length; k++) {
+          const part = splitParts[k];
+          if (part && typeof part === 'string' && part.trim().length > 100) {
+            newChunks.push(part);
+          }
+        }
+      }
       
       // Only use the new chunks if they provide better segmentation
       if (newChunks.length > chunks.length && newChunks.length <= 5) {
         chunks = newChunks;
       }
-    });
+    }
     
     // If no good natural breaks found, split by length
     if (chunks.length === 1 && chunks[0].length > 2000) {
