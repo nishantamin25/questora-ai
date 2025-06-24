@@ -13,7 +13,7 @@ interface ProcessedFileContent {
 
 class FileProcessingServiceClass {
   async processFile(file: File): Promise<ProcessedFileContent> {
-    console.log(`Processing file: ${file.name} (${file.type})`);
+    console.log(`Processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
     
     const fileType = this.determineFileType(file);
     const metadata = {
@@ -46,17 +46,24 @@ class FileProcessingServiceClass {
       }
 
       console.log(`Raw extraction result: ${content.length} characters`);
+      console.log(`Content preview: ${content.substring(0, 500)}...`);
 
-      // Improved content cleaning that preserves more useful text
-      const cleanedContent = this.improvedContentCleaning(content);
+      // Clean the extracted content
+      const cleanedContent = this.cleanExtractedContent(content);
       console.log(`After cleaning: ${cleanedContent.length} characters`);
+      console.log(`Cleaned preview: ${cleanedContent.substring(0, 500)}...`);
 
-      // Try ChatGPT enhancement if we have reasonable content
-      if (cleanedContent.length > 100) {
+      // Validate we have real content
+      if (!this.isValidExtractedContent(cleanedContent)) {
+        throw new Error(`No readable content could be extracted from ${file.name}. The file may be corrupted, password-protected, or in an unsupported format.`);
+      }
+
+      // Try ChatGPT enhancement for substantial content
+      if (cleanedContent.length > 200) {
         try {
-          console.log('Attempting ChatGPT enhancement...');
+          console.log('Attempting ChatGPT content enhancement...');
           const enhancedContent = await ChatGPTService.enhanceTextContent(cleanedContent);
-          if (enhancedContent && enhancedContent.length > cleanedContent.length * 0.8) {
+          if (enhancedContent && enhancedContent.length > cleanedContent.length * 0.5) {
             console.log(`ChatGPT enhanced content: ${enhancedContent.length} characters`);
             content = enhancedContent;
             metadata.extractionMethod += '-chatgpt-enhanced';
@@ -76,11 +83,6 @@ class FileProcessingServiceClass {
       throw new Error(`Failed to extract content from ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    // More lenient validation - accept smaller content
-    if (!content || content.length < 30) {
-      throw new Error(`Insufficient content extracted from ${file.name}. File may be empty, corrupted, or unsupported.`);
-    }
-
     console.log(`Final processed content for ${file.name}: ${content.length} characters`);
 
     return {
@@ -90,80 +92,74 @@ class FileProcessingServiceClass {
     };
   }
 
-  private improvedContentCleaning(content: string): string {
+  private isValidExtractedContent(content: string): boolean {
+    if (!content || content.length < 50) return false;
+    
+    // Check for meaningful words
+    const words = content.split(/\s+/).filter(word => 
+      word.length > 2 && /^[a-zA-Z]/.test(word)
+    );
+    
+    if (words.length < 10) return false;
+    
+    // Check readable character ratio
+    const readableChars = (content.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length;
+    const readableRatio = readableChars / content.length;
+    
+    console.log('Content validation:', { 
+      length: content.length, 
+      wordCount: words.length,
+      readableRatio,
+      isValid: readableRatio > 0.7
+    });
+    
+    return readableRatio > 0.7;
+  }
+
+  private cleanExtractedContent(content: string): string {
     if (!content) return '';
     
-    console.log('Starting improved content cleaning, original length:', content.length);
+    console.log('Cleaning extracted content...');
     
-    // Step 1: Remove obvious PDF/binary artifacts while preserving text
+    // Remove PDF artifacts and binary data
     let cleaned = content
       .replace(/%PDF-[\d.]+/g, '')
       .replace(/%%EOF/g, '')
-      .replace(/\d+\s+\d+\s+obj\b.*?endobj/gs, ' ')
-      .replace(/stream\s.*?endstream/gs, ' ')
-      .replace(/xref\s+.*?trailer/gs, ' ')
-      .replace(/startxref\s+\d+/g, '')
-      .replace(/\/[A-Za-z]+\d*\s+\d+(?:\.\d+)?\s+T[fFdD]\b/g, ' ')
-      .replace(/BT\s+/g, ' ')
-      .replace(/\s+ET/g, ' ');
+      .replace(/\/Type\s*\/\w+/g, ' ')
+      .replace(/\/Length\s+\d+/g, ' ')
+      .replace(/\/Filter\s*\/\w+/g, ' ')
+      .replace(/stream\s*[\s\S]*?endstream/g, ' ')
+      .replace(/\d+\s+\d+\s+obj[\s\S]*?endobj/g, ' ')
+      .replace(/xref[\s\S]*?trailer/g, ' ')
+      .replace(/startxref\s+\d+/g, '');
 
-    // Step 2: Extract text from parentheses (common in PDFs)
-    cleaned = cleaned.replace(/\(([^)]+)\)\s*T[jJ]\b/g, (match, text) => {
-      return text.replace(/\\[()\\]/g, (escSeq) => escSeq[1]) + ' ';
-    });
-
-    // Step 3: Remove control characters but preserve structure
+    // Remove control characters but keep basic punctuation
     cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
-
-    // Step 4: Extract meaningful sentences and paragraphs
-    const sentences = [];
-    const lines = cleaned.split(/\n+/);
     
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.length < 5) continue;
-      
-      // Keep lines with reasonable text content
-      const letterCount = (trimmedLine.match(/[a-zA-Z]/g) || []).length;
-      const wordCount = trimmedLine.split(/\s+/).length;
-      
-      if (letterCount > 5 && wordCount > 1 && letterCount > trimmedLine.length * 0.2) {
-        // Clean up the line further
-        const cleanLine = trimmedLine
-          .replace(/\s+/g, ' ')
-          .replace(/[{}[\]<>]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        if (cleanLine.length > 10) {
-          sentences.push(cleanLine);
-        }
-      }
-    }
-
-    let result = sentences.join(' ').trim();
+    // Extract text from PDF text operators
+    cleaned = cleaned.replace(/\(([^)]*)\)\s*T[jJ]/g, '$1 ');
+    cleaned = cleaned.replace(/\(([^)]*)\)\s*Tj/g, '$1 ');
     
-    // Step 5: If still insufficient, try more aggressive extraction
-    if (result.length < 200) {
+    // Remove remaining PDF operators
+    cleaned = cleaned.replace(/\b(?:BT|ET|Td|TD|Tm|T\*|TL|Tc|Tw|Tz|TL|Tf|Tr|Ts)\b/g, ' ');
+    cleaned = cleaned.replace(/\b\d+(?:\.\d+)?\s+(?:Td|TD|Tm|TL|Tc|Tw|Tz|Tf|Tr|Ts)\b/g, ' ');
+    
+    // Clean up whitespace and normalize
+    cleaned = cleaned
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+    
+    // If still very short, try more aggressive extraction
+    if (cleaned.length < 100) {
       console.log('Trying more aggressive text extraction...');
-      
-      // Extract any readable text sequences
-      const textMatches = content.match(/[a-zA-Z][a-zA-Z0-9\s,.'"-]{15,}/g) || [];
-      const additionalText = textMatches
-        .map(match => match.trim())
-        .filter(text => {
-          const words = text.split(/\s+/);
-          return words.length > 3 && text.length > 20;
-        })
-        .join(' ');
-      
-      if (additionalText.length > result.length) {
-        result = additionalText;
+      const sentences = content.match(/[A-Z][^.!?]*[.!?]/g) || [];
+      if (sentences.length > 0) {
+        cleaned = sentences.join(' ');
       }
     }
-
-    console.log('Improved cleaning result length:', result.length);
-    return result;
+    
+    return cleaned;
   }
 
   private determineFileType(file: File): 'text' | 'video' | 'image' | 'other' {
@@ -183,7 +179,7 @@ class FileProcessingServiceClass {
     const fileName = file.name.toLowerCase();
     
     if (fileName.endsWith('.pdf')) {
-      return await this.processPdfWithMultipleStrategies(file);
+      return await this.processPdfFile(file);
     } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
       return await this.processWordFile(file);
     } else {
@@ -195,203 +191,140 @@ class FileProcessingServiceClass {
     }
   }
 
-  private async processPdfWithMultipleStrategies(file: File): Promise<{ content: string; method: string }> {
-    console.log('Processing PDF with comprehensive extraction strategies...');
+  private async processPdfFile(file: File): Promise<{ content: string; method: string }> {
+    console.log('Processing PDF file with simplified extraction...');
     
     try {
       const arrayBuffer = await file.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      const pdfText = decoder.decode(uint8Array);
       
-      const strategies = [
-        { name: 'text-objects', fn: () => this.extractFromTextObjects(uint8Array) },
-        { name: 'content-streams', fn: () => this.extractFromContentStreams(uint8Array) },
-        { name: 'font-instructions', fn: () => this.extractFromFontInstructions(uint8Array) },
-        { name: 'raw-text-search', fn: () => this.extractRawTextPatterns(uint8Array) },
-        { name: 'liberal-extraction', fn: () => this.liberalTextExtraction(uint8Array) }
-      ];
+      console.log(`PDF file size: ${uint8Array.length} bytes`);
       
-      let bestContent = '';
-      let bestMethod = '';
-      const allContent = [];
+      // Strategy 1: Extract text from parentheses (most common PDF text storage)
+      let extractedText = this.extractTextFromParentheses(pdfText);
       
-      for (const strategy of strategies) {
-        try {
-          console.log(`Trying PDF extraction strategy: ${strategy.name}...`);
-          const extracted = strategy.fn();
-          console.log(`Strategy ${strategy.name} extracted ${extracted.length} characters`);
-          
-          if (extracted.length > 50) {
-            allContent.push(extracted);
-          }
-          
-          if (extracted.length > bestContent.length) {
-            bestContent = extracted;
-            bestMethod = `pdf-${strategy.name}`;
-          }
-        } catch (error) {
-          console.log(`PDF strategy ${strategy.name} failed:`, error);
+      // Strategy 2: If insufficient, try stream extraction
+      if (extractedText.length < 100) {
+        console.log('Trying stream-based extraction...');
+        const streamText = this.extractTextFromStreams(pdfText);
+        if (streamText.length > extractedText.length) {
+          extractedText = streamText;
         }
       }
       
-      // Combine all successful extractions for better content
-      if (allContent.length > 1) {
-        const combinedContent = allContent.join(' ');
-        if (combinedContent.length > bestContent.length) {
-          bestContent = combinedContent;
-          bestMethod = 'pdf-combined-strategies';
+      // Strategy 3: If still insufficient, try pattern matching
+      if (extractedText.length < 100) {
+        console.log('Trying pattern-based extraction...');
+        const patternText = this.extractTextFromPatterns(pdfText);
+        if (patternText.length > extractedText.length) {
+          extractedText = patternText;
         }
       }
       
-      if (bestContent.length > 30) {
-        console.log(`Successfully extracted ${bestContent.length} characters using ${bestMethod}`);
-        return {
-          content: bestContent,
-          method: bestMethod
-        };
+      console.log(`Extracted ${extractedText.length} characters from PDF`);
+      
+      if (extractedText.length < 30) {
+        throw new Error('PDF appears to be empty, image-based, or encrypted');
       }
       
-      throw new Error('All PDF extraction strategies failed to produce meaningful content');
+      return {
+        content: extractedText,
+        method: 'pdf-text-extraction'
+      };
       
     } catch (error) {
       console.error('PDF processing failed:', error);
-      throw error;
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  private extractFromTextObjects(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
+  private extractTextFromParentheses(pdfText: string): string {
+    const textParts: string[] = [];
     
-    const textBlocks: string[] = [];
+    // Match text in parentheses followed by text positioning operators
+    const textRegex = /\(([^)]*)\)\s*(?:Tj|TJ|'|")/g;
+    let match;
     
+    while ((match = textRegex.exec(pdfText)) !== null) {
+      let text = match[1];
+      
+      // Decode common PDF escape sequences
+      text = text
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\b/g, '\b')
+        .replace(/\\f/g, '\f')
+        .replace(/\\(/g, '(')
+        .replace(/\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+      
+      if (text.trim() && text.length > 0) {
+        textParts.push(text.trim());
+      }
+    }
+    
+    // Also try array-based text positioning
+    const arrayRegex = /\[(.*?)\]\s*TJ/g;
+    while ((match = arrayRegex.exec(pdfText)) !== null) {
+      const arrayContent = match[1];
+      const textMatches = arrayContent.match(/\(([^)]*)\)/g);
+      if (textMatches) {
+        textMatches.forEach(textMatch => {
+          const text = textMatch.slice(1, -1).trim();
+          if (text && text.length > 0) {
+            textParts.push(text);
+          }
+        });
+      }
+    }
+    
+    return textParts.join(' ').trim();
+  }
+
+  private extractTextFromStreams(pdfText: string): string {
+    const textParts: string[] = [];
+    
+    // Find text between BT (Begin Text) and ET (End Text) operators
     const btEtRegex = /BT\s*([\s\S]*?)\s*ET/g;
     let match;
     
     while ((match = btEtRegex.exec(pdfText)) !== null) {
-      const blockContent = match[1];
+      const textBlock = match[1];
       
-      const tjRegex = /\(((?:[^()\\]|\\.|\\[()])*)\)\s*T[jJ]/g;
-      let tjMatch;
-      while ((tjMatch = tjRegex.exec(blockContent)) !== null) {
-        let text = tjMatch[1]
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .replace(/\\t/g, '\t')
-          .replace(/\\[()\\]/g, (match) => match[1])
-          .trim();
-        
-        if (text.length > 0 && /[a-zA-Z0-9]/.test(text)) {
-          textBlocks.push(text);
-        }
-      }
-      
-      const arrayTjRegex = /\[([\s\S]*?)\]\s*TJ/g;
-      let arrayMatch;
-      while ((arrayMatch = arrayTjRegex.exec(blockContent)) !== null) {
-        const arrayContent = arrayMatch[1];
-        const textParts = arrayContent.match(/\(((?:[^()\\]|\\.|\\[()])*)\)/g);
-        if (textParts) {
-          textParts.forEach(part => {
-            const cleanText = part.slice(1, -1)
-              .replace(/\\[()\\]/g, (match) => match[1])
-              .trim();
-            if (cleanText.length > 0 && /[a-zA-Z0-9]/.test(cleanText)) {
-              textBlocks.push(cleanText);
-            }
-          });
-        }
+      // Extract text from this block
+      const blockText = this.extractTextFromParentheses('BT ' + textBlock + ' ET');
+      if (blockText.trim()) {
+        textParts.push(blockText.trim());
       }
     }
     
-    return textBlocks.join(' ').trim();
+    return textParts.join(' ').trim();
   }
 
-  private extractFromContentStreams(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
-    
-    const streams: string[] = [];
-    const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
-    let match;
-    
-    while ((match = streamRegex.exec(pdfText)) !== null) {
-      let streamData = match[1];
-      const readableText = this.extractReadableFromStream(streamData);
-      
-      if (readableText.length > 20) {
-        streams.push(readableText);
-      }
-    }
-    
-    return streams.join(' ').trim();
-  }
-
-  private extractFromFontInstructions(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
-    
-    const textContent: string[] = [];
-    const fontTextRegex = /\/[A-Za-z]+\d*\s+\d+(?:\.\d+)?\s+Tf\s*(?:\s*\(([^)]*)\)\s*T[jJ])?/g;
-    let match;
-    
-    while ((match = fontTextRegex.exec(pdfText)) !== null) {
-      if (match[1]) {
-        const text = match[1].trim();
-        if (text.length > 2 && /[a-zA-Z]/.test(text)) {
-          textContent.push(text);
-        }
-      }
-    }
-    
-    return textContent.join(' ').trim();
-  }
-
-  private extractRawTextPatterns(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
-    
+  private extractTextFromPatterns(pdfText: string): string {
+    // Look for readable text patterns in the PDF
     const patterns = [
-      /[A-Z][a-z]+ [a-z]+ [a-z]+[\w\s.,!?;:()\-'"]{20,}/g,
-      /[a-zA-Z]{3,}[\w\s.,!?;:()\-'"]{15,}/g,
-      /\b[A-Z][a-z]+ [A-Z][a-z]+/g,
+      /[A-Z][a-z]+(?:\s+[a-z]+)*[.!?]/g,  // Sentences
+      /[A-Z][a-z]+(?:\s+[A-Z][a-z]*)*\s+[a-z]+/g,  // Title case phrases
+      /\b[a-zA-Z]+(?:\s+[a-zA-Z]+){2,}/g  // Word sequences
     ];
     
-    const matches = [];
+    const textParts: string[] = [];
     
     for (const pattern of patterns) {
-      const patternMatches = pdfText.match(pattern) || [];
-      matches.push(...patternMatches);
+      const matches = pdfText.match(pattern) || [];
+      textParts.push(...matches);
     }
     
-    return matches
-      .map(match => match.trim())
-      .filter(text => text.length > 10)
-      .join(' ')
-      .substring(0, 5000);
-  }
-
-  private liberalTextExtraction(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
+    // Deduplicate and filter
+    const uniqueTexts = [...new Set(textParts)]
+      .filter(text => text.length > 10 && this.isReadableText(text))
+      .slice(0, 50);  // Limit to prevent overwhelming output
     
-    const liberalMatches = pdfText.match(/[a-zA-Z][a-zA-Z0-9\s,.'"-]{8,}/g) || [];
-    
-    return liberalMatches
-      .map(match => match.trim())
-      .filter(text => {
-        const letterCount = (text.match(/[a-zA-Z]/g) || []).length;
-        return letterCount > text.length * 0.4 && text.length > 15;
-      })
-      .join(' ')
-      .substring(0, 8000);
-  }
-
-  private extractReadableFromStream(input: string): string {
-    return input
-      .replace(/[^\x20-\x7E\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/[{}[\]<>]/g, ' ')
-      .trim();
+    return uniqueTexts.join(' ').trim();
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
@@ -484,36 +417,6 @@ Educational Elements:
       };
       
       reader.readAsText(file, 'UTF-8');
-    });
-  }
-
-  private async getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        resolve({ width: img.width, height: img.height });
-      };
-      img.onerror = () => {
-        resolve(null);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  private async getVideoDuration(file: File): Promise<number | null> {
-    return new Promise((resolve) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      
-      video.onloadedmetadata = () => {
-        resolve(video.duration);
-      };
-      
-      video.onerror = () => {
-        resolve(null);
-      };
-      
-      video.src = URL.createObjectURL(file);
     });
   }
 }
