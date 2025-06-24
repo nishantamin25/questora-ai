@@ -130,24 +130,27 @@ Respond with structured educational content based solely on the provided documen
     let currentChunks: string[] = [content];
     
     // Process each pattern individually
-    for (const pattern of patterns) {
-      const processedChunks: string[] = [];
+    for (let i = 0; i < patterns.length; i++) {
+      const pattern = patterns[i];
+      const newChunks: string[] = [];
       
       // Process each current chunk with the current pattern
-      currentChunks.forEach((chunk: string) => {
+      for (let j = 0; j < currentChunks.length; j++) {
+        const chunk = currentChunks[j];
         const splitParts: string[] = chunk.split(pattern);
         
-        // Filter and add valid parts with explicit typing
-        splitParts.forEach((part: string) => {
+        // Filter and add valid parts
+        for (let k = 0; k < splitParts.length; k++) {
+          const part = splitParts[k];
           if (part && typeof part === 'string' && part.trim().length > 100) {
-            processedChunks.push(part);
+            newChunks.push(part);
           }
-        });
-      });
+        }
+      }
       
       // Only use the new chunks if they provide better segmentation
-      if (processedChunks.length > currentChunks.length && processedChunks.length <= 5) {
-        currentChunks = processedChunks;
+      if (newChunks.length > currentChunks.length && newChunks.length <= 5) {
+        currentChunks = newChunks;
       }
     }
     
