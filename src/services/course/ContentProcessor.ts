@@ -135,15 +135,15 @@ Respond with structured educational content based solely on the provided documen
       
       // Process each chunk
       for (const chunk of chunks) {
-        // Split the chunk by the pattern
-        const parts = chunk.split(pattern);
+        // Split the chunk by the pattern and explicitly type the result
+        const parts: string[] = chunk.split(pattern);
         
         // Add valid parts to newChunks
-        for (const part of parts) {
+        parts.forEach(part => {
           if (part && typeof part === 'string' && part.trim().length > 100) {
             newChunks.push(part);
           }
-        }
+        });
       }
       
       // Only use the new chunks if they provide better segmentation
