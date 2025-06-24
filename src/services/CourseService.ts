@@ -48,39 +48,42 @@ class CourseServiceClass {
               extractionMethod: processedFile.metadata.extractionMethod
             });
 
-            // Create course materials from processed content
-            if (processedFile.content && processedFile.content.length > 100) {
-              // Split content into 2-3 meaningful sections
-              const sections = await this.createCourseSections(processedFile.content, prompt, file.name);
+            // CRITICAL FIX: Only use extracted content if it's substantial and real
+            if (processedFile.content && processedFile.content.length > 100 && this.isRealContent(processedFile.content)) {
+              console.log('Using REAL extracted content for course generation');
+              // Create course materials from the ACTUAL processed content
+              const sections = await this.createCourseSectionsFromRealContent(processedFile.content, file.name);
               materials.push(...sections);
             } else {
-              console.warn(`Insufficient content extracted from ${file.name}, using fallback`);
-              materials.push(this.createFallbackMaterial(file.name, prompt));
+              console.error(`CRITICAL: Insufficient or fake content extracted from ${file.name}`);
+              throw new Error(`Failed to extract real content from ${file.name}. Content length: ${processedFile.content?.length || 0}`);
             }
             
           } catch (error) {
             console.error(`Error processing file ${file.name}:`, error);
-            materials.push(this.createFallbackMaterial(file.name, prompt));
+            throw new Error(`Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         }
       } 
       // Use provided file content string if available
-      else if (fileContent && fileContent.trim().length > 100) {
-        console.log('Using provided file content for course generation');
-        const sections = await this.createCourseSections(fileContent, prompt, 'Content');
+      else if (fileContent && fileContent.trim().length > 100 && this.isRealContent(fileContent)) {
+        console.log('Using provided REAL file content for course generation');
+        const sections = await this.createCourseSectionsFromRealContent(fileContent, 'Content');
         materials.push(...sections);
       } 
-      // Generate from prompt only
-      else {
-        console.log('Generating course materials from prompt only');
+      // Only generate from prompt if no files provided
+      else if (!files || files.length === 0) {
+        console.log('No files provided - generating course materials from prompt only');
         const lessons = await this.generateLessonsFromPrompt(prompt);
         materials.push(...lessons);
+      } else {
+        throw new Error('No real content could be extracted from the uploaded files');
       }
 
-      // Ensure we have quality materials (2-3 sections)
+      // Ensure we have quality materials
       const finalMaterials = materials.slice(0, 3);
       if (finalMaterials.length === 0) {
-        finalMaterials.push(this.createFallbackMaterial('Course', prompt));
+        throw new Error('Failed to generate any course materials from the provided content');
       }
 
       const estimatedTime = this.calculateEstimatedTime(finalMaterials);
@@ -118,18 +121,62 @@ class CourseServiceClass {
     }
   }
 
-  private async createCourseSections(content: string, prompt: string, sourceName: string): Promise<CourseMaterial[]> {
+  private isRealContent(content: string): boolean {
+    if (!content || content.length < 50) return false;
+    
+    // Check for generic educational templates/patterns
+    const genericPatterns = [
+      /educational content designed for/i,
+      /learning objectives/i,
+      /students will gain understanding/i,
+      /course provides comprehensive coverage of/i,
+      /upon completion.*understanding/i,
+      /theoretical foundations and core principles/i,
+      /practical applications and real-world usage/i
+    ];
+    
+    const hasGenericPatterns = genericPatterns.some(pattern => pattern.test(content));
+    
+    // Content should have specific terms, numbers, proper nouns
+    const hasSpecificContent = /[\d,]+|\b[A-Z][a-z]+\s[A-Z][a-z]+|\b[A-Z]{2,}|\b\d+[A-Za-z]+|\b[A-Z][a-z]*\sTM\b|\b[A-Z][a-z]*®\b/.test(content);
+    
+    return !hasGenericPatterns && hasSpecificContent;
+  }
+
+  private async createCourseSectionsFromRealContent(content: string, sourceName: string): Promise<CourseMaterial[]> {
     const sections: CourseMaterial[] = [];
     
     try {
-      // Use ChatGPT to structure the content into meaningful sections
-      const structuredContent = await ChatGPTService.generateContent(
-        `Create a well-structured educational course from this content about "${prompt}". 
-        Organize it into 2-3 clear sections with titles and comprehensive content. 
-        Make each section substantial and educational.
-        
-        Source content: ${content.substring(0, 3000)}`
-      );
+      console.log('Creating course sections from REAL content:', content.substring(0, 200) + '...');
+      
+      // CRITICAL: Use very specific prompt to force ChatGPT to use ONLY the provided content
+      const structurePrompt = `CRITICAL INSTRUCTION: You must create course content using ONLY the information provided below. Do not add generic educational templates or fabricated content.
+
+Extract the actual information from this document and organize it into 2-3 educational sections with clear titles. Use the real data, metrics, product names, and specific details found in the content.
+
+REAL DOCUMENT CONTENT TO USE:
+${content}
+
+Requirements:
+1. Extract only factual information from the provided content
+2. Use actual product names, metrics, and specific details mentioned
+3. Create section titles based on the real topics covered
+4. Do not add generic learning objectives or educational templates
+5. Structure the real information into educational sections
+6. If metrics or specific data points exist, include them exactly as stated
+7. Keep all original terminology and proper nouns
+
+Respond with structured educational content based solely on the provided document.`;
+
+      const structuredContent = await ChatGPTService.generateContent(structurePrompt);
+      
+      console.log('ChatGPT structured content:', structuredContent.substring(0, 300) + '...');
+      
+      // Verify the structured content still contains real information
+      if (!this.containsRealInformation(structuredContent, content)) {
+        console.error('ChatGPT response does not contain real content - using direct extraction');
+        return this.extractSectionsDirectly(content, sourceName);
+      }
 
       // Split the structured content into sections
       const sectionParts = this.splitIntoSections(structuredContent);
@@ -145,19 +192,124 @@ class CourseServiceClass {
       });
 
     } catch (error) {
-      console.error('Error creating structured sections:', error);
-      // Fallback: split content manually
-      const chunks = this.splitContentIntoChunks(content, 1500);
-      chunks.forEach((chunk, index) => {
-        sections.push({
-          type: 'text',
-          title: `${sourceName} - Section ${index + 1}`,
-          content: chunk
-        });
-      });
+      console.error('Error creating structured sections with ChatGPT, using direct extraction:', error);
+      return this.extractSectionsDirectly(content, sourceName);
     }
 
     return sections.slice(0, 3);
+  }
+
+  private containsRealInformation(structuredContent: string, originalContent: string): boolean {
+    // Extract key terms from original content
+    const originalTerms = originalContent.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b|\b\d+[A-Za-z]*\b|\b[A-Z]{2,}\b/g) || [];
+    const structuredTerms = structuredContent.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b|\b\d+[A-Za-z]*\b|\b[A-Z]{2,}\b/g) || [];
+    
+    // Check if structured content contains at least 30% of original key terms
+    const commonTerms = originalTerms.filter(term => structuredTerms.includes(term));
+    const overlap = commonTerms.length / Math.max(originalTerms.length, 1);
+    
+    console.log('Content overlap check:', { 
+      originalTermsCount: originalTerms.length, 
+      commonTermsCount: commonTerms.length, 
+      overlap: overlap 
+    });
+    
+    return overlap > 0.3;
+  }
+
+  private extractSectionsDirectly(content: string, sourceName: string): CourseMaterial[] {
+    const sections: CourseMaterial[] = [];
+    
+    // Split content into meaningful chunks based on structure
+    const chunks = this.splitContentIntoMeaningfulChunks(content);
+    
+    chunks.forEach((chunk, index) => {
+      if (chunk.trim().length > 200) {
+        sections.push({
+          type: 'text',
+          title: this.extractRealSectionTitle(chunk, index + 1, sourceName),
+          content: chunk.trim()
+        });
+      }
+    });
+    
+    return sections.slice(0, 3);
+  }
+
+  private splitContentIntoMeaningfulChunks(content: string): string[] {
+    // Try to identify natural section breaks
+    const sectionBreaks = [
+      /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
+      /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
+      /\n\s*[A-Z][A-Z\s]+\n/g,               // ALL CAPS headings
+      /\n\s*[A-Z][^.]*:\s*\n/g               // Headings ending with colon
+    ];
+    
+    let chunks = [content];
+    
+    for (const breakPattern of sectionBreaks) {
+      const newChunks: string[] = [];
+      for (const chunk of chunks) {
+        const parts = chunk.split(breakPattern);
+        newChunks.push(...parts.filter(part => part.trim().length > 100));
+      }
+      if (newChunks.length > chunks.length && newChunks.length <= 5) {
+        chunks = newChunks;
+      }
+    }
+    
+    // If no good natural breaks found, split by length
+    if (chunks.length === 1 && chunks[0].length > 2000) {
+      chunks = this.splitContentIntoChunks(content, 1500);
+    }
+    
+    return chunks;
+  }
+
+  private extractRealSectionTitle(section: string, index: number, sourceName: string): string {
+    const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    
+    // Look for title-like patterns in the first few lines
+    for (let i = 0; i < Math.min(3, lines.length); i++) {
+      const line = lines[i];
+      
+      // Check for heading patterns
+      if (line.length < 100 && line.length > 5) {
+        // ALL CAPS headings
+        if (line === line.toUpperCase() && /[A-Z\s&]+/.test(line)) {
+          return this.cleanTitle(line);
+        }
+        // Title Case headings
+        if (/^[A-Z][^.]*[^.]$/.test(line) && line.split(' ').length <= 8) {
+          return this.cleanTitle(line);
+        }
+        // Headings with colons
+        if (line.endsWith(':') && line.split(' ').length <= 6) {
+          return this.cleanTitle(line.slice(0, -1));
+        }
+      }
+    }
+    
+    // Extract key terms from the section for a meaningful title
+    const keyTerms = section.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b/g) || [];
+    if (keyTerms.length > 0) {
+      const title = keyTerms.slice(0, 3).join(' ');
+      if (title.length > 5 && title.length < 50) {
+        return title;
+      }
+    }
+    
+    return `${sourceName} - Section ${index}`;
+  }
+
+  private cleanTitle(title: string): string {
+    return title
+      .replace(/[^\w\s&-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
 
   private splitIntoSections(content: string): string[] {
@@ -182,32 +334,6 @@ class CourseServiceClass {
     }
     
     return `${sourceName} - Section ${index}`;
-  }
-
-  private createFallbackMaterial(fileName: string, prompt: string): CourseMaterial {
-    return {
-      type: 'text',
-      title: `Course Overview: ${fileName}`,
-      content: `Educational Content: ${fileName}
-
-This course provides comprehensive coverage of ${prompt}, designed to give you thorough understanding and practical knowledge.
-
-Key Learning Objectives:
-• Master fundamental concepts and principles
-• Understand practical applications and real-world usage
-• Develop critical thinking and analytical skills
-• Apply knowledge to solve complex problems
-• Build confidence in the subject matter
-
-Course Overview:
-This educational material covers essential topics that form the foundation of understanding in this area. You'll explore core concepts, learn practical applications, and develop the skills necessary to apply this knowledge effectively.
-
-Learning Approach:
-The content is structured to build your knowledge progressively, starting with fundamental principles and advancing to more complex applications. Each concept is explained clearly with practical examples to enhance understanding.
-
-Expected Outcomes:
-Upon completion of this course, you will have developed a comprehensive understanding of the subject matter and be prepared to apply this knowledge in practical situations and assessments.`
-    };
   }
 
   private async generateLessonsFromPrompt(prompt: string): Promise<CourseMaterial[]> {
@@ -331,7 +457,7 @@ Understand emerging trends and developments that will shape the future of this f
       switch (material.type) {
         case 'text':
           const wordCount = material.content.split(' ').length;
-          totalTime += Math.ceil(wordCount / 60); // 60 words per minute
+          totalTime += Math.ceil(wordCount / 200); // Reading speed adjusted
           break;
         case 'image':
           totalTime += 5;
