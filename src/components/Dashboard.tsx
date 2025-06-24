@@ -51,44 +51,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const handleGenerateTest = async (
-    testName: string, 
-    difficulty: 'easy' | 'medium' | 'hard', 
-    numberOfQuestions: number, 
-    timeframe: number, 
-    includeCourse: boolean, 
-    includeQuestionnaire: boolean, 
-    numberOfSets: number
-  ) => {
+  const handleGenerateTest = async (prompt: string, options: any, files: File[]) => {
     setIsGenerating(true);
     try {
-      console.log('🚀 Starting test generation with params:', {
-        testName,
-        difficulty,
-        numberOfQuestions,
-        timeframe,
-        includeCourse,
-        includeQuestionnaire,
-        numberOfSets
-      });
+      console.log('🚀 Starting test generation with files:', files.map(f => f.name));
       
-      // Create options object to match the service
-      const options = {
-        testName,
-        difficulty,
-        numberOfQuestions,
-        timeframe,
-        includeCourse,
-        includeQuestionnaire
-      };
-
-      // For now, use empty prompt and files - this should be enhanced later
       const result = await QuestionnaireService.generateQuestionnaire(
-        testName, // Using testName as prompt for now
+        prompt,
         options,
-        [], // Empty files array for now
+        files,
         1,
-        numberOfSets
+        1
       );
 
       console.log('✅ Generation completed:', {
@@ -393,18 +366,15 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       </div>
 
       <GenerateTestDialog
-        open={isGenerateDialogOpen}
-        prompt=""
-        uploadedFiles={[]}
-        processedFileContent=""
+        isOpen={isGenerateDialogOpen}
+        onClose={() => setIsGenerateDialogOpen(false)}
         onGenerate={handleGenerateTest}
-        onCancel={() => setIsGenerateDialogOpen(false)}
+        isGenerating={isGenerating}
       />
 
       <SettingsDialog
-        open={isSettingsOpen}
+        isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        userRole={user.role}
       />
     </div>
   );
