@@ -245,13 +245,15 @@ Respond with structured educational content based solely on the provided documen
       /\n\s*[A-Z][^.]*:\s*\n/g               // Headings ending with colon
     ];
     
-    let chunks = [content];
+    let chunks: string[] = [content];
     
     for (const breakPattern of sectionBreaks) {
       const newChunks: string[] = [];
       for (const chunk of chunks) {
-        const parts = chunk.split(breakPattern);
-        newChunks.push(...parts.filter(part => part.trim().length > 100));
+        // Fix: Explicitly handle the split result with proper typing
+        const parts: string[] = chunk.split(breakPattern);
+        const filteredParts = parts.filter((part: string) => part.trim().length > 100);
+        newChunks.push(...filteredParts);
       }
       if (newChunks.length > chunks.length && newChunks.length <= 5) {
         chunks = newChunks;
