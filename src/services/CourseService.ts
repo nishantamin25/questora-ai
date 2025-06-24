@@ -1,4 +1,3 @@
-
 import { FileProcessingService } from './FileProcessingService';
 import { PDFGenerationService } from './PDFGenerationService';
 import { ChatGPTService } from './ChatGPTService';
@@ -248,24 +247,21 @@ Respond with structured educational content based solely on the provided documen
     
     let chunks: string[] = [content];
     
-    // Process each pattern individually with explicit typing
-    for (let i = 0; i < patterns.length; i++) {
-      const pattern = patterns[i];
+    // Process each pattern individually with simplified logic
+    for (const pattern of patterns) {
       const newChunks: string[] = [];
       
-      for (let j = 0; j < chunks.length; j++) {
-        const chunk = chunks[j];
+      // Process each chunk
+      for (const chunk of chunks) {
+        // Split the chunk by the pattern
+        const parts: string[] = chunk.split(pattern);
         
-        // Split the chunk and ensure we get string array
-        const splitParts: string[] = chunk.split(pattern);
-        
-        // Filter parts with explicit type checking
-        for (let k = 0; k < splitParts.length; k++) {
-          const part = splitParts[k];
-          if (part && typeof part === 'string' && part.trim().length > 100) {
+        // Add valid parts to newChunks
+        parts.forEach((part: string) => {
+          if (part && part.trim().length > 100) {
             newChunks.push(part);
           }
-        }
+        });
       }
       
       // Only use the new chunks if they provide better segmentation
