@@ -14,4 +14,5 @@ export interface Course {
   createdAt: string;
   difficulty: 'easy' | 'medium' | 'hard';
   pdfUrl?: string;
+  isActive?: boolean;
 }

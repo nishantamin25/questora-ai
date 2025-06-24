@@ -328,7 +328,10 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
           title: 'Course Material'
         }
       ],
-      estimatedTime: questionnaire.timeframe || 30
+      estimatedTime: questionnaire.timeframe || 30,
+      createdAt: new Date().toISOString(),
+      difficulty: 'medium' as const,
+      isActive: true
     };
   };
 
