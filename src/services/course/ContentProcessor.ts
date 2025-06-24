@@ -1,3 +1,4 @@
+
 import { CourseMaterial } from './CourseTypes';
 import { ChatGPTService } from '../ChatGPTService';
 
@@ -133,16 +134,16 @@ Respond with structured educational content based solely on the provided documen
       const processedChunks: string[] = [];
       
       // Process each current chunk with the current pattern
-      for (const chunk of currentChunks) {
+      currentChunks.forEach((chunk: string) => {
         const splitParts: string[] = chunk.split(pattern);
         
-        // Filter and add valid parts
-        const validParts = splitParts.filter((part: string) => 
-          part && part.trim().length > 100
-        );
-        
-        processedChunks.push(...validParts);
-      }
+        // Filter and add valid parts with explicit typing
+        splitParts.forEach((part: string) => {
+          if (part && typeof part === 'string' && part.trim().length > 100) {
+            processedChunks.push(part);
+          }
+        });
+      });
       
       // Only use the new chunks if they provide better segmentation
       if (processedChunks.length > currentChunks.length && processedChunks.length <= 5) {
