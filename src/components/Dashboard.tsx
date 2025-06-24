@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Plus, Settings, Users, BarChart3, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,6 +25,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<{ questionnaire?: any; course?: any } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -62,6 +62,17 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   ) => {
     setIsGenerating(true);
     try {
+      console.log('🚀 Starting test generation with params:', {
+        testName,
+        difficulty,
+        numberOfQuestions,
+        timeframe,
+        includeCourse,
+        includeQuestionnaire,
+        numberOfSets
+      });
+      
+      // Create options object to match the service
       const options = {
         testName,
         difficulty,
@@ -71,19 +82,35 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         includeQuestionnaire
       };
 
+      // For now, use empty prompt and files - this should be enhanced later
       const result = await QuestionnaireService.generateQuestionnaire(
-        testName,
+        testName, // Using testName as prompt for now
         options,
-        [],
+        [], // Empty files array for now
         1,
         numberOfSets
       );
 
+      console.log('✅ Generation completed:', {
+        questionnaire: !!result.questionnaire,
+        course: !!result.course,
+        questionCount: result.questionnaire?.questions?.length || 0
+      });
+
+      // Save course if generated
       if (result.course) {
         CourseService.saveCourse(result.course);
+        console.log('💾 Course saved');
       }
 
+      // Save questionnaire
       QuestionnaireService.saveQuestionnaire(result.questionnaire);
+      console.log('💾 Questionnaire saved');
+
+      // Set generated content for immediate display
+      setGeneratedContent(result);
+
+      // Refresh data
       loadData();
       
       toast({
@@ -93,7 +120,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
       setIsGenerateDialogOpen(false);
     } catch (error) {
-      console.error('Generation failed:', error);
+      console.error('💥 Generation failed:', error);
       toast({
         title: "Generation Failed",
         description: error instanceof Error ? error.message : "Failed to generate content",
@@ -151,33 +178,88 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
+  const renderGeneratedContent = () => {
+    if (!generatedContent) return null;
+
+    return (
+      <div className="space-y-6 mb-8 p-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border-2 border-green-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold text-green-800">🎉 Just Generated!</h3>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setGeneratedContent(null)}
+          >
+            Clear
+          </Button>
+        </div>
+
+        {generatedContent.course && (
+          <Card className="border-green-200">
+            <CardHeader className="bg-green-50">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-green-600" />
+                📚 Generated Course: {generatedContent.course.name}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <p className="text-gray-700 mb-4">{generatedContent.course.description}</p>
+              <div className="flex gap-4 text-sm text-gray-600 mb-4">
+                <span>📖 {generatedContent.course.materials?.length || 0} sections</span>
+                <span>⏱️ ~{generatedContent.course.estimatedTime || 0} minutes</span>
+                <span>📅 {new Date(generatedContent.course.createdAt).toLocaleDateString()}</span>
+              </div>
+              {generatedContent.course.pdfUrl && (
+                <Button 
+                  onClick={() => handleDownloadCoursePDF(generatedContent.course)}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Course PDF
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {generatedContent.questionnaire && (
+          <QuestionnaireDisplay
+            questionnaire={generatedContent.questionnaire}
+            isAdmin={user.role === 'admin'}
+            onUpdate={handleQuestionnaireUpdate}
+            onDelete={handleQuestionnaireDelete}
+          />
+        )}
+      </div>
+    );
+  };
+
   const filteredQuestionnaires = user.role === 'guest' 
     ? questionnaires.filter(q => {
         const accessCheck = QuestionnaireService.canAccessQuestionnaire(q.id, user.role);
-        return accessCheck.canAccess || q.requiresCourseCompletion;
+        return accessCheck.canAccess || q.requiresCourseCompletion; // Show all for course flow
       })
     : questionnaires;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b px-6 py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="bg-black/20 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-white">
               Welcome, {user.username}!
             </h1>
-            <p className="text-gray-600">
+            <p className="text-purple-200">
               {user.role === 'admin' ? 'Admin Dashboard' : 'Student Portal'}
             </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {user.role === 'admin' && (
               <Button
                 onClick={() => setIsGenerateDialogOpen(true)}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                 disabled={isGenerating}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 {isGenerating ? 'Generating...' : 'Generate Test'}
@@ -187,7 +269,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             <Button
               variant="outline"
               onClick={() => setIsSettingsOpen(true)}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="border-white/20 text-white hover:bg-white/10"
             >
               <Settings className="mr-2 h-4 w-4" />
               Settings
@@ -196,7 +278,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
             <Button
               variant="outline"
               onClick={onLogout}
-              className="border-red-300 text-red-600 hover:bg-red-50"
+              className="border-red-300/50 text-red-300 hover:bg-red-500/20"
             >
               Logout
             </Button>
@@ -204,51 +286,42 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Navigation Tabs for Admin */}
+      <div className="p-6">
         {user.role === 'admin' && (
-          <div className="mb-6">
-            <nav className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
-              {[
-                { key: 'questionnaires', label: 'Tests', icon: FileText },
-                { key: 'courses', label: 'Courses', icon: FileText },
-                { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-                { key: 'responses', label: 'Responses', icon: Users },
-                { key: 'leaderboard', label: 'Leaderboard', icon: Users }
-              ].map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === tab.key
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+          <div className="flex gap-2 mb-6">
+            {['questionnaires', 'courses', 'analytics', 'responses', 'leaderboard'].map((tab) => (
+              <Button
+                key={tab}
+                variant={activeTab === tab ? 'default' : 'outline'}
+                onClick={() => setActiveTab(tab)}
+                className={activeTab === tab 
+                  ? 'bg-purple-600 hover:bg-purple-700' 
+                  : 'border-white/20 text-white hover:bg-white/10'
+                }
+              >
+                {tab === 'questionnaires' && <FileText className="mr-2 h-4 w-4" />}
+                {tab === 'courses' && <FileText className="mr-2 h-4 w-4" />}
+                {tab === 'analytics' && <BarChart3 className="mr-2 h-4 w-4" />}
+                {tab === 'responses' && <Users className="mr-2 h-4 w-4" />}
+                {tab === 'leaderboard' && <Users className="mr-2 h-4 w-4" />}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </Button>
+            ))}
           </div>
         )}
 
-        {/* Main Content */}
+        {renderGeneratedContent()}
+
         {(activeTab === 'questionnaires' || user.role === 'guest') && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {user.role === 'admin' ? 'All Tests' : 'Available Tests'}
-              </h2>
-            </div>
+            <h2 className="text-xl font-semibold text-white mb-4">
+              {user.role === 'admin' ? 'All Tests' : 'Available Tests'}
+            </h2>
             
             {filteredQuestionnaires.length === 0 ? (
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-sm">
                 <CardContent className="p-8 text-center">
-                  <p className="text-gray-500">
+                  <p className="text-gray-600">
                     {user.role === 'admin' 
                       ? 'No tests created yet. Click "Generate Test" to create your first test.'
                       : 'No tests available at the moment.'
@@ -257,65 +330,59 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-6">
-                {filteredQuestionnaires.map((questionnaire) => (
-                  <QuestionnaireDisplay
-                    key={questionnaire.id}
-                    questionnaire={questionnaire}
-                    isAdmin={user.role === 'admin'}
-                    onUpdate={handleQuestionnaireUpdate}
-                    onDelete={handleQuestionnaireDelete}
-                  />
-                ))}
-              </div>
+              filteredQuestionnaires.map((questionnaire) => (
+                <QuestionnaireDisplay
+                  key={questionnaire.id}
+                  questionnaire={questionnaire}
+                  isAdmin={user.role === 'admin'}
+                  onUpdate={handleQuestionnaireUpdate}
+                  onDelete={handleQuestionnaireDelete}
+                />
+              ))
             )}
           </div>
         )}
 
         {activeTab === 'courses' && user.role === 'admin' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Generated Courses</h2>
-            </div>
+            <h2 className="text-xl font-semibold text-white mb-4">Generated Courses</h2>
             
             {courses.length === 0 ? (
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-sm">
                 <CardContent className="p-8 text-center">
-                  <p className="text-gray-500">
+                  <p className="text-gray-600">
                     No courses generated yet. Create a test with course option enabled.
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-6">
-                {courses.map((course) => (
-                  <Card key={course.id}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span>{course.name}</span>
-                        {course.pdfUrl && (
-                          <Button 
-                            onClick={() => handleDownloadCoursePDF(course)}
-                            size="sm"
-                            variant="outline"
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download PDF
-                          </Button>
-                        )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-700 mb-4">{course.description}</p>
-                      <div className="flex gap-4 text-sm text-gray-500">
-                        <span>📖 {course.materials?.length || 0} sections</span>
-                        <span>⏱️ ~{course.estimatedTime || 0} minutes</span>
-                        <span>📅 {new Date(course.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              courses.map((course) => (
+                <Card key={course.id} className="bg-white/90 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>{course.name}</span>
+                      {course.pdfUrl && (
+                        <Button 
+                          onClick={() => handleDownloadCoursePDF(course)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download PDF
+                        </Button>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-700 mb-4">{course.description}</p>
+                    <div className="flex gap-4 text-sm text-gray-600">
+                      <span>📖 {course.materials?.length || 0} sections</span>
+                      <span>⏱️ ~{course.estimatedTime || 0} minutes</span>
+                      <span>📅 {new Date(course.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
           </div>
         )}
