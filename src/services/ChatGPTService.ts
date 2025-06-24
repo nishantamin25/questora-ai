@@ -1,4 +1,3 @@
-
 import { LanguageService } from './LanguageService';
 
 class ChatGPTServiceClass {
@@ -229,7 +228,8 @@ class ChatGPTServiceClass {
     localStorage.removeItem('openai_api_key');
   }
 
-  private getApiKey(): string {
+  // Public method to get API key (used internally and by other services)
+  public getApiKey(): string {
     const apiKey = localStorage.getItem('openai_api_key');
     if (!apiKey) {
       console.warn('No OpenAI API key found in localStorage. Please set it in the settings.');
