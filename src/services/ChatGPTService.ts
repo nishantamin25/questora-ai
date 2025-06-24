@@ -14,29 +14,27 @@ class ChatGPTServiceClass {
     const apiKey = this.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    // IMPROVED PROMPT: More instructive about using content
     let fullPrompt = `You are a question generator. Your task is to create exactly ${numberOfQuestions} multiple-choice questions at ${difficulty} difficulty level.
 
 TOPIC: ${prompt}
 
 ${fileContent ? `CONTENT TO USE:
-Use the following content as your primary source. Even if it seems incomplete or poorly formatted, extract meaningful concepts and create questions based on what is available:
+Use the following content as your primary source. Create questions based on the concepts, information, and topics found in this content:
 
 ${fileContent}
 
 INSTRUCTIONS:
-- Create questions based on ANY concepts, terms, or information found in the above content
-- If the content seems fragmented, focus on any recognizable topics or themes
-- Use your knowledge to expand on concepts mentioned in the content
-- Do NOT reject the content - work with what is provided` : 'Create questions based on the topic and your knowledge.'}
+- Create questions based on the concepts and information in the above content
+- Focus on key topics, terms, and principles mentioned
+- Use your knowledge to create comprehensive questions about these topics` : 'Create questions based on the topic and your knowledge.'}
 
 ${totalSets > 1 ? `This is set ${setNumber} of ${totalSets}, so ensure questions are unique and don't overlap with other sets.` : ''}
 
 RESPONSE FORMAT:
 Return a JSON object with a "questions" array. Each question must have:
 - question: string (the question text)
-- options: array of 4 strings (answer choices)
-- correctAnswer: number (index 0-3 of correct option)
+- options: array of 4 strings (answer choices)  
+- correct_answer: number (index 0-3 of correct option)
 - explanation: string (brief explanation of the answer)
 
 Example format:
@@ -45,7 +43,7 @@ Example format:
     {
       "question": "What is the main topic?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": 0,
+      "correct_answer": 0,
       "explanation": "Option A is correct because..."
     }
   ]
@@ -57,7 +55,6 @@ Example format:
 
     try {
       console.log('Sending request to OpenAI with content length:', fileContent.length);
-      console.log('Content preview:', fileContent.substring(0, 500));
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -70,7 +67,7 @@ Example format:
           messages: [
             {
               role: 'system',
-              content: 'You are an expert question generator. Always create valid multiple-choice questions in the requested JSON format. Never refuse to create questions - work with any content provided, no matter how limited.'
+              content: 'You are an expert question generator. Always create valid multiple-choice questions in the requested JSON format. Work with any content provided and create meaningful educational questions.'
             },
             {
               role: 'user',
@@ -104,19 +101,14 @@ Example format:
         const parsedResponse = JSON.parse(content);
         console.log('Parsed OpenAI response:', parsedResponse);
 
-        // Handle multiple possible response formats
         let questions = [];
         
         if (parsedResponse.questions && Array.isArray(parsedResponse.questions)) {
           questions = parsedResponse.questions;
         } else if (Array.isArray(parsedResponse)) {
           questions = parsedResponse;
-        } else if (parsedResponse.error) {
-          console.warn('OpenAI returned error:', parsedResponse.error);
-          return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
         } else {
           console.warn('Unexpected response format, trying to extract questions...');
-          // Try to find questions in various formats
           questions = this.extractQuestionsFromResponse(parsedResponse);
         }
 
@@ -125,13 +117,14 @@ Example format:
           return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
         }
 
-        // Validate and clean questions
+        // FIXED: Handle both correctAnswer and correct_answer formats
         const validQuestions = questions
           .filter(q => q && q.question && q.options && Array.isArray(q.options))
           .map(q => ({
             question: q.question,
             options: Array.isArray(q.options) ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
-            correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+            correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
+                          typeof q.correct_answer === 'number' ? q.correct_answer : 0,
             explanation: q.explanation || 'Explanation not provided.'
           }))
           .slice(0, numberOfQuestions);
@@ -148,7 +141,6 @@ Example format:
         console.error('Error parsing JSON from OpenAI:', parseError);
         console.error('Content received from OpenAI:', content);
         
-        // Try to extract questions from malformed response
         const extractedQuestions = this.extractQuestionsFromText(content);
         if (extractedQuestions.length > 0) {
           console.log('Successfully extracted questions from malformed response');
@@ -166,7 +158,6 @@ Example format:
   private extractQuestionsFromResponse(response: any): any[] {
     const questions = [];
     
-    // Try different possible structures
     for (const key in response) {
       const value = response[key];
       if (Array.isArray(value) && value.length > 0 && value[0].question) {
@@ -182,20 +173,18 @@ Example format:
     console.log('Attempting to extract questions from text:', text.substring(0, 500));
     
     try {
-      // Try to find question patterns in text
       const questionBlocks = text.split(/(?:\d+\.|\n\n|\*\*Question)/);
       
       for (const block of questionBlocks) {
         if (block.trim().length < 20) continue;
         
         const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-        if (lines.length < 5) continue; // Need at least question + 4 options
+        if (lines.length < 5) continue;
         
         const questionText = lines[0].replace(/^[\d\.\*\-\s]+/, '');
         const options = [];
         let correctAnswer = 0;
         
-        // Look for options
         for (let i = 1; i < Math.min(lines.length, 6); i++) {
           const line = lines[i];
           if (line.match(/^[A-D][\.\)\:]?\s*/)) {
@@ -315,11 +304,11 @@ Example format:
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content enhancer. Extract, clean, and enhance the provided text content to make it suitable for educational course generation and assessment. Focus on creating clear, structured educational material. Always work with the content provided - never reject it as insufficient.'
+              content: 'You are an educational content enhancer. Extract, clean, and enhance the provided text content to make it suitable for educational course generation and assessment. Focus on creating clear, structured educational material. Always work with the content provided.'
             },
             {
               role: 'user',
-              content: `Please enhance this text content for educational use. Extract key information, organize it logically, and expand on important concepts to create comprehensive educational material. Work with whatever content is provided, even if it seems fragmented:
+              content: `Please enhance this text content for educational use. Extract key information, organize it logically, and expand on important concepts to create comprehensive educational material:
 
 ${textContent}`
             }
@@ -337,7 +326,7 @@ ${textContent}`
       return data.choices[0]?.message?.content || textContent;
     } catch (error) {
       console.error('Error enhancing text content:', error);
-      return textContent; // Return original content on error
+      return textContent;
     }
   }
 
@@ -356,7 +345,7 @@ ${textContent}`
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment. Focus on providing substantial content that covers key concepts, practical applications, and learning objectives. Always create content - never refuse due to insufficient input.'
+              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment.'
             },
             {
               role: 'user',
