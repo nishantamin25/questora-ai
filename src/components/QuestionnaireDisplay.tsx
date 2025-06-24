@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
@@ -47,140 +47,179 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   const [questionsVisible, setQuestionsVisible] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<Question[]>(questionnaire.questions || []);
   
-  // CRITICAL FIX: Maintain stable original content that never changes
-  const [originalContent] = useState<{
-    title: string;
-    description: string;
-    questions: Question[];
-    courseContent?: any;
-  }>({
-    title: questionnaire.title,
-    description: questionnaire.description,
-    questions: questionnaire.questions || [],
-    courseContent: questionnaire.courseContent
-  });
+  // CRITICAL FIX: Single source of truth for content with immediate language switching
+  const [content, setContent] = useState(() => ({
+    // Original English content (never changes)
+    original: {
+      title: questionnaire.title,
+      description: questionnaire.description,
+      questions: questionnaire.questions || [],
+      courseContent: questionnaire.courseContent
+    },
+    // Current display content (updates immediately on language change)
+    display: {
+      title: questionnaire.title,
+      description: questionnaire.description,
+      questions: questionnaire.questions || [],
+      courseContent: questionnaire.courseContent
+    },
+    currentLanguage: LanguageService.getCurrentLanguage(),
+    isTranslating: false
+  }));
   
-  // CRITICAL FIX: Separate display content that updates during translation
-  const [displayContent, setDisplayContent] = useState<{
-    title: string;
-    description: string;
-    questions: Question[];
-    courseContent?: any;
-    currentLanguage: string;
-  }>({
-    title: questionnaire.title,
-    description: questionnaire.description,
-    questions: questionnaire.questions || [],
-    courseContent: questionnaire.courseContent,
-    currentLanguage: LanguageService.getCurrentLanguage()
-  });
-  
-  const [isTranslating, setIsTranslating] = useState(false);
+  // Use ref to prevent stale closures in async operations
+  const contentRef = useRef(content);
+  contentRef.current = content;
 
-  // CRITICAL FIX: Atomic translation function that never clears questions
-  const translateContentToLanguage = useCallback(async (targetLanguage: string) => {
-    // NEVER translate if questions don't exist
-    if (!originalContent.questions || originalContent.questions.length === 0) {
-      console.warn('No questions to translate');
+  // CRITICAL: Atomic translation that never clears questions
+  const translateContent = useCallback(async (targetLanguage: string) => {
+    const currentContent = contentRef.current;
+    
+    // Skip if already in target language or no questions to translate
+    if (currentContent.currentLanguage === targetLanguage || !currentContent.original.questions.length) {
       return;
     }
 
-    // Don't translate if already in target language
-    if (displayContent.currentLanguage === targetLanguage) {
-      return;
-    }
-
-    console.log(`Starting translation from ${displayContent.currentLanguage} to ${targetLanguage}...`);
-    console.log(`Original questions count: ${originalContent.questions.length}`);
-    console.log(`Current display questions count: ${displayContent.questions.length}`);
-
-    setIsTranslating(true);
+    console.log(`Starting immediate translation to ${targetLanguage}...`);
+    
+    // STEP 1: Immediately update language and set translating state WITHOUT clearing questions
+    setContent(prev => ({
+      ...prev,
+      currentLanguage: targetLanguage,
+      isTranslating: true
+    }));
 
     try {
-      // CRITICAL: Start with current display content to preserve questions
-      const newDisplayContent = {
-        ...displayContent,
-        currentLanguage: targetLanguage
-      };
-
       if (targetLanguage === 'en') {
-        // Switch back to English - use original content
-        newDisplayContent.title = originalContent.title;
-        newDisplayContent.description = originalContent.description;
-        newDisplayContent.questions = originalContent.questions;
-        newDisplayContent.courseContent = originalContent.courseContent;
-      } else {
-        // Translate to target language
-        console.log('Translating title and description...');
-        if (originalContent.title) {
-          newDisplayContent.title = await LanguageService.translateContent(
-            originalContent.title, 
-            targetLanguage
-          );
-        }
-        
-        if (originalContent.description) {
-          newDisplayContent.description = await LanguageService.translateContent(
-            originalContent.description, 
-            targetLanguage
-          );
-        }
-        
-        // CRITICAL: Translate questions while preserving them
-        console.log(`Translating ${originalContent.questions.length} questions...`);
-        const translatedQuestions = await LanguageService.translateQuestions(
-          originalContent.questions, 
-          targetLanguage
+        // STEP 2A: Switch back to English immediately - use original content
+        setContent(prev => ({
+          ...prev,
+          display: {
+            title: prev.original.title,
+            description: prev.original.description,
+            questions: prev.original.questions, // Always preserve questions
+            courseContent: prev.original.courseContent
+          },
+          isTranslating: false
+        }));
+        console.log('Switched back to English immediately');
+        return;
+      }
+
+      // STEP 2B: For other languages, translate while keeping current display intact
+      const translationPromises = [];
+      
+      // Translate title
+      if (currentContent.original.title) {
+        translationPromises.push(
+          LanguageService.translateContent(currentContent.original.title, targetLanguage)
+            .then(translated => ({ type: 'title', value: translated }))
         );
+      }
+      
+      // Translate description
+      if (currentContent.original.description) {
+        translationPromises.push(
+          LanguageService.translateContent(currentContent.original.description, targetLanguage)
+            .then(translated => ({ type: 'description', value: translated }))
+        );
+      }
+      
+      // Translate questions
+      if (currentContent.original.questions.length > 0) {
+        translationPromises.push(
+          LanguageService.translateQuestions(currentContent.original.questions, targetLanguage)
+            .then(translated => ({ type: 'questions', value: translated }))
+        );
+      }
+      
+      // Translate course content
+      if (currentContent.original.courseContent) {
+        const courseContent = { ...currentContent.original.courseContent };
         
-        // CRITICAL: Always preserve questions - use original as fallback
-        newDisplayContent.questions = translatedQuestions && translatedQuestions.length > 0 
-          ? translatedQuestions 
-          : originalContent.questions;
-        
-        // Translate course content if present
-        if (originalContent.courseContent) {
-          const courseContent = { ...originalContent.courseContent };
-          
-          if (courseContent.title) {
-            courseContent.title = await LanguageService.translateContent(
-              courseContent.title, 
-              targetLanguage
-            );
-          }
-          
-          if (courseContent.description) {
-            courseContent.description = await LanguageService.translateContent(
-              courseContent.description, 
-              targetLanguage
-            );
-          }
-          
-          if (courseContent.modules && Array.isArray(courseContent.modules)) {
-            courseContent.modules = await Promise.all(
+        const coursePromises = [];
+        if (courseContent.title) {
+          coursePromises.push(
+            LanguageService.translateContent(courseContent.title, targetLanguage)
+              .then(translated => ({ field: 'title', value: translated }))
+          );
+        }
+        if (courseContent.description) {
+          coursePromises.push(
+            LanguageService.translateContent(courseContent.description, targetLanguage)
+              .then(translated => ({ field: 'description', value: translated }))
+          );
+        }
+        if (courseContent.modules && Array.isArray(courseContent.modules)) {
+          coursePromises.push(
+            Promise.all(
               courseContent.modules.map(async (module: any) => ({
                 ...module,
                 title: module.title ? await LanguageService.translateContent(module.title, targetLanguage) : module.title,
                 content: module.content ? await LanguageService.translateContent(module.content, targetLanguage) : module.content
               }))
-            );
-          }
-          
-          newDisplayContent.courseContent = courseContent;
+            ).then(translated => ({ field: 'modules', value: translated }))
+          );
+        }
+        
+        if (coursePromises.length > 0) {
+          translationPromises.push(
+            Promise.all(coursePromises).then(results => {
+              const translatedCourse = { ...courseContent };
+              results.forEach(result => {
+                if (result.field === 'title') translatedCourse.title = result.value;
+                else if (result.field === 'description') translatedCourse.description = result.value;
+                else if (result.field === 'modules') translatedCourse.modules = result.value;
+              });
+              return { type: 'courseContent', value: translatedCourse };
+            })
+          );
         }
       }
+
+      // STEP 3: Apply translations as they complete, ensuring questions are never lost
+      const translations = await Promise.all(translationPromises);
       
-      // CRITICAL: Single atomic update to prevent questions from disappearing
-      console.log(`Translation completed. Final questions count: ${newDisplayContent.questions.length}`);
-      setDisplayContent(newDisplayContent);
+      setContent(prev => {
+        const newDisplay = { ...prev.display };
+        
+        translations.forEach(translation => {
+          switch (translation.type) {
+            case 'title':
+              newDisplay.title = translation.value;
+              break;
+            case 'description':
+              newDisplay.description = translation.value;
+              break;
+            case 'questions':
+              // CRITICAL: Only update if translation succeeded and has content
+              if (translation.value && translation.value.length > 0) {
+                newDisplay.questions = translation.value;
+              }
+              // Otherwise keep current questions to prevent blank screen
+              break;
+            case 'courseContent':
+              newDisplay.courseContent = translation.value;
+              break;
+          }
+        });
+        
+        return {
+          ...prev,
+          display: newDisplay,
+          isTranslating: false
+        };
+      });
+      
+      console.log(`Translation to ${targetLanguage} completed successfully`);
       
     } catch (error) {
       console.error('Translation error:', error);
       
-      // CRITICAL: On error, preserve current state and just update language
-      setDisplayContent(prev => ({
+      // CRITICAL: On error, preserve current state and just update flags
+      setContent(prev => ({
         ...prev,
-        currentLanguage: targetLanguage
+        isTranslating: false
       }));
       
       toast({
@@ -188,49 +227,50 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         description: "Failed to translate content. Content preserved in current language.",
         variant: "destructive"
       });
-    } finally {
-      setIsTranslating(false);
     }
-  }, [originalContent, displayContent]);
+  }, []);
 
-  // Initialize display content on mount
+  // Initialize content on mount
   useEffect(() => {
     if (questionnaire) {
+      const currentLanguage = LanguageService.getCurrentLanguage();
+      
       setEditedQuestionnaire(questionnaire);
       setEditedQuestions(questionnaire.questions || []);
       
-      const currentLanguage = LanguageService.getCurrentLanguage();
-      
-      // CRITICAL: Initialize with questionnaire data and current language
-      setDisplayContent({
-        title: questionnaire.title,
-        description: questionnaire.description,
-        questions: questionnaire.questions || [],
-        courseContent: questionnaire.courseContent,
-        currentLanguage: currentLanguage
+      setContent({
+        original: {
+          title: questionnaire.title,
+          description: questionnaire.description,
+          questions: questionnaire.questions || [],
+          courseContent: questionnaire.courseContent
+        },
+        display: {
+          title: questionnaire.title,
+          description: questionnaire.description,
+          questions: questionnaire.questions || [],
+          courseContent: questionnaire.courseContent
+        },
+        currentLanguage: currentLanguage,
+        isTranslating: false
       });
       
       // Translate if not in English
       if (currentLanguage !== 'en') {
-        translateContentToLanguage(currentLanguage);
+        translateContent(currentLanguage);
       }
     }
-  }, [questionnaire.id]); // Only depend on questionnaire ID to prevent loops
+  }, [questionnaire.id, translateContent]);
 
-  // Listen for language changes
+  // Listen for language changes and translate immediately
   useEffect(() => {
     const unsubscribe = LanguageService.onLanguageChange((newLanguage: string) => {
-      console.log(`Language changed to ${newLanguage}, current display language: ${displayContent.currentLanguage}`);
-      
-      // CRITICAL: Only translate if language actually changed
-      if (newLanguage !== displayContent.currentLanguage) {
-        console.log(`Initiating translation to ${newLanguage}...`);
-        translateContentToLanguage(newLanguage);
-      }
+      console.log(`Language changed to ${newLanguage}`);
+      translateContent(newLanguage);
     });
 
     return unsubscribe;
-  }, [displayContent.currentLanguage, translateContentToLanguage]);
+  }, [translateContent]);
 
   const handleEditToggle = () => {
     if (isEditing) {
@@ -346,30 +386,28 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
     });
   };
 
-  // CRITICAL FIX: Use display content for rendering, always ensure questions exist
+  // CRITICAL: Use stable content for rendering - questions ALWAYS exist
   const displayQuestionnaire = isEditing ? editedQuestionnaire : {
     ...questionnaire,
-    title: displayContent.title,
-    description: displayContent.description
+    title: content.display.title,
+    description: content.display.description
   };
   
-  // CRITICAL FIX: Always ensure questions are available - never empty
+  // CRITICAL: Questions are ALWAYS available - never empty
   const displayQuestions = isEditing 
     ? editedQuestions 
-    : (displayContent.questions && displayContent.questions.length > 0 
-        ? displayContent.questions 
-        : originalContent.questions); // Always fallback to original
+    : content.display.questions;
   
-  const displayCourseContent = displayContent.courseContent;
+  const displayCourseContent = content.display.courseContent;
 
-  // CRITICAL: Debug logging
+  // Debug logging
   console.log('QuestionnaireDisplay render:', {
     questionnaireId: questionnaire.id,
     isEditing,
     displayQuestionsCount: displayQuestions.length,
-    displayLanguage: displayContent.currentLanguage,
-    isTranslating,
-    originalQuestionsCount: originalContent.questions.length
+    currentLanguage: content.currentLanguage,
+    isTranslating: content.isTranslating,
+    originalQuestionsCount: content.original.questions.length
   });
 
   return (
@@ -388,9 +426,9 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
           onDelete={onDelete}
           onSaveTest={() => {}}
         />
-        {isTranslating && (
+        {content.isTranslating && (
           <div className="text-sm text-slate-500 italic">
-            Translating content to {LanguageService.getCurrentLanguage()}...
+            Translating content to {content.currentLanguage}...
           </div>
         )}
       </CardHeader>
