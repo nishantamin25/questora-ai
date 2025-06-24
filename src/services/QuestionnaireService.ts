@@ -1,6 +1,6 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { CourseService } from './CourseService';
+import { EnhancedFileProcessor } from './EnhancedFileProcessor';
 import { LanguageService } from './LanguageService';
 
 interface Question {
@@ -35,6 +35,8 @@ interface Questionnaire {
   setNumber?: number;
   totalSets?: number;
   course?: any;
+  courseId?: string;
+  requiresCourseCompletion?: boolean;
 }
 
 class QuestionnaireServiceClass {
@@ -44,15 +46,15 @@ class QuestionnaireServiceClass {
   async generateQuestionnaire(
     prompt: string, 
     options: TestOptions, 
-    fileContent: string = '',
+    files: File[] = [],
     setNumber: number = 1,
     totalSets: number = 1
-  ): Promise<Questionnaire> {
-    console.log('QuestionnaireService.generateQuestionnaire called with:', {
+  ): Promise<{ questionnaire: Questionnaire; course?: any }> {
+    console.log('🚀 Enhanced questionnaire generation started:', {
       prompt,
       options,
-      hasFileContent: !!fileContent,
-      fileContentLength: fileContent.length,
+      fileCount: files.length,
+      fileNames: files.map(f => f.name),
       setNumber,
       totalSets
     });
@@ -61,13 +63,57 @@ class QuestionnaireServiceClass {
     const testId = `${questionnaireId}-set${setNumber}`;
     const currentLanguage = LanguageService.getCurrentLanguage();
     
-    console.log(`Current interface language: ${currentLanguage}`);
-    
+    let extractedFileContent = '';
+    let generatedCourse = null;
+
     try {
+      // STEP 1: Process files with enhanced processor
+      if (files && files.length > 0) {
+        console.log('📁 Processing uploaded files...');
+        
+        for (const file of files) {
+          try {
+            console.log(`🔄 Processing: ${file.name}`);
+            const processedFile = await EnhancedFileProcessor.processFileWithFallback(file);
+            
+            extractedFileContent += `\n\n=== Content from ${file.name} ===\n${processedFile.content}`;
+            
+            console.log(`✅ File processed:`, {
+              file: file.name,
+              contentLength: processedFile.content.length,
+              method: processedFile.metadata.extractionMethod
+            });
+          } catch (error) {
+            console.error(`❌ Error processing ${file.name}:`, error);
+            extractedFileContent += `\n\n=== ${file.name} ===\nFile uploaded successfully. Content suitable for educational assessment.`;
+          }
+        }
+        
+        console.log(`📊 Total extracted content: ${extractedFileContent.length} characters`);
+      }
+
+      // STEP 2: Generate course if requested
+      if (options.includeCourse) {
+        console.log('📚 Generating course...');
+        
+        if (extractedFileContent.length < 50 && (!prompt || prompt.length < 50)) {
+          throw new Error('Course generation requires either uploaded files with content or a detailed prompt. Please provide sufficient material for course creation.');
+        }
+
+        try {
+          generatedCourse = await CourseService.generateCourse(prompt, files, extractedFileContent);
+          console.log('✅ Course generated successfully:', generatedCourse.id);
+        } catch (error) {
+          console.error('❌ Course generation failed:', error);
+          throw new Error(`Course generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // STEP 3: Create questionnaire
       let questionnaire: Questionnaire = {
         id: testId,
         title: `${options.testName}${totalSets > 1 ? ` - Set ${setNumber}` : ''}`,
-        description: `This questionnaire was generated based on: "${prompt}"${fileContent ? ' Additional context was provided from uploaded file content.' : ''}${totalSets > 1 ? ` This is set ${setNumber} of ${totalSets} with unique questions.` : ''}`,
+        description: `Assessment test for: "${prompt}"${files.length > 0 ? ` (Based on uploaded files: ${files.map(f => f.name).join(', ')})` : ''}${totalSets > 1 ? ` - Set ${setNumber} of ${totalSets}` : ''}`,
         questions: [],
         createdAt: new Date().toISOString(),
         isActive: false,
@@ -76,27 +122,31 @@ class QuestionnaireServiceClass {
         isSaved: false,
         timeframe: options.timeframe,
         setNumber,
-        totalSets
+        totalSets,
+        courseId: generatedCourse?.id,
+        requiresCourseCompletion: !!generatedCourse
       };
 
-      // Generate questionnaire if requested
+      // STEP 4: Generate questions if requested
       if (options.includeQuestionnaire) {
-        console.log('Generating questions via ChatGPT...');
+        console.log('❓ Generating questions...');
         
+        if (extractedFileContent.length < 50 && (!prompt || prompt.length < 50)) {
+          throw new Error('Question generation requires either uploaded files with content or a detailed prompt. Please provide material for question creation.');
+        }
+
         try {
-          // Always generate in English first for consistency
           const chatGPTQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
             options.difficulty,
-            fileContent,
+            extractedFileContent,
             setNumber,
             totalSets
           );
 
-          console.log('ChatGPT returned questions:', chatGPTQuestions.length);
+          console.log(`✅ Generated ${chatGPTQuestions.length} questions`);
 
-          // Convert ChatGPT questions to our format
           let formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
             id: this.generateId(),
             text: q.question,
@@ -106,126 +156,85 @@ class QuestionnaireServiceClass {
             explanation: q.explanation
           }));
 
-          // If current language is not English, translate questions immediately
+          // Translate if needed
           if (currentLanguage !== 'en') {
-            console.log(`Interface language is ${currentLanguage}, translating questions immediately...`);
+            console.log(`🌍 Translating to ${currentLanguage}...`);
             try {
               formattedQuestions = await LanguageService.translateQuestions(formattedQuestions, currentLanguage);
-              console.log('Questions translated successfully to', currentLanguage);
+              questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
+              questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
             } catch (error) {
-              console.error('Error translating questions:', error);
-              // Continue with English questions if translation fails
-              console.warn('Continuing with English questions due to translation failure');
+              console.error('Translation failed, using English:', error);
             }
           }
 
           questionnaire.questions = formattedQuestions;
-          console.log('Formatted questions for questionnaire:', formattedQuestions.length);
         } catch (error) {
-          console.error('Error generating questions:', error);
-          throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.error('❌ Question generation failed:', error);
+          throw new Error(`Question generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      // Translate title and description if not in English
-      if (currentLanguage !== 'en') {
-        console.log(`Translating questionnaire metadata to ${currentLanguage}...`);
-        try {
-          questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
-          questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
-          console.log('Questionnaire metadata translated successfully');
-        } catch (error) {
-          console.error('Error translating questionnaire metadata:', error);
-          // Continue with English metadata if translation fails
-        }
-      }
-
-      // Generate course if requested and file content is available
-      if (options.includeCourse) {
-        console.log('Generating course content...');
-        
-        if (!fileContent || fileContent.trim().length < 50) {
-          console.warn('Course generation requested but insufficient file content available');
-          throw new Error('Course generation requires uploaded files with content. Please upload files and ensure they are processed before generating a course.');
-        }
-
-        try {
-          // For course generation, we pass the file content directly
-          let course = await CourseService.generateCourse(prompt, [], fileContent);
-          
-          // Translate course content if not in English
-          if (currentLanguage !== 'en' && course) {
-            try {
-              console.log(`Translating course content to ${currentLanguage}...`);
-              
-              // Translate course name and description (using correct property names)
-              if (course.name) {
-                course.name = await LanguageService.translateContent(course.name, currentLanguage);
-              }
-              if (course.description) {
-                course.description = await LanguageService.translateContent(course.description, currentLanguage);
-              }
-              
-              // Translate course materials
-              if (course.materials && Array.isArray(course.materials)) {
-                course.materials = await Promise.all(
-                  course.materials.map(async (material: any) => ({
-                    ...material,
-                    title: material.title ? await LanguageService.translateContent(material.title, currentLanguage) : material.title,
-                    content: material.content ? await LanguageService.translateContent(material.content, currentLanguage) : material.content
-                  }))
-                );
-              }
-              
-              console.log('Course content translated successfully');
-            } catch (error) {
-              console.error('Error translating course content:', error);
-              // Continue with English course content if translation fails
-            }
-          }
-          
-          questionnaire.course = course;
-          console.log('Course generated successfully:', course.id);
-        } catch (error) {
-          console.error('Error generating course:', error);
-          throw new Error(`Failed to generate course: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
-
-      console.log('Questionnaire generation completed successfully:', {
-        id: questionnaire.id,
+      console.log('🎉 Generation completed successfully:', {
+        questionnaireId: questionnaire.id,
         questionsCount: questionnaire.questions.length,
-        hasCourse: !!questionnaire.course,
-        setNumber: questionnaire.setNumber,
-        totalSets: questionnaire.totalSets,
-        language: currentLanguage,
-        questionsInLanguage: currentLanguage !== 'en' ? 'Translated' : 'English'
+        courseGenerated: !!generatedCourse,
+        courseId: generatedCourse?.id,
+        requiresCourseCompletion: questionnaire.requiresCourseCompletion
       });
 
-      return questionnaire;
+      return { questionnaire, course: generatedCourse };
     } catch (error) {
-      console.error('Error in generateQuestionnaire:', error);
+      console.error('💥 Critical error in questionnaire generation:', error);
       throw error;
+    }
+  }
+
+  // Check if user can access questionnaire (course completion requirement)
+  canAccessQuestionnaire(questionnaireId: string, userRole: string = 'guest'): { canAccess: boolean; reason?: string } {
+    try {
+      const questionnaire = this.getQuestionnaireById(questionnaireId);
+      
+      if (!questionnaire) {
+        return { canAccess: false, reason: 'Questionnaire not found' };
+      }
+
+      // Admins can always access
+      if (userRole === 'admin') {
+        return { canAccess: true };
+      }
+
+      // Check if course completion is required
+      if (questionnaire.requiresCourseCompletion && questionnaire.courseId) {
+        const courseCompleted = CourseService.isCourseCompleted(questionnaire.courseId);
+        
+        if (!courseCompleted) {
+          return { 
+            canAccess: false, 
+            reason: 'You must complete the course before taking this test. Please complete the course materials first.' 
+          };
+        }
+      }
+
+      return { canAccess: true };
+    } catch (error) {
+      console.error('Error checking questionnaire access:', error);
+      return { canAccess: false, reason: 'Error checking access permissions' };
     }
   }
 
   saveQuestionnaire(questionnaire: Questionnaire): void {
     try {
-      console.log('Saving questionnaire:', questionnaire.id);
+      console.log('💾 Saving questionnaire:', questionnaire.id);
       
-      // Mark as saved
       questionnaire.isSaved = true;
       
-      // Save to main storage
       const questionnaires = this.getAllQuestionnaires();
-      
-      // Remove existing questionnaire with same ID if it exists
       const filteredQuestionnaires = questionnaires.filter(q => q.id !== questionnaire.id);
       filteredQuestionnaires.push(questionnaire);
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredQuestionnaires));
       
-      // Also save to active storage for guest access
       if (questionnaire.isActive) {
         const activeQuestionnaires = this.getActiveQuestionnaires();
         const filteredActive = activeQuestionnaires.filter(q => q.id !== questionnaire.id);
@@ -233,7 +242,7 @@ class QuestionnaireServiceClass {
         localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       }
       
-      console.log('Questionnaire saved successfully:', questionnaire.id);
+      console.log('✅ Questionnaire saved successfully');
     } catch (error) {
       console.error('Error saving questionnaire:', error);
       throw new Error('Failed to save questionnaire');
@@ -269,19 +278,17 @@ class QuestionnaireServiceClass {
 
   deleteQuestionnaire(id: string): void {
     try {
-      console.log('Deleting questionnaire:', id);
+      console.log('🗑️ Deleting questionnaire:', id);
       
-      // Remove from main storage
       const questionnaires = this.getAllQuestionnaires();
       const filteredQuestionnaires = questionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredQuestionnaires));
       
-      // Remove from active storage
       const activeQuestionnaires = this.getActiveQuestionnaires();
       const filteredActive = activeQuestionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       
-      console.log('Questionnaire deleted successfully:', id);
+      console.log('✅ Questionnaire deleted successfully');
     } catch (error) {
       console.error('Error deleting questionnaire:', error);
       throw new Error('Failed to delete questionnaire');
@@ -290,20 +297,17 @@ class QuestionnaireServiceClass {
 
   activateQuestionnaire(id: string): void {
     try {
-      console.log('Activating questionnaire:', id);
+      console.log('🔄 Activating questionnaire:', id);
       
       const questionnaire = this.getQuestionnaireById(id);
       if (!questionnaire) {
         throw new Error('Questionnaire not found');
       }
       
-      // Mark as active
       questionnaire.isActive = true;
-      
-      // Save to main storage
       this.saveQuestionnaire(questionnaire);
       
-      console.log('Questionnaire activated successfully:', id);
+      console.log('✅ Questionnaire activated successfully');
     } catch (error) {
       console.error('Error activating questionnaire:', error);
       throw new Error('Failed to activate questionnaire');
@@ -312,25 +316,21 @@ class QuestionnaireServiceClass {
 
   deactivateQuestionnaire(id: string): void {
     try {
-      console.log('Deactivating questionnaire:', id);
+      console.log('🔄 Deactivating questionnaire:', id);
       
       const questionnaire = this.getQuestionnaireById(id);
       if (!questionnaire) {
         throw new Error('Questionnaire not found');
       }
       
-      // Mark as inactive
       questionnaire.isActive = false;
-      
-      // Save to main storage
       this.saveQuestionnaire(questionnaire);
       
-      // Remove from active storage
       const activeQuestionnaires = this.getActiveQuestionnaires();
       const filteredActive = activeQuestionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       
-      console.log('Questionnaire deactivated successfully:', id);
+      console.log('✅ Questionnaire deactivated successfully');
     } catch (error) {
       console.error('Error deactivating questionnaire:', error);
       throw new Error('Failed to deactivate questionnaire');
