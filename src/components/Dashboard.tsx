@@ -393,10 +393,12 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       </div>
 
       <GenerateTestDialog
-        isOpen={isGenerateDialogOpen}
-        onClose={() => setIsGenerateDialogOpen(false)}
+        open={isGenerateDialogOpen}
+        prompt=""
+        uploadedFiles={[]}
+        processedFileContent=""
         onGenerate={handleGenerateTest}
-        isGenerating={isGenerating}
+        onCancel={() => setIsGenerateDialogOpen(false)}
       />
 
       <SettingsDialog
