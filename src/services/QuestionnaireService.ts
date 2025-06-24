@@ -152,9 +152,9 @@ class QuestionnaireServiceClass {
             try {
               console.log(`Translating course content to ${currentLanguage}...`);
               
-              // Translate course title and description
-              if (course.title) {
-                course.title = await LanguageService.translateContent(course.title, currentLanguage);
+              // Translate course name and description (using correct property names)
+              if (course.name) {
+                course.name = await LanguageService.translateContent(course.name, currentLanguage);
               }
               if (course.description) {
                 course.description = await LanguageService.translateContent(course.description, currentLanguage);
