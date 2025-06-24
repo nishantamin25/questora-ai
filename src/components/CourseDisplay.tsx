@@ -3,8 +3,11 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { GraduationCap, Play, CheckCircle, Clock, FileText, Image, Video, Download } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { GraduationCap, Play, CheckCircle, Clock, FileText, Image, Video, Download, Edit, Save, X } from 'lucide-react';
 import { PDFGenerationService } from '@/services/PDFGenerationService';
+import { CourseService } from '@/services/CourseService';
 import { toast } from '@/hooks/use-toast';
 
 interface CourseDisplayProps {
@@ -21,15 +24,18 @@ interface CourseDisplayProps {
     pdfUrl?: string;
   };
   onCourseComplete: (courseId: string) => void;
+  onCourseUpdate?: (updatedCourse: any) => void;
   userRole?: 'admin' | 'guest';
 }
 
-const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseDisplayProps) => {
+const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'guest' }: CourseDisplayProps) => {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState(0);
   const [completedMaterials, setCompletedMaterials] = useState<Set<number>>(new Set());
   const [showMaterial, setShowMaterial] = useState(false);
   const [courseCompleted, setCourseCompleted] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCourse, setEditedCourse] = useState(course);
 
   // Load course progress from localStorage
   useEffect(() => {
@@ -43,6 +49,11 @@ const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseD
       setCourseCompleted(progress.courseCompleted || false);
     }
   }, [course.id]);
+
+  // Update edited course when course prop changes
+  useEffect(() => {
+    setEditedCourse(course);
+  }, [course]);
 
   // Save course progress to localStorage
   const saveProgress = () => {
@@ -67,6 +78,52 @@ const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseD
       title: "Enrolled Successfully",
       description: `You have enrolled in "${course.name}". Complete all materials to unlock the test.`,
     });
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    try {
+      // Update the existing course instead of creating a new one
+      CourseService.saveCourse({
+        ...editedCourse,
+        id: course.id, // Ensure we keep the same ID
+        createdAt: course.createdAt || new Date().toISOString(),
+        difficulty: course.difficulty || 'medium',
+        isActive: course.isActive !== undefined ? course.isActive : true
+      });
+      
+      setIsEditing(false);
+      
+      if (onCourseUpdate) {
+        onCourseUpdate(editedCourse);
+      }
+      
+      toast({
+        title: "Course Updated",
+        description: "Course has been successfully saved.",
+      });
+    } catch (error) {
+      console.error('Error saving course:', error);
+      toast({
+        title: "Save Failed",
+        description: "Failed to save course changes.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedCourse(course);
+  };
+
+  const handleMaterialChange = (index: number, field: string, value: string) => {
+    const updatedMaterials = [...editedCourse.materials];
+    updatedMaterials[index] = { ...updatedMaterials[index], [field]: value };
+    setEditedCourse({ ...editedCourse, materials: updatedMaterials });
   };
 
   const handleMaterialComplete = () => {
@@ -130,6 +187,81 @@ const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseD
         return <FileText className="h-4 w-4" />;
     }
   };
+
+  // Edit mode - Show all materials for full document editing
+  if (isEditing) {
+    return (
+      <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl mb-6">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-slate-200 rounded-t-xl">
+          <CardTitle className="text-slate-900 font-poppins flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-2 rounded-lg">
+                <GraduationCap className="h-5 w-5 text-white" />
+              </div>
+              <Input
+                value={editedCourse.name}
+                onChange={(e) => setEditedCourse({ ...editedCourse, name: e.target.value })}
+                className="text-lg font-semibold border-none bg-transparent"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={handleSave}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Save className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+              <Button
+                onClick={handleCancelEdit}
+                variant="outline"
+                size="sm"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
+              <Textarea
+                value={editedCourse.description}
+                onChange={(e) => setEditedCourse({ ...editedCourse, description: e.target.value })}
+                className="min-h-[80px]"
+              />
+            </div>
+            
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Course Materials</h3>
+              {editedCourse.materials.map((material, index) => (
+                <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    {getMaterialIcon(material.type)}
+                    <Input
+                      value={material.title}
+                      onChange={(e) => handleMaterialChange(index, 'title', e.target.value)}
+                      className="font-medium"
+                      placeholder="Section title"
+                    />
+                  </div>
+                  <Textarea
+                    value={material.content}
+                    onChange={(e) => handleMaterialChange(index, 'content', e.target.value)}
+                    className="min-h-[200px]"
+                    placeholder="Section content"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!isEnrolled && userRole === 'guest') {
     return (
@@ -222,6 +354,15 @@ const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseD
                 <span>PDF</span>
               </Button>
               <Button
+                onClick={handleEdit}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-1"
+              >
+                <Edit className="h-4 w-4" />
+                <span>Edit</span>
+              </Button>
+              <Button
                 onClick={() => setShowMaterial(true)}
                 variant="outline"
                 size="sm"
@@ -289,6 +430,17 @@ const CourseDisplay = ({ course, onCourseComplete, userRole = 'guest' }: CourseD
               <Download className="h-4 w-4" />
               <span>PDF</span>
             </Button>
+            {userRole === 'admin' && (
+              <Button
+                onClick={handleEdit}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-1"
+              >
+                <Edit className="h-4 w-4" />
+                <span>Edit</span>
+              </Button>
+            )}
             <div className="text-sm text-slate-600">
               {currentMaterialIndex + 1} of {course.materials.length}
             </div>

@@ -7,9 +7,19 @@ export class CourseManager {
   static saveCourse(course: Course): void {
     try {
       const courses = this.getAllCourses();
-      courses.push(course);
+      const existingIndex = courses.findIndex(c => c.id === course.id);
+      
+      if (existingIndex >= 0) {
+        // Update existing course
+        courses[existingIndex] = course;
+        console.log('Course updated successfully:', course.id);
+      } else {
+        // Add new course
+        courses.push(course);
+        console.log('Course saved successfully:', course.id);
+      }
+      
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(courses));
-      console.log('Course saved successfully:', course.id);
     } catch (error) {
       console.error('Error saving course:', error);
       throw new Error('Failed to save course');
