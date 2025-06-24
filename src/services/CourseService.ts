@@ -250,9 +250,10 @@ Respond with structured educational content based solely on the provided documen
     for (const breakPattern of sectionBreaks) {
       const newChunks: string[] = [];
       for (const chunk of chunks) {
-        // Fix: Explicitly handle the split result with proper typing
-        const parts: string[] = chunk.split(breakPattern);
-        const filteredParts = parts.filter((part: string) => part.trim().length > 100);
+        // Fix: Properly type the split operation and handle the result
+        const splitResult = chunk.split(breakPattern);
+        const parts: string[] = Array.isArray(splitResult) ? splitResult : [chunk];
+        const filteredParts = parts.filter((part) => typeof part === 'string' && part.trim().length > 100);
         newChunks.push(...filteredParts);
       }
       if (newChunks.length > chunks.length && newChunks.length <= 5) {
