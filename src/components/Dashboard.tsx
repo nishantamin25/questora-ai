@@ -51,17 +51,44 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const handleGenerateTest = async (prompt: string, options: any, files: File[]) => {
+  const handleGenerateTest = async (
+    testName: string, 
+    difficulty: 'easy' | 'medium' | 'hard', 
+    numberOfQuestions: number, 
+    timeframe: number, 
+    includeCourse: boolean, 
+    includeQuestionnaire: boolean, 
+    numberOfSets: number
+  ) => {
     setIsGenerating(true);
     try {
-      console.log('🚀 Starting test generation with files:', files.map(f => f.name));
+      console.log('🚀 Starting test generation with params:', {
+        testName,
+        difficulty,
+        numberOfQuestions,
+        timeframe,
+        includeCourse,
+        includeQuestionnaire,
+        numberOfSets
+      });
       
+      // Create options object to match the service
+      const options = {
+        testName,
+        difficulty,
+        numberOfQuestions,
+        timeframe,
+        includeCourse,
+        includeQuestionnaire
+      };
+
+      // For now, use empty prompt and files - this should be enhanced later
       const result = await QuestionnaireService.generateQuestionnaire(
-        prompt,
+        testName, // Using testName as prompt for now
         options,
-        files,
+        [], // Empty files array for now
         1,
-        1
+        numberOfSets
       );
 
       console.log('✅ Generation completed:', {
@@ -373,8 +400,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
       />
 
       <SettingsDialog
-        isOpen={isSettingsOpen}
+        open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        userRole={user.role}
       />
     </div>
   );
