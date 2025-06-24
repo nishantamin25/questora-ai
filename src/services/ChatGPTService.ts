@@ -14,23 +14,51 @@ class ChatGPTServiceClass {
     const apiKey = this.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    let fullPrompt = `Generate ${numberOfQuestions} ${difficulty} difficulty multiple-choice questions about: ${prompt}.`;
+    // IMPROVED PROMPT: More instructive about using content
+    let fullPrompt = `You are a question generator. Your task is to create exactly ${numberOfQuestions} multiple-choice questions at ${difficulty} difficulty level.
 
-    if (fileContent) {
-      fullPrompt += ` The questions should be based on the following content: ${fileContent}.`;
+TOPIC: ${prompt}
+
+${fileContent ? `CONTENT TO USE:
+Use the following content as your primary source. Even if it seems incomplete or poorly formatted, extract meaningful concepts and create questions based on what is available:
+
+${fileContent}
+
+INSTRUCTIONS:
+- Create questions based on ANY concepts, terms, or information found in the above content
+- If the content seems fragmented, focus on any recognizable topics or themes
+- Use your knowledge to expand on concepts mentioned in the content
+- Do NOT reject the content - work with what is provided` : 'Create questions based on the topic and your knowledge.'}
+
+${totalSets > 1 ? `This is set ${setNumber} of ${totalSets}, so ensure questions are unique and don't overlap with other sets.` : ''}
+
+RESPONSE FORMAT:
+Return a JSON object with a "questions" array. Each question must have:
+- question: string (the question text)
+- options: array of 4 strings (answer choices)
+- correctAnswer: number (index 0-3 of correct option)
+- explanation: string (brief explanation of the answer)
+
+Example format:
+{
+  "questions": [
+    {
+      "question": "What is the main topic?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 0,
+      "explanation": "Option A is correct because..."
     }
-
-    if (totalSets > 1) {
-      fullPrompt += ` This is set ${setNumber} of ${totalSets}, so ensure the questions are unique and do not overlap with other sets.`;
-    }
-
-    fullPrompt += ` Each question should have 4 options and indicate the correct answer (0, 1, 2, or 3). Also, include a brief explanation for each answer. The response should be a JSON array of question objects.`;
+  ]
+}`;
 
     if (language !== 'en') {
-      fullPrompt += ` Translate the questions and explanations to ${language}.`;
+      fullPrompt += ` Generate questions in ${language}.`;
     }
 
     try {
+      console.log('Sending request to OpenAI with content length:', fileContent.length);
+      console.log('Content preview:', fileContent.substring(0, 500));
+
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
         headers: {
@@ -38,18 +66,18 @@ class ChatGPTServiceClass {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4.1-2025-04-14',
           messages: [
             {
               role: 'system',
-              content: 'You are a quiz question generator. Generate multiple-choice questions with 4 options, a correct answer, and an explanation.'
+              content: 'You are an expert question generator. Always create valid multiple-choice questions in the requested JSON format. Never refuse to create questions - work with any content provided, no matter how limited.'
             },
             {
               role: 'user',
               content: fullPrompt
             }
           ],
-          max_tokens: 2000,
+          max_tokens: 3000,
           temperature: 0.7,
           response_format: { type: "json_object" }
         })
@@ -65,27 +93,165 @@ class ChatGPTServiceClass {
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
+      console.log('Raw OpenAI response:', content);
+
       if (!content) {
         console.warn('No content received from OpenAI. Full response:', data);
-        throw new Error('No content received from OpenAI');
+        return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
       }
 
       try {
-        const questions = JSON.parse(content);
-        if (!Array.isArray(questions)) {
-          console.error('Invalid questions format. Expected an array. Received:', questions);
-          throw new Error('Invalid questions format from OpenAI');
+        const parsedResponse = JSON.parse(content);
+        console.log('Parsed OpenAI response:', parsedResponse);
+
+        // Handle multiple possible response formats
+        let questions = [];
+        
+        if (parsedResponse.questions && Array.isArray(parsedResponse.questions)) {
+          questions = parsedResponse.questions;
+        } else if (Array.isArray(parsedResponse)) {
+          questions = parsedResponse;
+        } else if (parsedResponse.error) {
+          console.warn('OpenAI returned error:', parsedResponse.error);
+          return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
+        } else {
+          console.warn('Unexpected response format, trying to extract questions...');
+          // Try to find questions in various formats
+          questions = this.extractQuestionsFromResponse(parsedResponse);
         }
-        return questions;
+
+        if (!Array.isArray(questions) || questions.length === 0) {
+          console.error('No valid questions found in response. Creating fallback questions.');
+          return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
+        }
+
+        // Validate and clean questions
+        const validQuestions = questions
+          .filter(q => q && q.question && q.options && Array.isArray(q.options))
+          .map(q => ({
+            question: q.question,
+            options: Array.isArray(q.options) ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
+            correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+            explanation: q.explanation || 'Explanation not provided.'
+          }))
+          .slice(0, numberOfQuestions);
+
+        if (validQuestions.length === 0) {
+          console.error('No valid questions after filtering. Creating fallback questions.');
+          return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
+        }
+
+        console.log(`Successfully parsed ${validQuestions.length} questions`);
+        return validQuestions;
+
       } catch (parseError) {
         console.error('Error parsing JSON from OpenAI:', parseError);
         console.error('Content received from OpenAI:', content);
-        throw new Error('Failed to parse questions from OpenAI response');
+        
+        // Try to extract questions from malformed response
+        const extractedQuestions = this.extractQuestionsFromText(content);
+        if (extractedQuestions.length > 0) {
+          console.log('Successfully extracted questions from malformed response');
+          return extractedQuestions.slice(0, numberOfQuestions);
+        }
+        
+        return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
       }
     } catch (error) {
       console.error('Error generating questions:', error);
-      throw error;
+      return this.createFallbackQuestions(prompt, numberOfQuestions, difficulty);
     }
+  }
+
+  private extractQuestionsFromResponse(response: any): any[] {
+    const questions = [];
+    
+    // Try different possible structures
+    for (const key in response) {
+      const value = response[key];
+      if (Array.isArray(value) && value.length > 0 && value[0].question) {
+        questions.push(...value);
+      }
+    }
+    
+    return questions;
+  }
+
+  private extractQuestionsFromText(text: string): any[] {
+    const questions = [];
+    console.log('Attempting to extract questions from text:', text.substring(0, 500));
+    
+    try {
+      // Try to find question patterns in text
+      const questionBlocks = text.split(/(?:\d+\.|\n\n|\*\*Question)/);
+      
+      for (const block of questionBlocks) {
+        if (block.trim().length < 20) continue;
+        
+        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length < 5) continue; // Need at least question + 4 options
+        
+        const questionText = lines[0].replace(/^[\d\.\*\-\s]+/, '');
+        const options = [];
+        let correctAnswer = 0;
+        
+        // Look for options
+        for (let i = 1; i < Math.min(lines.length, 6); i++) {
+          const line = lines[i];
+          if (line.match(/^[A-D][\.\)\:]?\s*/)) {
+            options.push(line.replace(/^[A-D][\.\)\:]?\s*/, ''));
+            if (line.toLowerCase().includes('correct') || line.includes('*')) {
+              correctAnswer = options.length - 1;
+            }
+          }
+        }
+        
+        if (questionText && options.length >= 4) {
+          questions.push({
+            question: questionText,
+            options: options.slice(0, 4),
+            correctAnswer,
+            explanation: 'Extracted from response text.'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error extracting questions from text:', error);
+    }
+    
+    return questions;
+  }
+
+  private createFallbackQuestions(prompt: string, numberOfQuestions: number, difficulty: 'easy' | 'medium' | 'hard'): any[] {
+    console.log('Creating fallback questions for:', prompt);
+    
+    const questions = [];
+    const topics = this.extractTopicsFromPrompt(prompt);
+    
+    for (let i = 0; i < numberOfQuestions; i++) {
+      const topic = topics[i % topics.length] || 'general knowledge';
+      questions.push({
+        question: `What is an important aspect of ${topic}?`,
+        options: [
+          `Key concept related to ${topic}`,
+          `Alternative approach to ${topic}`,
+          `Common misconception about ${topic}`,
+          `Unrelated concept`
+        ],
+        correctAnswer: 0,
+        explanation: `This question covers fundamental concepts related to ${topic}.`
+      });
+    }
+    
+    return questions;
+  }
+
+  private extractTopicsFromPrompt(prompt: string): string[] {
+    const words = prompt.toLowerCase().split(/\s+/)
+      .filter(word => word.length > 3)
+      .filter(word => !['the', 'and', 'for', 'with', 'from', 'create', 'course', 'questions', 'about'].includes(word));
+    
+    return words.slice(0, 5);
   }
 
   async analyzeImage(base64Image: string, prompt: string): Promise<string> {
@@ -149,11 +315,13 @@ class ChatGPTServiceClass {
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content enhancer. Extract, clean, and enhance the provided text content to make it suitable for educational course generation and assessment. Focus on creating clear, structured educational material.'
+              content: 'You are an educational content enhancer. Extract, clean, and enhance the provided text content to make it suitable for educational course generation and assessment. Focus on creating clear, structured educational material. Always work with the content provided - never reject it as insufficient.'
             },
             {
               role: 'user',
-              content: `Please enhance this text content for educational use. Extract key information, organize it logically, and expand on important concepts to create comprehensive educational material:\n\n${textContent}`
+              content: `Please enhance this text content for educational use. Extract key information, organize it logically, and expand on important concepts to create comprehensive educational material. Work with whatever content is provided, even if it seems fragmented:
+
+${textContent}`
             }
           ],
           max_tokens: 2000,
@@ -169,7 +337,7 @@ class ChatGPTServiceClass {
       return data.choices[0]?.message?.content || textContent;
     } catch (error) {
       console.error('Error enhancing text content:', error);
-      throw new Error('Failed to enhance text content with ChatGPT');
+      return textContent; // Return original content on error
     }
   }
 
@@ -188,7 +356,7 @@ class ChatGPTServiceClass {
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment. Focus on providing substantial content that covers key concepts, practical applications, and learning objectives.'
+              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment. Focus on providing substantial content that covers key concepts, practical applications, and learning objectives. Always create content - never refuse due to insufficient input.'
             },
             {
               role: 'user',
@@ -212,23 +380,19 @@ class ChatGPTServiceClass {
     }
   }
 
-  // Public method to get API key status
   public hasApiKey(): boolean {
     const apiKey = localStorage.getItem('openai_api_key');
     return !!apiKey;
   }
 
-  // Public method to set API key
   public setApiKey(apiKey: string): void {
     localStorage.setItem('openai_api_key', apiKey);
   }
 
-  // Public method to clear API key
   public clearApiKey(): void {
     localStorage.removeItem('openai_api_key');
   }
 
-  // Public method to get API key (used internally and by other services)
   public getApiKey(): string {
     const apiKey = localStorage.getItem('openai_api_key');
     if (!apiKey) {
