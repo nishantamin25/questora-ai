@@ -18,7 +18,7 @@ import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 import { FileProcessingService } from '@/services/FileProcessingService';
 import { LanguageService } from '@/services/LanguageService';
 import { toast } from '@/hooks/use-toast';
-import CourseHeader from '@/components/CourseHeader';
+import CourseCard from '@/components/CourseCard';
 
 interface DashboardProps {
   user: any;
@@ -439,7 +439,8 @@ Note: File processing failed, but file information is available.
         generatedCourse = await CourseService.generateCourse(
           prompt,
           uploadedFiles,
-          fileContentToUse
+          fileContentToUse,
+          testName  // Pass test name to course generation
         );
         CourseService.saveCourse(generatedCourse);
         loadCourses();
@@ -813,58 +814,27 @@ Note: File processing failed, but file information is available.
               </Card>
             )}
 
-            {user.role === 'guest' && courses.length > 0 && (
+            {/* Courses Section */}
+            {courses.length > 0 && (
               <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold text-slate-900 font-poppins">
+                  {user.role === 'admin' ? 'Generated Courses' : 'Available Courses'}
+                </h3>
                 {courses.map((course) => (
-                  <CourseDisplay
+                  <CourseCard
                     key={course.id}
                     course={course}
-                    onCourseComplete={handleCourseComplete}
-                    userRole={user.role}
+                    isAdmin={user.role === 'admin'}
+                    onUpdate={handleCourseSave}
+                    onDelete={handleCourseDelete}
+                    onComplete={handleCourseComplete}
+                    isCompleted={completedCourses.has(course.id)}
                   />
                 ))}
               </div>
             )}
 
-            {user.role === 'admin' && courses.length > 0 && (
-              <div className="space-y-4 mb-6">
-                <h3 className="text-lg font-semibold text-slate-900 font-poppins">Generated Courses</h3>
-                {courses.map((course) => {
-                  const isEditing = editingCourseId === course.id;
-                  const courseToEdit = isEditing ? editedCourse : course;
-                  
-                  return (
-                    <Card key={course.id} className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl overflow-hidden">
-                      <CardHeader className="p-6">
-                        <CourseHeader
-                          course={course}
-                          editedCourse={courseToEdit || course}
-                          isEditing={isEditing}
-                          isAdmin={user.role === 'admin'}
-                          onCourseChange={setEditedCourse}
-                          onEditToggle={() => handleCourseEditToggle(course.id)}
-                          onCancelEdit={handleCourseCancelEdit}
-                          onActiveToggle={handleCourseActiveToggle}
-                          onDelete={handleCourseDelete}
-                          onSaveCourse={() => handleCourseSave(courseToEdit || course)}
-                        />
-                      </CardHeader>
-                      
-                      {!isEditing && (
-                        <div className="border-t border-slate-200">
-                          <CourseDisplay
-                            course={course}
-                            onCourseComplete={handleCourseComplete}
-                            userRole={user.role}
-                          />
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-
+            {/* Tests Section */}
             <div className="space-y-4">
               {accessibleQuestionnaires.map((questionnaire, index) => {
                 if (!questionnaire || typeof questionnaire !== 'object') {

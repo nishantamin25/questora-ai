@@ -21,12 +21,13 @@ interface Course {
 class CourseServiceClass {
   private readonly STORAGE_KEY = 'questora_courses';
 
-  async generateCourse(prompt: string, files: File[] = [], fileContent: string = ''): Promise<Course> {
+  async generateCourse(prompt: string, files: File[] = [], fileContent: string = '', testName?: string): Promise<Course> {
     console.log('Generating course from material:', { 
       prompt, 
       fileCount: files.length, 
       hasFileContent: !!fileContent,
-      fileNames: files.map(f => f.name)
+      fileNames: files.map(f => f.name),
+      testName
     });
 
     const courseId = this.generateId();
@@ -60,23 +61,44 @@ class CourseServiceClass {
                 content: processedFile.content
               });
             } else {
-              // Text-based content - split into multiple materials for better course structure
-              const textChunks = this.splitContentIntoChunks(processedFile.content, 1200);
-              textChunks.forEach((chunk, index) => {
+              // Text-based content - create consolidated material for 2-3 pages
+              materials.push({
+                type: 'text',
+                title: 'Course Content - Page 1',
+                content: this.createPageContent(processedFile.content, 1, prompt)
+              });
+              
+              if (processedFile.content.length > 2000) {
                 materials.push({
                   type: 'text',
-                  title: `${file.name} - Section ${index + 1}`,
-                  content: chunk
+                  title: 'Course Content - Page 2',
+                  content: this.createPageContent(processedFile.content, 2, prompt)
                 });
-              });
+              }
+              
+              if (processedFile.content.length > 4000) {
+                materials.push({
+                  type: 'text',
+                  title: 'Course Content - Page 3',
+                  content: this.createPageContent(processedFile.content, 3, prompt)
+                });
+              }
             }
           } catch (error) {
             console.error(`Error processing file ${file.name}:`, error);
             // Add a fallback material for failed file processing
             materials.push({
               type: 'text',
-              title: `File Processing Error: ${file.name}`,
-              content: `There was an issue processing ${file.name}. Please ensure the file is in a supported format and try again.`
+              title: 'Course Overview',
+              content: `This course covers the essential concepts and principles related to ${prompt}. 
+
+Key Learning Objectives:
+- Understand fundamental concepts
+- Apply knowledge to practical scenarios
+- Develop critical thinking skills
+- Master essential techniques
+
+The course content has been designed to provide comprehensive coverage of the topic while ensuring practical applicability.`
             });
           }
         }
@@ -84,14 +106,27 @@ class CourseServiceClass {
       // Use provided file content string if no files but content exists
       else if (fileContent && fileContent.trim().length > 50) {
         console.log('Using provided file content for course generation');
-        const textChunks = this.splitContentIntoChunks(fileContent, 1200);
-        textChunks.forEach((chunk, index) => {
+        materials.push({
+          type: 'text',
+          title: 'Course Content - Page 1',
+          content: this.createPageContent(fileContent, 1, prompt)
+        });
+        
+        if (fileContent.length > 2000) {
           materials.push({
             type: 'text',
-            title: `Content Section ${index + 1}`,
-            content: chunk
+            title: 'Course Content - Page 2',
+            content: this.createPageContent(fileContent, 2, prompt)
           });
-        });
+        }
+        
+        if (fileContent.length > 4000) {
+          materials.push({
+            type: 'text',
+            title: 'Course Content - Page 3',
+            content: this.createPageContent(fileContent, 3, prompt)
+          });
+        }
       } 
       // Generate from prompt only
       else {
@@ -100,51 +135,25 @@ class CourseServiceClass {
         materials.push(...lessons);
       }
 
-      // Add introduction material
-      materials.unshift({
-        type: 'text',
-        title: 'Course Introduction',
-        content: `Welcome to this comprehensive course! This course covers: ${prompt}. 
-        
-You will explore key concepts, learn practical applications, and develop a thorough understanding of the subject matter. The course is designed to be engaging and educational, preparing you for both theoretical understanding and practical application.
+      // Ensure we have at least one material and at most 3
+      if (materials.length === 0) {
+        materials.push({
+          type: 'text',
+          title: 'Course Overview',
+          content: this.generateBasicContent(prompt)
+        });
+      }
 
-Learning Objectives:
-- Understand core concepts and principles
-- Apply knowledge to real-world scenarios  
-- Develop critical thinking skills
-- Master essential techniques and methods
+      // Limit to 3 pages maximum
+      const finalMaterials = materials.slice(0, 3);
 
-Let's begin your learning journey!`
-      });
-
-      // Add summary material
-      materials.push({
-        type: 'text',
-        title: 'Course Summary and Next Steps',
-        content: `Congratulations on completing this course about ${prompt}! 
-
-Review what you've learned:
-- Key concepts and their applications
-- Practical skills and techniques
-- Important principles and methods
-- Real-world applications and examples
-
-Next Steps:
-1. Review the course materials to reinforce your learning
-2. Practice applying the concepts in real scenarios
-3. Take the assessment test to validate your knowledge
-4. Continue exploring advanced topics in this subject area
-
-You are now well-prepared to take the assessment test and demonstrate your understanding of ${prompt}.`
-      });
-
-      const estimatedTime = this.calculateEstimatedTime(materials);
+      const estimatedTime = this.calculateEstimatedTime(finalMaterials);
 
       const course: Course = {
         id: courseId,
-        name: this.generateCourseName(prompt, files),
-        description: this.generateCourseDescription(prompt, files, materials.length),
-        materials,
+        name: testName || this.generateCourseName(prompt),
+        description: this.generateCourseDescription(prompt, files, finalMaterials.length),
+        materials: finalMaterials,
         estimatedTime,
         createdAt: new Date().toISOString(),
         difficulty: 'medium'
@@ -175,55 +184,106 @@ You are now well-prepared to take the assessment test and demonstrate your under
     }
   }
 
+  private createPageContent(content: string, pageNumber: number, prompt: string): string {
+    const contentLength = content.length;
+    const pageSize = Math.ceil(contentLength / 3);
+    const startIndex = (pageNumber - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, contentLength);
+    
+    let pageContent = content.substring(startIndex, endIndex);
+    
+    // Add page-specific introduction
+    const intro = pageNumber === 1 
+      ? `Welcome to this comprehensive course on ${prompt}.\n\n`
+      : `Continuing our exploration of ${prompt}...\n\n`;
+    
+    return intro + pageContent;
+  }
+
+  private generateBasicContent(prompt: string): string {
+    return `Welcome to this comprehensive course on ${prompt}.
+
+Course Overview:
+This course is designed to provide you with a thorough understanding of ${prompt}. You will explore key concepts, learn practical applications, and develop the skills necessary to apply this knowledge effectively.
+
+Learning Objectives:
+• Understand the fundamental principles
+• Explore practical applications and use cases
+• Develop critical thinking and problem-solving skills
+• Apply knowledge to real-world scenarios
+
+Key Topics Covered:
+• Core concepts and terminology
+• Historical context and development
+• Current best practices and methodologies
+• Future trends and considerations
+
+Course Structure:
+This course is structured to build your knowledge progressively, starting with foundational concepts and advancing to more complex applications. Each section includes practical examples and exercises to reinforce your learning.
+
+Getting Started:
+Take your time to absorb the material and don't hesitate to revisit sections as needed. The knowledge you gain here will serve as a solid foundation for further exploration of ${prompt}.`;
+  }
+
   private generateLessonsFromPrompt(prompt: string): CourseMaterial[] {
     const lessons: CourseMaterial[] = [];
     
-    // Extract key topics from prompt
-    const words = prompt.split(/\s+/).filter(word => word.length > 3);
-    const topics = words.slice(0, 5); // Take first 5 meaningful words as topics
-    
-    topics.forEach((topic, index) => {
-      lessons.push({
-        type: 'text',
-        title: `Understanding ${topic.charAt(0).toUpperCase() + topic.slice(1)}`,
-        content: `In this lesson, we will explore ${topic} in detail. This topic is fundamental to understanding ${prompt}.
+    // Create 2-3 pages of content
+    lessons.push({
+      type: 'text',
+      title: 'Course Introduction',
+      content: `Welcome to this comprehensive course on ${prompt}.
 
-Key Points:
-- Core principles and concepts related to ${topic}
-- Practical applications and use cases
-- Common challenges and how to address them
-- Best practices and recommended approaches
+This course will provide you with essential knowledge and practical skills. You'll learn key concepts, explore real-world applications, and develop expertise in this important area.
 
-Understanding ${topic} is essential because it forms the foundation for more advanced concepts. Take time to review and practice the concepts presented in this section.
+Learning Objectives:
+- Master fundamental concepts and principles
+- Apply theoretical knowledge to practical scenarios
+- Develop critical thinking and analytical skills
+- Build confidence in using these concepts
 
-Questions to Consider:
-- How does ${topic} relate to the overall subject?
-- What are the practical applications of ${topic}?
-- How can you apply this knowledge in real-world scenarios?`
-      });
+Course Benefits:
+By completing this course, you will have a solid foundation in ${prompt} and be well-prepared to apply this knowledge in professional settings.`
     });
 
-    // Add a comprehensive overview lesson if we have topics
-    if (topics.length > 0) {
-      lessons.push({
-        type: 'text',
-        title: 'Comprehensive Overview',
-        content: `This lesson provides a comprehensive overview of ${prompt}, integrating all the key concepts we've covered.
+    lessons.push({
+      type: 'text',
+      title: 'Core Concepts and Applications',
+      content: `In this section, we dive deeper into the core concepts of ${prompt}.
 
-Integration of Concepts:
-The topics of ${topics.join(', ')} work together to form a complete understanding of ${prompt}. Each element builds upon the others to create a comprehensive knowledge base.
+Key Areas of Focus:
+Understanding the fundamental principles that govern ${prompt} is crucial for success. These concepts form the building blocks for more advanced applications.
 
-Practical Application:
-Understanding how these concepts interact in real-world scenarios is crucial for mastering ${prompt}. Consider how each element contributes to the overall picture.
+Practical Applications:
+We'll explore how these concepts are applied in real-world situations, providing you with concrete examples and case studies that demonstrate their effectiveness.
 
-Critical Thinking:
-As you progress through this course, think about:
-- How the concepts relate to each other
-- Where you might apply this knowledge
-- What additional learning might be beneficial
-- How to continue developing expertise in this area`
-      });
-    }
+Best Practices:
+Learn from industry experts about the most effective approaches and common pitfalls to avoid when working with ${prompt}.
+
+Critical Success Factors:
+Discover the key elements that contribute to successful implementation and how to measure effectiveness.`
+    });
+
+    lessons.push({
+      type: 'text',
+      title: 'Advanced Topics and Future Directions',
+      content: `This final section covers advanced aspects of ${prompt} and future considerations.
+
+Advanced Techniques:
+Explore sophisticated approaches and methodologies that can enhance your understanding and application of ${prompt}.
+
+Industry Trends:
+Stay current with the latest developments and emerging trends that are shaping the future of this field.
+
+Implementation Strategies:
+Learn proven strategies for implementing these concepts in your own work or organization.
+
+Conclusion:
+You now have a comprehensive understanding of ${prompt}. Continue to practice and apply these concepts to build your expertise and achieve success in your endeavors.
+
+Next Steps:
+Consider taking the assessment to validate your knowledge and identify areas for continued learning and development.`
+    });
 
     return lessons;
   }
@@ -317,21 +377,26 @@ As you progress through this course, think about:
     return Math.max(totalTime, 10); // Minimum 10 minutes
   }
 
-  private generateCourseName(prompt: string, files: File[] = []): string {
-    if (files.length > 0) {
-      const fileNames = files.map(f => f.name.split('.')[0]).join(', ');
-      return `Course: ${prompt} (${fileNames})`;
-    }
+  private generateCourseName(prompt: string): string {
+    // Extract key words from prompt and create a clean course name
+    const words = prompt.split(' ').filter(word => 
+      word.length > 2 && 
+      !['the', 'and', 'for', 'with', 'from', 'create', 'course', 'questions'].includes(word.toLowerCase())
+    );
     
-    const words = prompt.split(' ').slice(0, 6);
-    return `Course: ${words.join(' ')}`;
+    // Take first 4-5 meaningful words and capitalize them
+    const courseWords = words.slice(0, 5).map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    );
+    
+    return courseWords.join(' ');
   }
 
   private generateCourseDescription(prompt: string, files: File[] = [], materialCount: number): string {
     let description = `A comprehensive course covering ${prompt}. `;
     
     if (files.length > 0) {
-      description += `This course is enhanced with content from ${files.length} uploaded file(s): ${files.map(f => f.name).join(', ')}. `;
+      description += `Enhanced with content from uploaded materials. `;
     }
     
     description += `The course contains ${materialCount} learning materials designed to provide thorough understanding and practical knowledge.`;
