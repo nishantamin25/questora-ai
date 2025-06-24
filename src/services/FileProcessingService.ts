@@ -45,43 +45,134 @@ class FileProcessingServiceClass {
           metadata.extractionMethod = 'generic-text-extraction';
       }
 
-      // For enterprise PDFs, be less strict about enhancement
-      if (content && content.length > 50) {
-        console.log('Content extracted successfully:', content.length, 'characters');
-        console.log('Content preview:', content.substring(0, 300));
-        
-        // Only try ChatGPT enhancement if we have a reasonable amount of content
-        if (content.length > 500) {
-          try {
-            const enhancedContent = await ChatGPTService.enhanceTextContent(content);
-            if (enhancedContent && enhancedContent.length > content.length * 0.8) {
-              content = enhancedContent;
-              metadata.extractionMethod += '-chatgpt-enhanced';
-            }
-          } catch (error) {
-            console.log('ChatGPT enhancement failed, using original content:', error);
+      console.log(`Raw extraction result: ${content.length} characters`);
+      console.log('Raw content preview:', content.substring(0, 500));
+
+      // Clean the content but preserve meaningful text
+      const cleanedContent = this.cleanContentPreservingText(content);
+      console.log(`After cleaning: ${cleanedContent.length} characters`);
+
+      // Only use ChatGPT enhancement if we have substantial extracted content
+      if (cleanedContent.length > 1000) {
+        try {
+          console.log('Attempting ChatGPT enhancement...');
+          const enhancedContent = await ChatGPTService.enhanceTextContent(cleanedContent);
+          if (enhancedContent && enhancedContent.length > cleanedContent.length * 0.5) {
+            console.log(`ChatGPT enhanced content: ${enhancedContent.length} characters`);
+            content = enhancedContent;
+            metadata.extractionMethod += '-chatgpt-enhanced';
+          } else {
+            content = cleanedContent;
           }
+        } catch (error) {
+          console.log('ChatGPT enhancement failed, using cleaned content:', error);
+          content = cleanedContent;
         }
+      } else {
+        content = cleanedContent;
       }
 
     } catch (error) {
       console.error(`Error processing file ${file.name}:`, error);
-      
-      // Enhanced fallback - generate substantial content based on file metadata
-      console.log('Using enhanced fallback content generation...');
-      content = this.generateEnhancedFallbackContent(file, fileType);
-      metadata.extractionMethod = 'enhanced-fallback-content-generation';
+      throw new Error(`Failed to extract content from ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    // Use more lenient content validation for real files
-    const processedContent = this.cleanAndValidateContentLenient(content, file);
-    console.log(`Final processed content for ${file.name}: ${processedContent.length} characters`);
+    // Final validation - reject only if content is truly unusable
+    if (!content || content.length < 50) {
+      throw new Error(`No meaningful content could be extracted from ${file.name}. The file may be corrupted, empty, or in an unsupported format.`);
+    }
+
+    console.log(`Final processed content for ${file.name}: ${content.length} characters`);
+    console.log('Final content preview:', content.substring(0, 300));
 
     return {
-      content: processedContent,
+      content,
       type: fileType,
       metadata
     };
+  }
+
+  private cleanContentPreservingText(content: string): string {
+    if (!content) return '';
+    
+    console.log('Starting content cleaning, original length:', content.length);
+    
+    // Remove binary artifacts but preserve readable text
+    let cleaned = content
+      // Remove PDF-specific artifacts
+      .replace(/%PDF-[\d.]+/g, '')
+      .replace(/%%EOF/g, '')
+      .replace(/obj\s*<<.*?>>/gs, '')
+      .replace(/endobj/g, '')
+      .replace(/stream\s*/g, '')
+      .replace(/endstream/g, '')
+      .replace(/xref\s+\d+/g, '')
+      .replace(/trailer\s*<</g, '')
+      .replace(/startxref\s+\d+/g, '')
+      .replace(/\d+\s+\d+\s+obj/g, '')
+      // Remove control characters but keep newlines and tabs
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+      // Clean up font and formatting commands
+      .replace(/\/[A-Za-z]+\s+\d+(\.\d+)?\s+(Tf|TJ|Tj)/g, ' ')
+      .replace(/BT\s+ET/g, ' ')
+      // Remove excessive whitespace but preserve paragraph breaks
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+
+    console.log('After basic cleaning:', cleaned.length);
+
+    // Extract meaningful sentences and phrases
+    const meaningfulText = this.extractMeaningfulSentences(cleaned);
+    console.log('After meaningful extraction:', meaningfulText.length);
+
+    return meaningfulText;
+  }
+
+  private extractMeaningfulSentences(text: string): string {
+    if (!text) return '';
+
+    // Split into potential sentences
+    const sentences = text
+      .split(/[.!?]+/)
+      .map(s => s.trim())
+      .filter(s => {
+        // Keep sentences that:
+        // - Are at least 10 characters long
+        // - Contain at least 2 words
+        // - Have a reasonable ratio of letters to total characters
+        if (s.length < 10) return false;
+        
+        const words = s.split(/\s+/).filter(w => w.length > 0);
+        if (words.length < 2) return false;
+        
+        const letterCount = (s.match(/[a-zA-Z]/g) || []).length;
+        const letterRatio = letterCount / s.length;
+        
+        return letterRatio > 0.3; // At least 30% letters
+      });
+
+    // Join sentences back together
+    let result = sentences.join('. ').trim();
+    
+    // If result is too short, try a more lenient approach
+    if (result.length < 200 && text.length > 500) {
+      console.log('Trying more lenient text extraction...');
+      
+      // Split by paragraphs and take meaningful chunks
+      const chunks = text
+        .split(/\n+/)
+        .map(chunk => chunk.trim())
+        .filter(chunk => {
+          if (chunk.length < 20) return false;
+          const letterCount = (chunk.match(/[a-zA-Z]/g) || []).length;
+          return letterCount > chunk.length * 0.2; // At least 20% letters
+        });
+      
+      result = chunks.join('\n\n').trim();
+    }
+
+    return result;
   }
 
   private determineFileType(file: File): 'text' | 'video' | 'image' | 'other' {
@@ -107,7 +198,7 @@ class FileProcessingServiceClass {
     } else {
       const content = await this.readFileAsText(file);
       return {
-        content: this.extractMeaningfulText(content),
+        content,
         method: 'text-file-reading'
       };
     }
@@ -146,20 +237,18 @@ class FileProcessingServiceClass {
         }
       }
       
-      // Be more lenient - accept any content over 100 characters
-      if (bestContent.length > 100) {
+      if (bestContent.length > 50) {
         console.log(`Successfully extracted ${bestContent.length} characters using ${bestMethod}`);
         return {
-          content: this.extractMeaningfulText(bestContent),
+          content: bestContent,
           method: bestMethod
         };
       }
       
-      console.log('All PDF extraction strategies produced insufficient content, using enhanced fallback');
-      throw new Error('PDF extraction insufficient - using fallback');
+      throw new Error('All PDF extraction strategies failed to produce sufficient content');
       
     } catch (error) {
-      console.log('PDF processing failed, generating rich content from metadata');
+      console.error('PDF processing failed:', error);
       throw error;
     }
   }
@@ -212,21 +301,6 @@ class FileProcessingServiceClass {
     return textBlocks.join(' ').trim();
   }
 
-  private extractPdfRawText(uint8Array: Uint8Array): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
-    
-    // Extract any readable text sequences
-    const readableTextRegex = /[A-Za-z][A-Za-z0-9\s.,!?;:()\-'"]{10,}/g;
-    const matches = pdfText.match(readableTextRegex) || [];
-    
-    return matches
-      .map(match => match.trim())
-      .filter(text => text.length > 10)
-      .join(' ')
-      .substring(0, 5000); // Limit to prevent overwhelming content
-  }
-
   private extractPdfContentStreams(uint8Array: Uint8Array): string {
     const decoder = new TextDecoder('utf-8', { fatal: false });
     const pdfText = decoder.decode(uint8Array);
@@ -238,11 +312,10 @@ class FileProcessingServiceClass {
     while ((match = streamRegex.exec(pdfText)) !== null) {
       let streamData = match[1];
       
-      // Try to decompress or decode stream data
-      const decodedStream = this.attemptStreamDecoding(streamData);
-      const readableText = this.extractReadableText(decodedStream);
+      // Extract readable text from stream data
+      const readableText = this.extractReadableTextFromStream(streamData);
       
-      if (readableText.length > 20) {
+      if (readableText.length > 50) {
         streams.push(readableText);
       }
     }
@@ -258,7 +331,6 @@ class FileProcessingServiceClass {
     
     // Look for text in various PDF object types
     const patterns = [
-      /\/Type\s*\/Font.*?\/BaseFont\s*\/([^\/\s]+)/g,
       /\/Contents\s*\[(.*?)\]/gs,
       /\/F\d+\s+(\d+(?:\.\d+)?)\s+Tf\s*\((.*?)\)/g
     ];
@@ -267,9 +339,9 @@ class FileProcessingServiceClass {
       let match;
       while ((match = pattern.exec(pdfText)) !== null) {
         const content = match[match.length - 1];
-        if (content && content.length > 3) {
-          const cleanContent = this.extractReadableText(content);
-          if (cleanContent.length > 10) {
+        if (content && content.length > 5) {
+          const cleanContent = this.extractReadableTextFromStream(content);
+          if (cleanContent.length > 20) {
             textContent.push(cleanContent);
           }
         }
@@ -279,36 +351,27 @@ class FileProcessingServiceClass {
     return textContent.join(' ').trim();
   }
 
-  private attemptStreamDecoding(streamData: string): string {
-    // Try different decoding approaches
-    try {
-      // Remove common PDF stream filters
-      let decoded = streamData
-        .replace(/FlateDecode/g, '')
-        .replace(/ASCII85Decode/g, '')
-        .replace(/ASCIIHexDecode/g, '');
-      
-      return decoded;
-    } catch (error) {
-      return streamData;
-    }
+  private extractPdfRawText(uint8Array: Uint8Array): string {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const pdfText = decoder.decode(uint8Array);
+    
+    // Extract any readable text sequences
+    const readableTextRegex = /[A-Za-z][A-Za-z0-9\s.,!?;:()\-'"]{15,}/g;
+    const matches = pdfText.match(readableTextRegex) || [];
+    
+    return matches
+      .map(match => match.trim())
+      .filter(text => text.length > 15)
+      .join(' ')
+      .substring(0, 10000); // Reasonable limit
   }
 
-  private extractReadableText(input: string): string {
+  private extractReadableTextFromStream(input: string): string {
     return input
       .replace(/[^\x20-\x7E\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .replace(/[{}[\]<>]/g, ' ')
       .trim();
-  }
-
-  private isQualityContent(content: string): boolean {
-    if (!content || content.length < 50) return false;
-    
-    const words = content.split(/\s+/).filter(word => word.length > 2);
-    const readableWords = words.filter(word => /^[a-zA-Z][a-zA-Z0-9]*$/.test(word));
-    
-    return readableWords.length > 10 && (readableWords.length / words.length) > 0.7;
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
@@ -317,7 +380,7 @@ class FileProcessingServiceClass {
       
       if (this.isReadableText(text)) {
         return {
-          content: this.extractMeaningfulText(text),
+          content: text,
           method: 'word-text-extraction'
         };
       }
@@ -413,231 +476,14 @@ The visual presentation enhances learning by providing clear, structured informa
     try {
       const content = await this.readFileAsText(file);
       
-      if (this.isReadableText(content)) {
-        return this.extractMeaningfulText(content);
+      if (this.isReadableText(content) && content.length > 100) {
+        return content;
       } else {
-        return this.generateGenericContentAnalysis(file);
+        throw new Error('Content not readable or too short');
       }
     } catch (error) {
-      return this.generateGenericContentAnalysis(file);
+      throw new Error(`Unable to extract meaningful content from ${file.name}`);
     }
-  }
-
-  private generateGenericContentAnalysis(file: File): string {
-    return `Educational Content Analysis: ${file.name}
-
-This file contains specialized educational material that provides comprehensive learning opportunities for students.
-
-Content Overview:
-The file represents educational content designed to support academic learning and professional development. It contains structured information that contributes to understanding key concepts and principles in the subject area.
-
-Educational Structure:
-- Comprehensive coverage of essential topics
-- Progressive learning from basic to advanced concepts
-- Practical applications and real-world examples
-- Supporting materials for enhanced understanding
-- Assessment-ready content for evaluation
-
-Learning Objectives:
-Students engaging with this content will:
-1. Master fundamental concepts and principles
-2. Develop practical application skills
-3. Build critical thinking capabilities
-4. Enhance problem-solving abilities
-5. Prepare for comprehensive assessment
-
-Key Focus Areas:
-- Theoretical foundations and core principles
-- Practical applications and methodologies
-- Professional standards and best practices
-- Analytical and evaluation techniques
-- Integration and synthesis of concepts
-
-Assessment Applications:
-This content supports various assessment formats including:
-- Comprehension and knowledge-based questions
-- Application and scenario-based problems
-- Analysis and critical thinking challenges
-- Evaluation and decision-making tasks
-- Synthesis and integration exercises
-
-Educational Benefits:
-The structured approach ensures students gain both theoretical understanding and practical skills necessary for success in the subject area and professional application.`;
-  }
-
-  private generateEnhancedFallbackContent(file: File, fileType: string): string {
-    const sizeKB = Math.round(file.size / 1024);
-    const fileName = file.name;
-    
-    // Generate comprehensive content based on the file being a business document
-    return `# Comprehensive Educational Content: ${fileName}
-
-## Document Overview
-This ${fileType} document (${fileName}, ${sizeKB}KB) contains substantial business and technical information suitable for comprehensive educational analysis and course development.
-
-## Content Analysis Framework
-
-### Strategic Business Context
-The document provides detailed insights into business operations, strategic initiatives, and technical implementations. Key areas typically covered include:
-
-- **Business Strategy & Operations**: Core business models, operational frameworks, strategic objectives, and performance metrics
-- **Technical Architecture**: System designs, platform capabilities, integration approaches, and technical specifications  
-- **Market Analysis**: Industry positioning, competitive advantages, market opportunities, and growth strategies
-- **Implementation Guidelines**: Best practices, deployment strategies, operational procedures, and success metrics
-
-### Educational Learning Objectives
-Students engaging with this material will develop competencies in:
-
-1. **Strategic Analysis**: Understanding business strategy formulation and execution
-2. **Technical Evaluation**: Assessing technical architectures and implementation approaches
-3. **Market Assessment**: Analyzing market dynamics and competitive positioning
-4. **Operational Excellence**: Applying operational frameworks and best practices
-5. **Performance Measurement**: Evaluating success metrics and optimization strategies
-
-### Key Learning Areas
-
-#### Business Intelligence & Analytics
-- Data-driven decision making processes
-- Performance measurement and KPI frameworks
-- Business intelligence implementation strategies
-- Analytics-driven optimization approaches
-
-#### Technology & Innovation
-- Platform architecture and scalability considerations
-- Integration strategies and technical implementations
-- Innovation frameworks and technology adoption
-- Digital transformation methodologies
-
-#### Market Dynamics & Strategy
-- Competitive analysis and market positioning
-- Customer experience optimization
-- Revenue model development and optimization
-- Strategic partnership and ecosystem development
-
-#### Operational Excellence
-- Process optimization and efficiency improvements
-- Quality management and continuous improvement
-- Resource allocation and capacity planning
-- Risk management and mitigation strategies
-
-### Assessment Applications
-This comprehensive content supports various assessment formats:
-
-- **Strategic Case Studies**: Real-world application of business concepts
-- **Technical Analysis**: Evaluation of architectural decisions and implementations
-- **Market Research Projects**: Industry analysis and competitive assessment
-- **Implementation Planning**: Developing actionable implementation strategies
-- **Performance Evaluation**: Measuring and optimizing business outcomes
-
-### Professional Development Impact
-The content provides practical knowledge applicable to:
-
-- Business strategy development and execution
-- Technical architecture and platform management
-- Market analysis and competitive intelligence
-- Operational process optimization
-- Digital transformation leadership
-
-This educational material ensures comprehensive understanding of both theoretical concepts and practical implementation strategies essential for professional success in modern business environments.
-
-## Additional Learning Resources
-The document content supports supplementary research into:
-- Industry best practices and standards
-- Emerging technology trends and implications
-- Market evolution and future opportunities
-- Regulatory considerations and compliance requirements
-- Sustainability and social responsibility initiatives`;
-  }
-
-  private cleanAndValidateContent(content: string): string {
-    if (!content) return '';
-    
-    // Remove binary artifacts and control characters
-    let cleaned = content
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ')
-      .replace(/%PDF-[\d.]+/g, '')
-      .replace(/%%EOF/g, '')
-      .replace(/obj\s*<<.*?>>/gs, '')
-      .replace(/endobj/g, '')
-      .replace(/stream\s*/g, '')
-      .replace(/endstream/g, '')
-      .replace(/xref/g, '')
-      .replace(/trailer/g, '')
-      .replace(/startxref/g, '')
-      .replace(/\d+\s+\d+\s+obj/g, '');
-    
-    // Normalize whitespace
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    
-    // Remove repeated sequences (like "QE QE QE")
-    cleaned = cleaned.replace(/(\b\w{1,3}\b)\s+(\1\s+)+/g, '$1 ');
-    
-    // Ensure reasonable length for processing
-    if (cleaned.length > 10000) {
-      cleaned = cleaned.substring(0, 10000) + '...';
-    }
-    
-    // Validate content quality
-    if (!this.isQualityContent(cleaned)) {
-      throw new Error('Extracted content does not meet quality standards');
-    }
-    
-    return cleaned;
-  }
-
-  private cleanAndValidateContentLenient(content: string, file: File): string {
-    if (!content) {
-      console.log('No content provided, returning empty string');
-      return '';
-    }
-    
-    // Remove binary artifacts and control characters
-    let cleaned = content
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ')
-      .replace(/%PDF-[\d.]+/g, '')
-      .replace(/%%EOF/g, '')
-      .replace(/obj\s*<<.*?>>/gs, '')
-      .replace(/endobj/g, '')
-      .replace(/stream\s*/g, '')
-      .replace(/endstream/g, '')
-      .replace(/xref/g, '')
-      .replace(/trailer/g, '')
-      .replace(/startxref/g, '')
-      .replace(/\d+\s+\d+\s+obj/g, '');
-    
-    // Normalize whitespace
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    
-    // Remove repeated sequences (like "QE QE QE")
-    cleaned = cleaned.replace(/(\b\w{1,3}\b)\s+(\1\s+)+/g, '$1 ');
-    
-    // Ensure reasonable length for processing
-    if (cleaned.length > 10000) {
-      cleaned = cleaned.substring(0, 10000) + '...';
-    }
-    
-    console.log(`Content validation: ${cleaned.length} characters after cleaning`);
-    
-    // More lenient validation for real business documents
-    if (cleaned.length < 200) {
-      console.log('Content too short, but this is a real file - using enhanced fallback');
-      return this.generateEnhancedFallbackContent(file, this.determineFileType(file));
-    }
-    
-    return cleaned;
-  }
-
-  private extractMeaningfulText(content: string): string {
-    if (!content) return '';
-    
-    // Split into sentences and filter meaningful ones
-    const sentences = content
-      .split(/[.!?]+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 15 && /[a-zA-Z]/.test(s) && s.split(' ').length > 3)
-      .slice(0, 200);
-    
-    return sentences.join('. ').trim();
   }
 
   private isReadableText(content: string): boolean {
@@ -647,49 +493,7 @@ The document content supports supplementary research into:
     const totalChars = content.length;
     const readableRatio = readableChars / totalChars;
     
-    return readableRatio > 0.7 && content.split(' ').length > 10;
-  }
-
-  private generateFallbackContent(file: File, fileType: string): string {
-    return `Educational Content from ${file.name}
-
-This ${fileType} file contains comprehensive educational material designed for academic learning and professional development.
-
-Content Overview:
-Based on the file "${file.name}" (${Math.round(file.size/1024)}KB), this educational material provides structured learning content covering essential concepts, practical applications, and theoretical foundations.
-
-Learning Objectives:
-Students will gain understanding of:
-1. Core concepts and fundamental principles
-2. Practical applications and real-world usage
-3. Analytical and problem-solving techniques
-4. Professional standards and best practices
-5. Critical evaluation and synthesis methods
-
-Educational Structure:
-The content is organized to support progressive learning, beginning with foundational concepts and advancing to more complex applications. Each section builds upon previous knowledge while introducing new concepts and skills.
-
-Key Topics Covered:
-- Theoretical foundations and core principles
-- Practical methodologies and applications
-- Professional standards and industry practices
-- Analytical techniques and evaluation methods
-- Integration and synthesis of concepts
-
-Assessment Preparation:
-Students should be prepared for comprehensive assessment covering theoretical understanding, practical application, analytical thinking, and synthesis of multiple concepts presented in this educational material.`;
-  }
-
-  private async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    return readableRatio > 0.5 && content.split(' ').length > 5;
   }
 
   private async readFileAsText(file: File): Promise<string> {

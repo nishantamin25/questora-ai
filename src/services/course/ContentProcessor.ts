@@ -6,45 +6,48 @@ export class ContentProcessor {
   static isRealContent(content: string): boolean {
     if (!content || content.length < 50) return false;
     
-    // More lenient check for enterprise documents
-    const hasWords = content.split(/\s+/).filter(word => word.length > 2).length > 10;
+    // Much more lenient check for real documents
+    const words = content.split(/\s+/).filter(word => word.length > 1);
+    const hasWords = words.length > 10;
     const hasReadableContent = /[a-zA-Z0-9]/.test(content);
     
-    // Accept content if it has basic readability characteristics
     console.log('Content validation:', { 
       length: content.length, 
       hasWords, 
       hasReadableContent,
-      wordCount: content.split(/\s+/).length 
+      wordCount: words.length 
     });
     
     return hasWords && hasReadableContent;
   }
 
   static async createCourseSectionsFromRealContent(content: string, sourceName: string): Promise<CourseMaterial[]> {
+    console.log('Creating course sections from content:', {
+      contentLength: content.length,
+      contentPreview: content.substring(0, 300) + '...',
+      sourceName
+    });
+    
+    // Always use the extracted content - don't be overly strict
+    if (content.length < 100) {
+      throw new Error(`Insufficient content extracted from ${sourceName}. Only ${content.length} characters available.`);
+    }
+
     const sections: CourseMaterial[] = [];
     
     try {
-      console.log('Creating course sections from content:', {
-        contentLength: content.length,
-        contentPreview: content.substring(0, 200) + '...',
-        sourceName
-      });
-      
-      // For business documents, use simpler processing approach
+      // For substantial content, try ChatGPT structuring
       if (content.length > 500) {
         try {
-          // Try ChatGPT structuring but don't fail if it doesn't work
-          const structurePrompt = `Create 3 educational sections from this business document content. Use the actual information provided and structure it into clear learning sections with titles.
+          const structurePrompt = `Create 3 educational sections from this document content. Use the actual information provided and structure it into clear learning sections with titles.
 
 DOCUMENT CONTENT:
-${content.substring(0, 3000)}
+${content.substring(0, 4000)}
 
 Create 3 sections with:
 1. Clear educational titles
-2. Substantial content for each section
-3. Use the real information from the document
-4. Make it suitable for course learning`;
+2. Substantial content for each section using the real information
+3. Make it suitable for course learning`;
 
           const structuredContent = await ChatGPTService.generateContent(structurePrompt);
           
@@ -52,7 +55,7 @@ Create 3 sections with:
             const sectionParts = this.splitIntoSections(structuredContent);
             
             sectionParts.forEach((section, index) => {
-              if (section.trim().length > 150) {
+              if (section.trim().length > 100) {
                 sections.push({
                   type: 'text',
                   title: this.extractSectionTitle(section, index + 1, sourceName),
@@ -66,7 +69,7 @@ Create 3 sections with:
         }
       }
 
-      // If ChatGPT approach didn't work or content is shorter, use direct extraction
+      // If ChatGPT approach didn't work, use direct extraction
       if (sections.length === 0) {
         console.log('Using direct content extraction approach');
         return this.extractSectionsDirectly(content, sourceName);
@@ -87,7 +90,7 @@ Create 3 sections with:
     const chunks = this.splitContentIntoMeaningfulChunks(content);
     
     chunks.forEach((chunk, index) => {
-      if (chunk.trim().length > 100) {
+      if (chunk.trim().length > 50) {
         sections.push({
           type: 'text',
           title: this.extractRealSectionTitle(chunk, index + 1, sourceName),
@@ -109,19 +112,18 @@ Create 3 sections with:
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
-    if (!content || content.length < 200) {
+    if (!content || content.length < 100) {
       return content ? [content] : [];
     }
 
-    // Try different splitting approaches
     let chunks: string[] = [];
     
-    // First try splitting by natural document structure
+    // Try splitting by natural document structure
     if (content.includes('\n\n')) {
-      chunks = content.split(/\n\s*\n/).filter(chunk => chunk.trim().length > 100);
+      chunks = content.split(/\n\s*\n/).filter(chunk => chunk.trim().length > 50);
     }
     
-    // If that doesn't work well, try splitting by sentences
+    // If that doesn't work well, try splitting by sentences into reasonable chunks
     if (chunks.length < 2) {
       chunks = this.splitContentIntoChunks(content, 800);
     }
@@ -152,7 +154,7 @@ Create 3 sections with:
     }
     
     // Extract key business terms for meaningful titles
-    const businessTerms = section.match(/\b(?:Platform|Commerce|Business|Strategy|Digital|Technology|Innovation|Management|Operations|Analytics|Customer|Market|Revenue|Growth|Integration|Solution|Framework|System|Service|Experience|Performance)\b/gi) || [];
+    const businessTerms = section.match(/\b(?:Platform|Commerce|Business|Strategy|Digital|Technology|Innovation|Management|Operations|Analytics|Customer|Market|Revenue|Growth|Integration|Solution|Framework|System|Service|Experience|Performance|Overview|Introduction|Summary|Analysis|Implementation|Development|Process|Data|Security|Mobile|Cloud|API|Network|Enterprise|Corporate|Industry|Product|Service|Quality|Efficiency|Optimization|Standards|Compliance|Best|Practices)\b/gi) || [];
     
     if (businessTerms.length > 0) {
       const uniqueTerms = [...new Set(businessTerms.map(term => term.toLowerCase()))];
@@ -233,6 +235,6 @@ Create 3 sections with:
       chunks.push(currentChunk + '.');
     }
 
-    return chunks.filter(chunk => chunk.trim().length > 50);
+    return chunks.filter(chunk => chunk.trim().length > 30);
   }
 }
