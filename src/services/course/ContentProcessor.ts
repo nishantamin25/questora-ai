@@ -6,107 +6,88 @@ export class ContentProcessor {
   static isRealContent(content: string): boolean {
     if (!content || content.length < 50) return false;
     
-    // Check for generic educational templates/patterns
-    const genericPatterns = [
-      /educational content designed for/i,
-      /learning objectives/i,
-      /students will gain understanding/i,
-      /course provides comprehensive coverage of/i,
-      /upon completion.*understanding/i,
-      /theoretical foundations and core principles/i,
-      /practical applications and real-world usage/i
-    ];
+    // More lenient check for enterprise documents
+    const hasWords = content.split(/\s+/).filter(word => word.length > 2).length > 10;
+    const hasReadableContent = /[a-zA-Z0-9]/.test(content);
     
-    const hasGenericPatterns = genericPatterns.some(pattern => pattern.test(content));
+    // Accept content if it has basic readability characteristics
+    console.log('Content validation:', { 
+      length: content.length, 
+      hasWords, 
+      hasReadableContent,
+      wordCount: content.split(/\s+/).length 
+    });
     
-    // Content should have specific terms, numbers, proper nouns
-    const hasSpecificContent = /[\d,]+|\b[A-Z][a-z]+\s[A-Z][a-z]+|\b[A-Z]{2,}|\b\d+[A-Za-z]+|\b[A-Z][a-z]*\sTM\b|\b[A-Z][a-z]*®\b/.test(content);
-    
-    return !hasGenericPatterns && hasSpecificContent;
+    return hasWords && hasReadableContent;
   }
 
   static async createCourseSectionsFromRealContent(content: string, sourceName: string): Promise<CourseMaterial[]> {
     const sections: CourseMaterial[] = [];
     
     try {
-      console.log('Creating course sections from REAL content:', content.substring(0, 200) + '...');
+      console.log('Creating course sections from content:', {
+        contentLength: content.length,
+        contentPreview: content.substring(0, 200) + '...',
+        sourceName
+      });
       
-      // CRITICAL: Use very specific prompt to force ChatGPT to use ONLY the provided content
-      const structurePrompt = `CRITICAL INSTRUCTION: You must create course content using ONLY the information provided below. Do not add generic educational templates or fabricated content.
+      // For business documents, use simpler processing approach
+      if (content.length > 500) {
+        try {
+          // Try ChatGPT structuring but don't fail if it doesn't work
+          const structurePrompt = `Create 3 educational sections from this business document content. Use the actual information provided and structure it into clear learning sections with titles.
 
-Extract the actual information from this document and organize it into 2-3 educational sections with clear titles. Use the real data, metrics, product names, and specific details found in the content.
+DOCUMENT CONTENT:
+${content.substring(0, 3000)}
 
-REAL DOCUMENT CONTENT TO USE:
-${content}
+Create 3 sections with:
+1. Clear educational titles
+2. Substantial content for each section
+3. Use the real information from the document
+4. Make it suitable for course learning`;
 
-Requirements:
-1. Extract only factual information from the provided content
-2. Use actual product names, metrics, and specific details mentioned
-3. Create section titles based on the real topics covered
-4. Do not add generic learning objectives or educational templates
-5. Structure the real information into educational sections
-6. If metrics or specific data points exist, include them exactly as stated
-7. Keep all original terminology and proper nouns
+          const structuredContent = await ChatGPTService.generateContent(structurePrompt);
+          
+          if (structuredContent && structuredContent.length > 500) {
+            const sectionParts = this.splitIntoSections(structuredContent);
+            
+            sectionParts.forEach((section, index) => {
+              if (section.trim().length > 150) {
+                sections.push({
+                  type: 'text',
+                  title: this.extractSectionTitle(section, index + 1, sourceName),
+                  content: section.trim()
+                });
+              }
+            });
+          }
+        } catch (error) {
+          console.log('ChatGPT structuring failed, using direct extraction:', error);
+        }
+      }
 
-Respond with structured educational content based solely on the provided document.`;
-
-      const structuredContent = await ChatGPTService.generateContent(structurePrompt);
-      
-      console.log('ChatGPT structured content:', structuredContent.substring(0, 300) + '...');
-      
-      // Verify the structured content still contains real information
-      if (!this.containsRealInformation(structuredContent, content)) {
-        console.error('ChatGPT response does not contain real content - using direct extraction');
+      // If ChatGPT approach didn't work or content is shorter, use direct extraction
+      if (sections.length === 0) {
+        console.log('Using direct content extraction approach');
         return this.extractSectionsDirectly(content, sourceName);
       }
 
-      // Split the structured content into sections
-      const sectionParts = this.splitIntoSections(structuredContent);
-      
-      sectionParts.forEach((section, index) => {
-        if (section.trim().length > 200) {
-          sections.push({
-            type: 'text',
-            title: this.extractSectionTitle(section, index + 1, sourceName),
-            content: section.trim()
-          });
-        }
-      });
-
     } catch (error) {
-      console.error('Error creating structured sections with ChatGPT, using direct extraction:', error);
+      console.log('Error in course section creation, using direct extraction:', error);
       return this.extractSectionsDirectly(content, sourceName);
     }
 
-    return sections.slice(0, 3);
-  }
-
-  private static containsRealInformation(structuredContent: string, originalContent: string): boolean {
-    // Extract key terms from original content
-    const originalTerms = originalContent.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b|\b\d+[A-Za-z]*\b|\b[A-Z]{2,}\b/g) || [];
-    const structuredTerms = structuredContent.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b|\b\d+[A-Za-z]*\b|\b[A-Z]{2,}\b/g) || [];
-    
-    // Check if structured content contains at least 30% of original key terms
-    const commonTerms = originalTerms.filter(term => structuredTerms.includes(term));
-    const overlap = commonTerms.length / Math.max(originalTerms.length, 1);
-    
-    console.log('Content overlap check:', { 
-      originalTermsCount: originalTerms.length, 
-      commonTermsCount: commonTerms.length, 
-      overlap: overlap 
-    });
-    
-    return overlap > 0.3;
+    return sections.length > 0 ? sections.slice(0, 3) : this.extractSectionsDirectly(content, sourceName);
   }
 
   private static extractSectionsDirectly(content: string, sourceName: string): CourseMaterial[] {
     const sections: CourseMaterial[] = [];
     
-    // Split content into meaningful chunks based on structure
+    // Create meaningful sections from the content
     const chunks = this.splitContentIntoMeaningfulChunks(content);
     
     chunks.forEach((chunk, index) => {
-      if (chunk.trim().length > 200) {
+      if (chunk.trim().length > 100) {
         sections.push({
           type: 'text',
           title: this.extractRealSectionTitle(chunk, index + 1, sourceName),
@@ -115,45 +96,38 @@ Respond with structured educational content based solely on the provided documen
       }
     });
     
+    // Ensure we have at least one section
+    if (sections.length === 0 && content.length > 50) {
+      sections.push({
+        type: 'text',
+        title: `${sourceName} - Main Content`,
+        content: content.trim()
+      });
+    }
+    
     return sections.slice(0, 3);
   }
 
   private static splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define splitting patterns
-    const patterns = [
-      /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
-      /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
-      /\n\s*[A-Z][A-Z\s]+\n/g,               // ALL CAPS headings
-      /\n\s*[A-Z][^.]*:\s*\n/g               // Headings ending with colon
-    ];
+    if (!content || content.length < 200) {
+      return content ? [content] : [];
+    }
+
+    // Try different splitting approaches
+    let chunks: string[] = [];
     
-    let resultChunks: string[] = [content];
-    
-    // Apply each pattern to split the content
-    for (const pattern of patterns) {
-      const newResultChunks: string[] = [];
-      
-      for (const chunk of resultChunks) {
-        const splitParts = chunk.split(pattern);
-        for (const part of splitParts) {
-          if (part && part.trim().length > 100) {
-            newResultChunks.push(part);
-          }
-        }
-      }
-      
-      // Only use new chunks if they provide better segmentation
-      if (newResultChunks.length > resultChunks.length && newResultChunks.length <= 5) {
-        resultChunks = newResultChunks;
-      }
+    // First try splitting by natural document structure
+    if (content.includes('\n\n')) {
+      chunks = content.split(/\n\s*\n/).filter(chunk => chunk.trim().length > 100);
     }
     
-    // If no good natural breaks found, split by length
-    if (resultChunks.length === 1 && resultChunks[0] && resultChunks[0].length > 2000) {
-      resultChunks = this.splitContentIntoChunks(content, 1500);
+    // If that doesn't work well, try splitting by sentences
+    if (chunks.length < 2) {
+      chunks = this.splitContentIntoChunks(content, 800);
     }
     
-    return resultChunks;
+    // Ensure we have reasonable chunks
+    return chunks.length > 0 ? chunks : [content];
   }
 
   private static extractRealSectionTitle(section: string, index: number, sourceName: string): string {
@@ -163,28 +137,30 @@ Respond with structured educational content based solely on the provided documen
     for (let i = 0; i < Math.min(3, lines.length); i++) {
       const line = lines[i];
       
-      // Check for heading patterns
-      if (line.length < 100 && line.length > 5) {
-        // ALL CAPS headings
+      if (line.length > 5 && line.length < 80) {
+        // Check for heading patterns
         if (line === line.toUpperCase() && /[A-Z\s&]+/.test(line)) {
           return this.cleanTitle(line);
         }
-        // Title Case headings
         if (/^[A-Z][^.]*[^.]$/.test(line) && line.split(' ').length <= 8) {
           return this.cleanTitle(line);
         }
-        // Headings with colons
         if (line.endsWith(':') && line.split(' ').length <= 6) {
           return this.cleanTitle(line.slice(0, -1));
         }
       }
     }
     
-    // Extract key terms from the section for a meaningful title
-    const keyTerms = section.match(/\b[A-Z][a-z]*(?:\s[A-Z][a-z]*)*\b/g) || [];
-    if (keyTerms.length > 0) {
-      const title = keyTerms.slice(0, 3).join(' ');
-      if (title.length > 5 && title.length < 50) {
+    // Extract key business terms for meaningful titles
+    const businessTerms = section.match(/\b(?:Platform|Commerce|Business|Strategy|Digital|Technology|Innovation|Management|Operations|Analytics|Customer|Market|Revenue|Growth|Integration|Solution|Framework|System|Service|Experience|Performance)\b/gi) || [];
+    
+    if (businessTerms.length > 0) {
+      const uniqueTerms = [...new Set(businessTerms.map(term => term.toLowerCase()))];
+      const title = uniqueTerms.slice(0, 2).map(term => 
+        term.charAt(0).toUpperCase() + term.slice(1)
+      ).join(' & ');
+      
+      if (title.length > 5) {
         return title;
       }
     }
@@ -204,11 +180,10 @@ Respond with structured educational content based solely on the provided documen
 
   private static splitIntoSections(content: string): string[] {
     // Try to split by section headers or natural breaks
-    const sections = content.split(/(?:\n\s*(?:Section|Chapter|Part)\s*\d+|\n\s*#{1,3}\s*)/i);
+    const sections = content.split(/(?:\n\s*(?:Section|Chapter|Part|##)\s*\d*|\n\s*#{1,3}\s*)/i);
     
     if (sections.length < 2) {
-      // Split by paragraphs if no clear sections
-      return this.splitContentIntoChunks(content, 1200);
+      return this.splitContentIntoChunks(content, 1000);
     }
     
     return sections.filter(section => section.trim().length > 100);
@@ -217,9 +192,8 @@ Respond with structured educational content based solely on the provided documen
   private static extractSectionTitle(section: string, index: number, sourceName: string): string {
     const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    // Look for a title-like first line
     const firstLine = lines[0];
-    if (firstLine && firstLine.length < 100 && !firstLine.endsWith('.')) {
+    if (firstLine && firstLine.length > 5 && firstLine.length < 80 && !firstLine.endsWith('.')) {
       return firstLine;
     }
     
