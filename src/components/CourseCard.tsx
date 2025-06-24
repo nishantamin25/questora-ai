@@ -37,15 +37,6 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCoursePopup, setShowCoursePopup] = useState(false);
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-100 text-green-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'hard': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const handleEdit = () => {
     if (isEditing) {
       onUpdate(editedCourse);
@@ -119,9 +110,6 @@ const CourseCard = ({ course, isAdmin, onUpdate, onDelete, onComplete, isComplet
                 <CardTitle className="text-lg font-semibold text-slate-900 mb-2 flex items-center space-x-2">
                   <BookOpen className="h-5 w-5 text-blue-600" />
                   <span>{course.name}</span>
-                  <Badge className={getDifficultyColor(course.difficulty)}>
-                    {course.difficulty}
-                  </Badge>
                   {isCompleted && (
                     <Badge className="bg-green-100 text-green-800">Completed</Badge>
                   )}

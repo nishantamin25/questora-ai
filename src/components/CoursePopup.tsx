@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface CoursePopupProps {
@@ -60,13 +60,10 @@ const CoursePopup = ({ course, isOpen, onClose, onComplete, isCompleted = false 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader className="border-b pb-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl font-semibold">{course.name}</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
           </div>
           <div className="mt-2">
             <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
@@ -77,35 +74,74 @@ const CoursePopup = ({ course, isOpen, onClose, onComplete, isCompleted = false 
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 min-h-[400px]">
-          {currentMaterial && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-slate-900">{currentMaterial.title}</h3>
-                {!completedPages.has(currentPage) && (
-                  <Button
-                    onClick={handleMarkPageComplete}
-                    variant="outline"
-                    size="sm"
-                    className="border-green-300 text-green-700 hover:bg-green-50"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Mark Page Complete
-                  </Button>
-                )}
-              </div>
-
-              <div className="prose prose-slate max-w-none">
-                {currentMaterial.content.split('\n').map((paragraph, index) => (
-                  paragraph.trim() && (
-                    <p key={index} className="text-slate-700 leading-relaxed mb-4">
-                      {paragraph}
-                    </p>
-                  )
-                ))}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {course.materials.map((material, index) => (
+            <div key={index} className={`${index === currentPage ? 'block' : 'hidden'}`}>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-slate-900">{material.title}</h3>
+                <div className="prose prose-slate max-w-none">
+                  {material.content.split('\n').map((paragraph, pIndex) => (
+                    paragraph.trim() && (
+                      <p key={pIndex} className="text-slate-700 leading-relaxed mb-4">
+                        {paragraph}
+                      </p>
+                    )
+                  ))}
+                </div>
               </div>
             </div>
-          )}
+          ))}
+          
+          {/* All materials displayed in a scrollable container */}
+          <div className="space-y-8">
+            {course.materials.map((material, index) => (
+              <div key={index} className="border-b border-slate-200 pb-8 last:border-b-0">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-slate-900">
+                    {index + 1}. {material.title}
+                  </h3>
+                  {completedPages.has(index) && (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  )}
+                </div>
+                <div className="prose prose-slate max-w-none">
+                  {material.content.split('\n').map((paragraph, pIndex) => (
+                    paragraph.trim() && (
+                      <p key={pIndex} className="text-slate-700 leading-relaxed mb-4">
+                        {paragraph}
+                      </p>
+                    )
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Mark as completed button at the bottom */}
+          <div className="pt-6 border-t border-slate-200">
+            {!completedPages.has(currentPage) && (
+              <Button
+                onClick={handleMarkPageComplete}
+                variant="outline"
+                size="sm"
+                className="border-green-300 text-green-700 hover:bg-green-50 mb-4"
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Mark as completed
+              </Button>
+            )}
+            
+            {completedPages.size === totalPages && (
+              <Button
+                onClick={handleMarkCourseComplete}
+                disabled={isCompleted}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 w-full"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {isCompleted ? 'Completed' : 'Mark Course as Complete'}
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="border-t pt-4 flex items-center justify-between">
@@ -120,16 +156,7 @@ const CoursePopup = ({ course, isOpen, onClose, onComplete, isCompleted = false 
           </Button>
 
           <div className="flex items-center space-x-2">
-            {completedPages.size === totalPages ? (
-              <Button
-                onClick={handleMarkCourseComplete}
-                disabled={isCompleted}
-                className="bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                {isCompleted ? 'Completed' : 'Mark as Complete'}
-              </Button>
-            ) : (
+            {completedPages.size < totalPages && (
               <span className="text-sm text-slate-600">
                 Complete all pages to finish the course
               </span>
