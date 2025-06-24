@@ -1,4 +1,3 @@
-
 import { FileProcessingService } from './FileProcessingService';
 import { PDFGenerationService } from './PDFGenerationService';
 import { ChatGPTService } from './ChatGPTService';
@@ -238,7 +237,7 @@ Respond with structured educational content based solely on the provided documen
   }
 
   private splitContentIntoMeaningfulChunks(content: string): string[] {
-    // Define regex patterns with explicit typing to avoid TypeScript inference issues
+    // Define regex patterns
     const patterns: RegExp[] = [
       /(?:\n\s*){2,}(?=[A-Z][^.]*(?:\n|$))/g,  // Double line breaks before headings
       /(?:\d+\.|\w+\)|\•)\s+/g,                // Numbered or bulleted lists
@@ -248,15 +247,14 @@ Respond with structured educational content based solely on the provided documen
     
     let chunks: string[] = [content];
     
-    // Process each pattern individually to avoid type issues
-    for (let i = 0; i < patterns.length; i++) {
-      const pattern = patterns[i];
+    // Process each pattern individually
+    for (const pattern of patterns) {
       const newChunks: string[] = [];
       
-      for (let j = 0; j < chunks.length; j++) {
-        const chunk = chunks[j];
-        const parts = chunk.split(pattern);
-        const validParts = parts.filter(part => part && part.trim().length > 100);
+      for (const chunk of chunks) {
+        // Explicitly type the split result to avoid type inference issues
+        const parts: string[] = chunk.split(pattern);
+        const validParts: string[] = parts.filter((part: string) => part && part.trim().length > 100);
         newChunks.push(...validParts);
       }
       
