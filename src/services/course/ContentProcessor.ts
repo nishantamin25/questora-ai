@@ -2,6 +2,10 @@ import { CourseMaterial } from './CourseTypes';
 import { ChatGPTService } from '../ChatGPTService';
 
 export class ContentProcessor {
+  private static generateId(): string {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  }
+
   static isRealContent(content: string): boolean {
     if (!content || content.length < 100) {
       console.log('Content rejected: too short');
@@ -126,9 +130,11 @@ Format each section clearly with a title and detailed content based on the sourc
         sectionParts.forEach((section, index) => {
           if (section.trim().length > 200) {
             sections.push({
+              id: this.generateId(),
               type: 'text',
               title: this.extractSectionTitle(section, index + 1, sourceName),
-              content: section.trim()
+              content: section.trim(),
+              order: index + 1
             });
           }
         });
@@ -172,9 +178,11 @@ Format each section clearly with a title and detailed content based on the sourc
       contentDivisions.slice(0, 3).forEach((division, index) => {
         if (division.content.trim().length > 150) {
           sections.push({
+            id: this.generateId(),
             type: 'text',
             title: division.title || `${sourceName} - Section ${index + 1}`,
-            content: division.content.trim()
+            content: division.content.trim(),
+            order: index + 1
           });
         }
       });
@@ -185,9 +193,11 @@ Format each section clearly with a title and detailed content based on the sourc
       chunks.forEach((chunk, index) => {
         if (chunk.trim().length > 150) {
           sections.push({
+            id: this.generateId(),
             type: 'text',
             title: this.generateContentBasedTitle(chunk, index + 1, sourceName),
-            content: chunk.trim()
+            content: chunk.trim(),
+            order: index + 1
           });
         }
       });
@@ -196,9 +206,11 @@ Format each section clearly with a title and detailed content based on the sourc
     // Ensure we have at least one section
     if (sections.length === 0 && content.length > 150) {
       sections.push({
+        id: this.generateId(),
         type: 'text',
         title: `${sourceName} - Content Overview`,
-        content: content.trim()
+        content: content.trim(),
+        order: 1
       });
     }
     
