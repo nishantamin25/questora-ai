@@ -4,6 +4,9 @@ import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
 import { PayloadValidator } from './PayloadValidator';
 import { ApiCallService } from './ApiCallService';
+import { InputSanitizer } from './InputSanitizer';
+import { RecoveryService } from './RecoveryService';
+import { ErrorHandler } from './ErrorHandler';
 
 export class QuestionGenerationService {
   async generateQuestions(
@@ -27,45 +30,80 @@ export class QuestionGenerationService {
       language
     });
 
-    // CRITICAL: Validate API key first
-    if (!ApiKeyManager.hasApiKey()) {
-      throw new Error('OpenAI API key not configured. Please set your API key in settings.');
+    try {
+      // CRITICAL: Validate API key first
+      if (!ApiKeyManager.hasApiKey()) {
+        throw new Error('OpenAI API key not configured. Please set your API key in settings.');
+      }
+
+      // Sanitize and validate inputs
+      const sanitizedPrompt = InputSanitizer.sanitizePrompt(prompt);
+      const sanitizedFileContent = InputSanitizer.sanitizeFileContent(fileContent);
+      const sanitizedNumberOfQuestions = InputSanitizer.sanitizeNumber(numberOfQuestions, 1, 50, 5);
+      const sanitizedDifficulty = InputSanitizer.sanitizeDifficulty(difficulty);
+
+      // ABSOLUTE REQUIREMENT: Block without substantial file content
+      if (!sanitizedFileContent || sanitizedFileContent.length < 300) {
+        console.error('❌ BLOCKED: Insufficient file content for question generation');
+        throw new Error(`Question generation requires substantial file content (minimum 300 characters). Current content: ${sanitizedFileContent?.length || 0} characters. Upload a file with readable text to generate accurate questions.`);
+      }
+
+      // STRICT: Validate content quality
+      if (!ContentValidator.validateFileContentQuality(sanitizedFileContent)) {
+        console.error('❌ BLOCKED: File content quality validation failed');
+        throw new Error('The file content is not suitable for question generation. Content appears corrupted, incomplete, or lacks educational substance.');
+      }
+
+      console.log('✅ VALIDATED: File content approved for strict generation');
+
+      // MERGE: Combine prompt and file content properly
+      const mergedContent = PayloadValidator.mergePromptAndFileContent(sanitizedPrompt, sanitizedFileContent);
+      
+      // VALIDATE: Check word count before processing
+      const wordValidation = PayloadValidator.validateWordCount(mergedContent, 2000);
+      if (!wordValidation.isValid) {
+        throw new Error(wordValidation.error!);
+      }
+
+      console.log('✅ WORD COUNT VALIDATED:', wordValidation.wordCount, 'words');
+
+      // Generate questions with recovery
+      const questions = await RecoveryService.executeWithRecovery(
+        () => this.performQuestionGeneration(
+          sanitizedPrompt,
+          sanitizedNumberOfQuestions,
+          sanitizedDifficulty,
+          sanitizedFileContent,
+          setNumber,
+          totalSets,
+          language
+        ),
+        'QUESTION_GENERATION',
+        () => Promise.resolve(RecoveryService.generateFallbackQuestions(
+          sanitizedNumberOfQuestions,
+          sanitizedPrompt
+        ))
+      );
+
+      console.log(`✅ SUCCESS: Generated exactly ${questions.length} validated questions`);
+      return questions;
+
+    } catch (error) {
+      console.error('❌ Question generation failed:', error);
+      const errorDetails = ErrorHandler.handleError(error, 'QUESTION_GENERATION');
+      throw new Error(errorDetails.userMessage);
     }
+  }
 
-    // ABSOLUTE REQUIREMENT: Block without substantial file content
-    if (!fileContent || fileContent.length < 300) {
-      console.error('❌ BLOCKED: Insufficient file content for question generation');
-      throw new Error(`Question generation requires substantial file content (minimum 300 characters). Current content: ${fileContent?.length || 0} characters. Upload a file with readable text to generate accurate questions.`);
-    }
-
-    // STRICT: Validate content quality
-    if (!ContentValidator.validateFileContentQuality(fileContent)) {
-      console.error('❌ BLOCKED: File content quality validation failed');
-      throw new Error('The file content is not suitable for question generation. Content appears corrupted, incomplete, or lacks educational substance.');
-    }
-
-    console.log('✅ VALIDATED: File content approved for strict generation');
-
-    // Input validation
-    if (!prompt || prompt.trim().length === 0) {
-      throw new Error('Prompt is required for question generation');
-    }
-
-    if (numberOfQuestions < 1 || numberOfQuestions > 50) {
-      throw new Error('Number of questions must be between 1 and 50');
-    }
-
-    // MERGE: Combine prompt and file content properly
-    const mergedContent = PayloadValidator.mergePromptAndFileContent(prompt, fileContent);
-    
-    // VALIDATE: Check word count before processing
-    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 2000);
-    if (!wordValidation.isValid) {
-      throw new Error(wordValidation.error!);
-    }
-
-    console.log('✅ WORD COUNT VALIDATED:', wordValidation.wordCount, 'words');
-
+  private async performQuestionGeneration(
+    prompt: string,
+    numberOfQuestions: number,
+    difficulty: 'easy' | 'medium' | 'hard',
+    fileContent: string,
+    setNumber: number,
+    totalSets: number,
+    language: string
+  ): Promise<any[]> {
     // CRITICAL: Zero-hallucination prompt with exact question count enforcement
     let strictPrompt = `USER REQUEST: "${prompt}"
 
@@ -138,53 +176,48 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       response_format: { type: "json_object" }
     };
 
-    try {
-      console.log('📤 Sending VALIDATED anti-hallucination request...');
+    console.log('📤 Sending VALIDATED anti-hallucination request...');
 
-      const content = await ApiCallService.makeApiCall(requestBody, 'QUESTION GENERATION');
+    const content = await ApiCallService.makeApiCall(requestBody, 'QUESTION GENERATION');
 
-      if (!content) {
-        console.error('❌ No content from OpenAI');
-        throw new Error('Failed to generate questions - no AI response');
-      }
-
-      const parsedResponse = JSON.parse(content);
-      let questions = parsedResponse.questions || [];
-
-      if (!Array.isArray(questions)) {
-        console.error('❌ Invalid response format');
-        throw new Error('AI response format invalid - expected questions array');
-      }
-
-      // STRICT: Validate each question against content and remove fabricated ones
-      const validatedQuestions = questions
-        .filter(q => q && q.question && q.options && Array.isArray(q.options))
-        .filter(q => ContentValidator.strictValidateQuestionAgainstContent(q, fileContent))
-        .map(q => ({
-          question: q.question,
-          options: q.options.slice(0, 4), // Ensure exactly 4 options
-          correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
-                         typeof q.correct_answer === 'number' ? q.correct_answer : 0,
-          explanation: q.explanation || 'Based on document content.'
-        }));
-
-      // CRITICAL: Enforce exact question count
-      if (validatedQuestions.length < numberOfQuestions) {
-        console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, requested ${numberOfQuestions}`);
-        throw new Error(`Could only generate ${validatedQuestions.length} valid questions from document content. Requested ${numberOfQuestions}. The document may not contain sufficient content for the requested number of questions.`);
-      }
-
-      const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
-      
-      console.log(`✅ SUCCESS: Generated exactly ${finalQuestions.length} validated questions`);
-      return finalQuestions;
-
-    } catch (error) {
-      console.error('❌ Question generation failed:', error);
-      if (error instanceof SyntaxError) {
-        throw new Error('Failed to parse AI response. The AI may have returned invalid JSON.');
-      }
-      throw error;
+    if (!content) {
+      console.error('❌ No content from OpenAI');
+      throw new Error('Failed to generate questions - no AI response');
     }
+
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(content);
+    } catch (parseError) {
+      console.error('❌ JSON Parse Error:', parseError);
+      throw new Error('AI response format invalid - unable to parse JSON response');
+    }
+
+    let questions = parsedResponse.questions || [];
+
+    if (!Array.isArray(questions)) {
+      console.error('❌ Invalid response format');
+      throw new Error('AI response format invalid - expected questions array');
+    }
+
+    // STRICT: Validate each question against content and remove fabricated ones
+    const validatedQuestions = questions
+      .filter(q => q && q.question && q.options && Array.isArray(q.options))
+      .filter(q => ContentValidator.strictValidateQuestionAgainstContent(q, fileContent))
+      .map(q => ({
+        question: q.question,
+        options: q.options.slice(0, 4), // Ensure exactly 4 options
+        correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
+                       typeof q.correct_answer === 'number' ? q.correct_answer : 0,
+        explanation: q.explanation || 'Based on document content.'
+      }));
+
+    // CRITICAL: Enforce exact question count
+    if (validatedQuestions.length < numberOfQuestions) {
+      console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, requested ${numberOfQuestions}`);
+      throw new Error(`Could only generate ${validatedQuestions.length} valid questions from document content. Requested ${numberOfQuestions}. The document may not contain sufficient content for the requested number of questions.`);
+    }
+
+    return validatedQuestions.slice(0, numberOfQuestions);
   }
 }
