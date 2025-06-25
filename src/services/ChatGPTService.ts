@@ -14,7 +14,7 @@ class ChatGPTServiceClass {
     const apiKey = this.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    console.log('🔍 CRITICAL: Question generation with STRICT file content validation:', {
+    console.log('🔍 CRITICAL: Question generation respecting BOTH prompt and file content:', {
       prompt,
       hasFileContent: !!fileContent,
       fileContentLength: fileContent.length,
@@ -34,29 +34,34 @@ class ChatGPTServiceClass {
       throw new Error('The provided file content is not suitable for question generation. Content appears to be corrupted, incomplete, or lacks educational substance.');
     }
 
-    console.log('✅ VALIDATED: File content approved for strict question generation');
+    console.log('✅ VALIDATED: File content approved for combined prompt + content generation');
 
-    // CRITICAL FIX: INJECT FULL FILE CONTENT INTO PROMPT - NO FABRICATION ALLOWED
-    let strictContentPrompt = `Based strictly on the content from the uploaded file below, generate exactly ${numberOfQuestions} multiple-choice questions that reflect the actual information, examples, and topics discussed in the document.
+    // NEW: CRITICAL FIX - COMBINE USER PROMPT WITH FILE CONTENT
+    let combinedPrompt = `Based on the following user request:
+"${prompt}"
 
-CRITICAL REQUIREMENTS:
-- Use ONLY information explicitly present in the document content below
-- Do NOT invent learning areas, skills, frameworks, methodologies, or concepts not found in the source
-- Do NOT add generic educational terms like "assessment preparation", "critical thinking", "professional development", "best practices", "key learning areas", "confidence-building", or "evaluation frameworks" unless they appear verbatim in the document
-- Questions must be answerable using ONLY the specific information provided in the content below
-- Focus on actual facts, concepts, definitions, processes, examples, and specific details from the document
-- Each answer option must be based on information present in or derivable from the document content
-
-ACTUAL DOCUMENT CONTENT TO USE EXCLUSIVELY:
+And the following content extracted from the attached file:
 """
 ${fileContent}
 """
+
+Generate exactly ${numberOfQuestions} multiple-choice questions that strictly reflect BOTH the user's request AND the actual file content.
+
+CRITICAL REQUIREMENTS:
+- Honor the user's specific intent from their request: "${prompt}"
+- Use ONLY information explicitly present in the document content above
+- Do NOT invent learning areas, skills, frameworks, methodologies, or concepts not found in the source
+- Do NOT add generic educational terms unless they appear in the user request or document
+- Questions must be answerable using ONLY the specific information provided in the content
+- Focus on actual facts, concepts, definitions, processes, examples, and specific details from the document
+- Each answer option must be based on information present in or derivable from the document content
+- Ensure questions align with the user's intent while staying within document boundaries
 
 ${totalSets > 1 ? `This is set ${setNumber} of ${totalSets}, so ensure questions are unique and don't overlap with other sets while staying strictly within the document content above.` : ''}
 
 RESPONSE FORMAT REQUIREMENTS:
 Return a JSON object with a "questions" array. Each question MUST have:
-- question: string (specific question about actual content from the document above)
+- question: string (specific question about actual content from the document that aligns with user intent)
 - options: array of exactly 4 strings (answer choices based on document content)
 - correct_answer: number (index 0-3 of correct option)
 - explanation: string (explanation referencing specific information from the source document)
@@ -65,7 +70,7 @@ Example format:
 {
   "questions": [
     {
-      "question": "According to the document, what specific [concept/process/fact] is mentioned?",
+      "question": "According to the document, what specific [concept/process/fact] is mentioned regarding [user's topic of interest]?",
       "options": ["Actual info from doc", "Actual info from doc", "Actual info from doc", "Actual info from doc"],
       "correct_answer": 0,
       "explanation": "The document specifically states that..."
@@ -73,14 +78,14 @@ Example format:
   ]
 }
 
-Generate exactly ${numberOfQuestions} questions now, using ONLY the document content provided above.`;
+Generate exactly ${numberOfQuestions} questions now, respecting both the user request and using ONLY the document content provided above.`;
 
     if (language !== 'en') {
-      strictContentPrompt += ` Generate questions in ${language}.`;
+      combinedPrompt += ` Generate questions in ${language}.`;
     }
 
     try {
-      console.log('📤 Sending STRICT file-content-only request to OpenAI...');
+      console.log('📤 Sending COMBINED prompt + file content request to OpenAI...');
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -93,11 +98,11 @@ Generate exactly ${numberOfQuestions} questions now, using ONLY the document con
           messages: [
             {
               role: 'system',
-              content: 'You are a strict content-based question generator. You ONLY create questions based on the exact content provided in the user message. You NEVER add content, frameworks, methodologies, learning objectives, or educational concepts not explicitly present in the source material. You are forbidden from using generic educational language unless it appears verbatim in the provided content.'
+              content: 'You are a strict content-based question generator that respects both user intent and source material. You combine the user\'s specific request with the exact content provided. You NEVER add content, frameworks, methodologies, learning objectives, or educational concepts not explicitly present in the source material or requested by the user. You follow the user\'s intent while staying within the bounds of the provided content.'
             },
             {
               role: 'user',
-              content: strictContentPrompt
+              content: combinedPrompt
             }
           ],
           max_tokens: 3000,
@@ -140,7 +145,7 @@ Generate exactly ${numberOfQuestions} questions now, using ONLY the document con
 
         if (!Array.isArray(questions) || questions.length === 0) {
           console.error('❌ No valid questions found in response');
-          throw new Error('AI service failed to generate valid questions based on the document content');
+          throw new Error('AI service failed to generate valid questions based on the combined prompt and document content');
         }
 
         // CRITICAL: Validate questions are strictly content-adherent
@@ -161,7 +166,7 @@ Generate exactly ${numberOfQuestions} questions now, using ONLY the document con
           throw new Error('All generated questions were rejected for containing fabricated content not present in the document. Please ensure the uploaded file contains substantial educational content.');
         }
 
-        console.log(`✅ SUCCESS: Generated ${validQuestions.length} strictly content-based questions`);
+        console.log(`✅ SUCCESS: Generated ${validQuestions.length} questions respecting both prompt intent and file content`);
         return validQuestions;
 
       } catch (parseError) {
@@ -306,10 +311,24 @@ Generate exactly ${numberOfQuestions} questions now, using ONLY the document con
     return [];
   }
 
-  async enhanceTextContent(textContent: string): Promise<string> {
+  async enhanceTextContent(textContent: string, userPrompt: string = ''): Promise<string> {
     const apiKey = this.getApiKey();
     
     try {
+      // NEW: Combine user prompt with content organization
+      const organizationPrompt = userPrompt 
+        ? `Based on the user request: "${userPrompt}"
+
+Clean and organize the provided text content for educational use while respecting the user's intent. ${userPrompt.toLowerCase().includes('course') ? 'Organize into logical course sections.' : ''} ${userPrompt.toLowerCase().includes('page') && userPrompt.match(/\d+/) ? `Structure into approximately ${userPrompt.match(/\d+/)[0]} main sections.` : ''}
+
+CRITICAL INSTRUCTION: Do not add any information, frameworks, methodologies, or concepts not present in the source text. Only reorganize and clarify existing content while honoring the user's structural request.
+
+ACTUAL DOCUMENT CONTENT:
+${textContent}`
+        : `Please clean and organize this extracted text content for educational use. Organize it logically and fix formatting issues while preserving ALL original information. Do not add any sections, summaries, frameworks, or concepts not present in the source:
+
+${textContent}`;
+
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
         headers: {
@@ -321,13 +340,11 @@ Generate exactly ${numberOfQuestions} questions now, using ONLY the document con
           messages: [
             {
               role: 'system',
-              content: 'You are a content organizer. Clean and organize the provided text content while preserving ALL original information. Do not add any new information, frameworks, methodologies, or concepts not present in the source text. Only reorganize and clarify existing content.'
+              content: 'You are a content organizer that respects both user intent and source material integrity. Clean and organize the provided text content while preserving ALL original information and following any structural guidance from the user. Do not add any new information, frameworks, methodologies, or concepts not present in the source text.'
             },
             {
               role: 'user',
-              content: `Please clean and organize this extracted text content for educational use. Organize it logically and fix formatting issues while preserving ALL original information. Do not add any sections, summaries, frameworks, or concepts not present in the source:
-
-${textContent}`
+              content: organizationPrompt
             }
           ],
           max_tokens: 2000,
@@ -386,10 +403,22 @@ ${textContent}`
     return true;
   }
 
-  async generateContent(prompt: string): Promise<string> {
+  async generateContent(prompt: string, fileContent: string = ''): Promise<string> {
     const apiKey = this.getApiKey();
     
     try {
+      // NEW: Create combined prompt that respects both user intent and file content
+      const combinedPrompt = fileContent 
+        ? `Based on the user request: "${prompt}"
+
+And the following content extracted from the attached file:
+"""
+${fileContent}
+"""
+
+Generate a response that strictly reflects both the user's intent and the provided file content. Do not fabricate or inject unrelated educational structure unless clearly asked in the prompt or present in the file. Honor the user's specific request while using only the information available in the file content.`
+        : prompt;
+
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
         headers: {
@@ -401,11 +430,11 @@ ${textContent}`
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator. When provided with source content, organize and structure ONLY that content without adding new information. When generating original content, create focused educational material based strictly on the provided prompt without adding generic frameworks or methodologies unless specifically requested.'
+              content: 'You are an educational content generator that respects both user intent and source material. When provided with source content, organize and structure ONLY that content while following the user\'s specific request. When generating original content, create focused educational material based strictly on the provided prompt without adding generic frameworks or methodologies unless specifically requested.'
             },
             {
               role: 'user',
-              content: prompt
+              content: combinedPrompt
             }
           ],
           max_tokens: 2000,

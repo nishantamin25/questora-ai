@@ -6,7 +6,7 @@ import { PDFGenerationService } from '../PDFGenerationService';
 
 export class CourseGenerator {
   static async generateCourse(prompt: string, files: File[] = [], fileContent: string = '', testName?: string): Promise<Course> {
-    console.log('🔍 STRICT MODE: Course generation with NO content fabrication:', { 
+    console.log('🔍 NEW BEHAVIOR: Course generation respecting BOTH user prompt and file content:', { 
       prompt, 
       fileCount: files.length, 
       hasFileContent: !!fileContent,
@@ -22,7 +22,7 @@ export class CourseGenerator {
       let validatedFileContent = '';
       
       if (files && files.length > 0) {
-        console.log('📄 Processing files for STRICT content extraction...');
+        console.log('📄 Processing files for content extraction...');
         
         for (const file of files) {
           try {
@@ -63,13 +63,13 @@ export class CourseGenerator {
         throw new Error('Course generation requires uploaded files with substantial content. Please upload files containing at least 200 characters of readable text. Generic course generation without file content is not supported.');
       }
 
-      // CRITICAL: Generate course materials STRICTLY from file content - NO FABRICATION
-      console.log('🔒 STRICT MODE: Creating course sections from file content ONLY');
-      const materials = await this.createStrictFileOnlyCourseSections(validatedFileContent, 'Uploaded Content');
+      // NEW: Generate course materials respecting BOTH user prompt AND file content
+      console.log('🔒 NEW BEHAVIOR: Creating course sections from BOTH user prompt and file content');
+      const materials = await this.createCombinedPromptAndContentSections(prompt, validatedFileContent, 'Uploaded Content');
 
       if (!materials || materials.length === 0) {
-        console.error('❌ CRITICAL: Failed to create course sections from file content');
-        throw new Error('Unable to generate course sections from the provided file content. The content may be too short or not suitable for educational course creation.');
+        console.error('❌ CRITICAL: Failed to create course sections from combined prompt and file content');
+        throw new Error('Unable to generate course sections from the provided prompt and file content. The content may be too short or not suitable for the requested course structure.');
       }
 
       const finalMaterials = materials.slice(0, 3);
@@ -94,12 +94,12 @@ export class CourseGenerator {
         console.error('⚠️ Error generating course PDF:', error);
       }
 
-      console.log('✅ STRICT COURSE GENERATION SUCCESS:', {
+      console.log('✅ NEW COURSE GENERATION SUCCESS:', {
         id: course.id,
         materialsCount: course.materials.length,
         estimatedTime: course.estimatedTime,
         hasPDF: !!course.pdfUrl,
-        contentSource: 'STRICT_FILE_CONTENT_ONLY'
+        contentSource: 'COMBINED_PROMPT_AND_FILE_CONTENT'
       });
 
       return course;
@@ -109,47 +109,115 @@ export class CourseGenerator {
     }
   }
 
-  // NEW: Create course sections strictly from file content only
-  private static async createStrictFileOnlyCourseSections(fileContent: string, sourceTitle: string): Promise<CourseMaterial[]> {
-    console.log('🔒 Creating course sections STRICTLY from file content - NO FABRICATION');
+  // NEW: Create course sections respecting both user prompt and file content
+  private static async createCombinedPromptAndContentSections(userPrompt: string, fileContent: string, sourceTitle: string): Promise<CourseMaterial[]> {
+    console.log('🔒 NEW: Creating course sections from BOTH user prompt and file content');
 
     try {
-      // First, try to use ChatGPT to organize the content WITHOUT adding new information
-      const organizedContent = await ChatGPTService.generateContent(
-        `Based strictly on the content extracted from the uploaded file below, organize this content into educational sections. 
-
-CRITICAL INSTRUCTION: Do not add any sections, summaries, learning goals, frameworks, methodologies, assessment preparation, professional development, or best practices unless they are explicitly found in the document itself.
-
-ACTUAL DOCUMENT CONTENT:
-"""
-${fileContent}
-"""
-
-Organize the existing content into 2-3 logical sections using ONLY the information present in the document. Do not invent new concepts or add academic frameworks not present in the source.
-
-Format as:
-## Section Title (from actual content)
-Content from the document...
-
-## Another Section Title (from actual content)  
-More content from the document...`
-      );
+      // Use ChatGPT to organize content while respecting user intent
+      const organizedContent = await ChatGPTService.generateContent(userPrompt, fileContent);
 
       // Parse the organized content into sections
       const sections = this.parseContentIntoSections(organizedContent);
       
       if (sections.length > 0) {
-        console.log('✅ Successfully organized file content into sections');
+        console.log('✅ Successfully organized content respecting both prompt and file content');
         return sections;
       } else {
-        console.warn('⚠️ ChatGPT organization failed, using direct content splitting');
-        return this.createDirectContentSections(fileContent, sourceTitle);
+        console.warn('⚠️ ChatGPT organization failed, using enhanced content splitting');
+        return this.createEnhancedContentSections(userPrompt, fileContent, sourceTitle);
       }
 
     } catch (error) {
       console.error('❌ Error organizing content with ChatGPT:', error);
-      console.log('🔄 Falling back to direct content splitting');
-      return this.createDirectContentSections(fileContent, sourceTitle);
+      console.log('🔄 Falling back to enhanced content splitting');
+      return this.createEnhancedContentSections(userPrompt, fileContent, sourceTitle);
+    }
+  }
+
+  // NEW: Enhanced content sections that consider user prompt
+  private static createEnhancedContentSections(userPrompt: string, fileContent: string, sourceTitle: string): Promise<CourseMaterial[]> {
+    console.log('📋 Creating enhanced content sections considering user prompt');
+    
+    // Determine target number of sections from user prompt
+    const promptLower = userPrompt.toLowerCase();
+    let targetSections = 3; // default
+    
+    if (promptLower.includes('page')) {
+      const pageMatch = promptLower.match(/(\d+)[-\s]*page/);
+      if (pageMatch) {
+        targetSections = parseInt(pageMatch[1]);
+      }
+    } else if (promptLower.includes('section')) {
+      const sectionMatch = promptLower.match(/(\d+)[-\s]*section/);
+      if (sectionMatch) {
+        targetSections = parseInt(sectionMatch[1]);
+      }
+    } else if (promptLower.includes('module')) {
+      const moduleMatch = promptLower.match(/(\d+)[-\s]*module/);
+      if (moduleMatch) {
+        targetSections = parseInt(moduleMatch[1]);
+      }
+    }
+
+    // Ensure reasonable bounds
+    targetSections = Math.max(1, Math.min(5, targetSections));
+    
+    const materials: CourseMaterial[] = [];
+    
+    // Split content into paragraphs
+    const paragraphs = fileContent.split(/\n\s*\n/).filter(p => p.trim().length > 100);
+    
+    if (paragraphs.length === 0) {
+      // If no clear paragraphs, split by sentences
+      const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 50);
+      const chunkedSentences = this.chunkArray(sentences, Math.ceil(sentences.length / targetSections));
+      
+      chunkedSentences.forEach((chunk, index) => {
+        if (chunk.length > 0) {
+          materials.push({
+            id: `section_${index + 1}`,
+            title: this.generateSectionTitle(userPrompt, sourceTitle, index + 1, targetSections),
+            content: chunk.join('. ').trim() + '.',
+            type: 'text',
+            order: index + 1
+          });
+        }
+      });
+    } else {
+      // Group paragraphs into sections
+      const chunkedParagraphs = this.chunkArray(paragraphs, Math.ceil(paragraphs.length / targetSections));
+      
+      chunkedParagraphs.forEach((chunk, index) => {
+        if (chunk.length > 0) {
+          materials.push({
+            id: `section_${index + 1}`,
+            title: this.generateSectionTitle(userPrompt, sourceTitle, index + 1, targetSections),
+            content: chunk.join('\n\n').trim(),
+            type: 'text',
+            order: index + 1
+          });
+        }
+      });
+    }
+
+    return Promise.resolve(materials.slice(0, targetSections));
+  }
+
+  // NEW: Generate section titles that reflect user intent
+  private static generateSectionTitle(userPrompt: string, sourceTitle: string, sectionNumber: number, totalSections: number): string {
+    const promptLower = userPrompt.toLowerCase();
+    
+    if (promptLower.includes('course')) {
+      return `Module ${sectionNumber}: ${sourceTitle}`;
+    } else if (promptLower.includes('page')) {
+      return `Page ${sectionNumber}`;
+    } else if (promptLower.includes('chapter')) {
+      return `Chapter ${sectionNumber}`;
+    } else if (promptLower.includes('lesson')) {
+      return `Lesson ${sectionNumber}`;
+    } else {
+      return `${sourceTitle} - Section ${sectionNumber}`;
     }
   }
 
@@ -188,51 +256,6 @@ More content from the document...`
     }
 
     return sections;
-  }
-
-  // NEW: Create sections by directly splitting file content
-  private static createDirectContentSections(fileContent: string, sourceTitle: string): CourseMaterial[] {
-    console.log('📋 Creating direct content sections from file content');
-    
-    const materials: CourseMaterial[] = [];
-    
-    // Split content into paragraphs
-    const paragraphs = fileContent.split(/\n\s*\n/).filter(p => p.trim().length > 100);
-    
-    if (paragraphs.length === 0) {
-      // If no clear paragraphs, split by sentences
-      const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 50);
-      const chunkedSentences = this.chunkArray(sentences, Math.ceil(sentences.length / 3));
-      
-      chunkedSentences.forEach((chunk, index) => {
-        if (chunk.length > 0) {
-          materials.push({
-            id: `section_${index + 1}`,
-            title: `${sourceTitle} - Part ${index + 1}`,
-            content: chunk.join('. ').trim() + '.',
-            type: 'text',
-            order: index + 1
-          });
-        }
-      });
-    } else {
-      // Group paragraphs into sections
-      const chunkedParagraphs = this.chunkArray(paragraphs, Math.ceil(paragraphs.length / 3));
-      
-      chunkedParagraphs.forEach((chunk, index) => {
-        if (chunk.length > 0) {
-          materials.push({
-            id: `section_${index + 1}`,
-            title: `${sourceTitle} - Section ${index + 1}`,
-            content: chunk.join('\n\n').trim(),
-            type: 'text',
-            order: index + 1
-          });
-        }
-      });
-    }
-
-    return materials.slice(0, 3); // Limit to 3 sections
   }
 
   // NEW: Utility method to chunk arrays
