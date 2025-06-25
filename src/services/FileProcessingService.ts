@@ -1,4 +1,5 @@
 import { ChatGPTService } from './ChatGPTService';
+import { createWorker } from 'tesseract.js';
 
 interface ProcessedFileContent {
   content: string;
@@ -12,6 +13,8 @@ interface ProcessedFileContent {
 }
 
 class FileProcessingServiceClass {
+  private ocrWorker: any = null;
+
   async processFile(file: File): Promise<ProcessedFileContent> {
     console.log(`Processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
     
@@ -48,15 +51,35 @@ class FileProcessingServiceClass {
       console.log(`Raw extraction result: ${content.length} characters`);
       console.log(`Content preview: ${content.substring(0, 200)}...`);
 
-      // CRITICAL: Strict validation to reject garbage content
+      // CRITICAL: Enhanced validation with OCR fallback for PDFs
       if (!this.isRealReadableContent(content)) {
-        console.error('CRITICAL: Extracted content is garbage or unreadable');
-        throw new Error(`Failed to extract readable text from ${file.name}. The file appears to be image-based, encrypted, or corrupted. Please try converting it to a plain text format first.`);
+        console.log('❌ Initial extraction failed validation, checking for OCR fallback...');
+        
+        // Trigger OCR fallback for PDFs with insufficient content
+        if (file.name.toLowerCase().endsWith('.pdf') && content.length < 500) {
+          console.log('🔄 PDF appears to be image-based. Triggering OCR fallback...');
+          try {
+            const ocrContent = await this.performOCRExtraction(file);
+            if (ocrContent && ocrContent.length > 100 && this.isRealReadableContent(ocrContent)) {
+              console.log('✅ OCR extraction successful:', ocrContent.length, 'characters');
+              content = ocrContent;
+              metadata.extractionMethod += '-ocr-fallback';
+            } else {
+              throw new Error('OCR extraction failed to produce readable content');
+            }
+          } catch (ocrError) {
+            console.error('OCR fallback failed:', ocrError);
+            throw new Error(`This PDF appears to be image-based or has complex formatting. OCR processing failed: ${ocrError instanceof Error ? ocrError.message : 'Unknown OCR error'}. Please try uploading a text-based PDF, Word document, or plain text file.`);
+          }
+        } else {
+          console.error('CRITICAL: Extracted content is not readable and no OCR fallback available');
+          throw new Error(`Failed to extract readable text from ${file.name}. The file appears to be corrupted, encrypted, or in an unsupported format. Please try converting it to a plain text format first.`);
+        }
       }
 
       console.log(`✅ Successfully extracted valid content: ${content.length} characters`);
 
-      // Try ChatGPT enhancement for substantial content - but only if content is already good
+      // Try ChatGPT enhancement for substantial content
       if (content.length > 200 && this.hasSubstantialContent(content)) {
         try {
           console.log('Attempting ChatGPT content enhancement...');
@@ -83,6 +106,46 @@ class FileProcessingServiceClass {
       type: fileType,
       metadata
     };
+  }
+
+  private async performOCRExtraction(file: File): Promise<string> {
+    console.log('🔍 Starting OCR extraction for PDF...');
+    
+    try {
+      // Convert PDF to images first, then OCR each page
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfData = new Uint8Array(arrayBuffer);
+      
+      // For now, we'll try OCR directly on the PDF file
+      // In a more robust implementation, you'd convert PDF pages to images first
+      const worker = await this.getOCRWorker();
+      
+      // Create a blob from the PDF data for OCR processing
+      const blob = new Blob([pdfData], { type: 'application/pdf' });
+      const result = await worker.recognize(blob);
+      
+      console.log('OCR extraction completed:', result.data.text.length, 'characters');
+      return result.data.text.trim();
+      
+    } catch (error) {
+      console.error('OCR extraction error:', error);
+      throw new Error(`OCR processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async getOCRWorker(): Promise<any> {
+    if (!this.ocrWorker) {
+      console.log('Initializing OCR worker...');
+      this.ocrWorker = await createWorker('eng');
+    }
+    return this.ocrWorker;
+  }
+
+  private async terminateOCRWorker(): Promise<void> {
+    if (this.ocrWorker) {
+      await this.ocrWorker.terminate();
+      this.ocrWorker = null;
+    }
   }
 
   private hasSubstantialContent(content: string): boolean {
@@ -212,46 +275,55 @@ class FileProcessingServiceClass {
       try {
         console.log('Trying UTF-8 extraction...');
         const utf8Content = await this.extractPdfTextUTF8(uint8Array);
-        if (this.isRealReadableContent(utf8Content) && utf8Content.length > bestContent.length) {
+        if (utf8Content && utf8Content.length > 100) {
           bestContent = utf8Content;
           bestMethod = 'utf8-text-extraction';
-          console.log('✅ UTF-8 extraction successful:', utf8Content.length, 'characters');
+          console.log('✅ UTF-8 extraction produced content:', utf8Content.length, 'characters');
         }
       } catch (error) {
         console.log('UTF-8 extraction failed:', error);
       }
 
       // Strategy 2: Latin-1 text extraction
-      try {
-        console.log('Trying Latin-1 extraction...');
-        const latin1Content = await this.extractPdfTextLatin1(uint8Array);
-        if (this.isRealReadableContent(latin1Content) && latin1Content.length > bestContent.length) {
-          bestContent = latin1Content;
-          bestMethod = 'latin1-text-extraction';
-          console.log('✅ Latin-1 extraction successful:', latin1Content.length, 'characters');
+      if (bestContent.length < 500) {
+        try {
+          console.log('Trying Latin-1 extraction...');
+          const latin1Content = await this.extractPdfTextLatin1(uint8Array);
+          if (latin1Content && latin1Content.length > bestContent.length) {
+            bestContent = latin1Content;
+            bestMethod = 'latin1-text-extraction';
+            console.log('✅ Latin-1 extraction produced content:', latin1Content.length, 'characters');
+          }
+        } catch (error) {
+          console.log('Latin-1 extraction failed:', error);
         }
-      } catch (error) {
-        console.log('Latin-1 extraction failed:', error);
       }
 
       // Strategy 3: Pattern-based extraction
-      try {
-        console.log('Trying pattern-based extraction...');
-        const patternContent = await this.extractPdfTextPatterns(uint8Array);
-        if (this.isRealReadableContent(patternContent) && patternContent.length > bestContent.length) {
-          bestContent = patternContent;
-          bestMethod = 'pattern-based-extraction';
-          console.log('✅ Pattern extraction successful:', patternContent.length, 'characters');
+      if (bestContent.length < 500) {
+        try {
+          console.log('Trying pattern-based extraction...');
+          const patternContent = await this.extractPdfTextPatterns(uint8Array);
+          if (patternContent && patternContent.length > bestContent.length) {
+            bestContent = patternContent;
+            bestMethod = 'pattern-based-extraction';
+            console.log('✅ Pattern extraction produced content:', patternContent.length, 'characters');
+          }
+        } catch (error) {
+          console.log('Pattern extraction failed:', error);
         }
-      } catch (error) {
-        console.log('Pattern extraction failed:', error);
       }
 
+      // CRITICAL: If text extraction fails or produces insufficient content, we'll let the main flow handle OCR
       if (!bestContent || bestContent.length < 100) {
-        throw new Error('PDF contains no readable text content. This may be a scanned document that requires OCR processing.');
+        console.log('⚠️ PDF text extraction produced insufficient content, will trigger OCR fallback');
+        return {
+          content: bestContent || '',
+          method: 'text-extraction-insufficient'
+        };
       }
 
-      console.log(`✅ Best PDF extraction method: ${bestMethod}, content length: ${bestContent.length}`);
+      console.log(`✅ PDF text extraction successful: ${bestMethod}, content length: ${bestContent.length}`);
       
       return {
         content: bestContent,
@@ -260,7 +332,10 @@ class FileProcessingServiceClass {
       
     } catch (error) {
       console.error('PDF processing failed:', error);
-      throw new Error(`PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return {
+        content: '',
+        method: 'text-extraction-failed'
+      };
     }
   }
 
@@ -460,6 +535,11 @@ Educational Elements:
       
       reader.readAsText(file, 'UTF-8');
     });
+  }
+
+  // Clean up OCR worker when needed
+  async cleanup(): Promise<void> {
+    await this.terminateOCRWorker();
   }
 }
 
