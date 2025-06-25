@@ -247,8 +247,8 @@ class QuestionnaireServiceClass {
     }
   }
 
-  // CRITICAL: New method for auto-save
-  private autoSaveQuestionnaire(questionnaire: Questionnaire): void {
+  // CRITICAL: New method for auto-save (now public)
+  public autoSaveQuestionnaire(questionnaire: Questionnaire): void {
     try {
       console.log('🔄 Auto-saving questionnaire:', questionnaire.id);
       

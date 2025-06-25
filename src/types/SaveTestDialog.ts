@@ -2,8 +2,10 @@
 export interface Question {
   id: string;
   text: string;
-  type: string;
-  options?: string[];
+  type: 'multiple-choice' | 'text' | 'boolean';
+  options: string[];
+  correctAnswer: number;
+  explanation?: string;
 }
 
 export interface Questionnaire {
@@ -12,14 +14,14 @@ export interface Questionnaire {
   description: string;
   questions: Question[];
   createdAt: string;
-  isActive?: boolean;
-  testName?: string;
-  difficulty?: 'easy' | 'medium' | 'hard';
-  isSaved?: boolean;
-  timeframe?: number;
+  isActive: boolean;
+  testName: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  isSaved: boolean;
+  timeframe: number;
   setNumber?: number;
   totalSets?: number;
-  courseContent?: any;
+  course?: any;
 }
 
 export interface SaveTestDialogProps {
