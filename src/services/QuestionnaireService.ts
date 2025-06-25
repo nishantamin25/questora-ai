@@ -39,7 +39,7 @@ interface Questionnaire {
 class QuestionnaireServiceClass {
   private readonly STORAGE_KEY = 'questionnaires';
   private readonly ACTIVE_STORAGE_KEY = 'active_questionnaires';
-  private readonly TEMP_STORAGE_KEY = 'temp_questionnaire'; // For immediate persistence
+  private readonly TEMP_STORAGE_KEY = 'temp_questionnaire';
 
   async generateQuestionnaire(
     prompt: string, 
@@ -48,7 +48,7 @@ class QuestionnaireServiceClass {
     setNumber: number = 1,
     totalSets: number = 1
   ): Promise<Questionnaire> {
-    console.log('🔍 CRITICAL: QuestionnaireService generation starting with strict validation:', {
+    console.log('🔍 CRITICAL: QuestionnaireService generation with MANDATORY file content:', {
       prompt,
       options,
       hasFileContent: !!fileContent,
@@ -65,7 +65,7 @@ class QuestionnaireServiceClass {
       let questionnaire: Questionnaire = {
         id: testId,
         title: `${options.testName}${totalSets > 1 ? ` - Set ${setNumber}` : ''}`,
-        description: `This questionnaire was generated based on: "${prompt}"${fileContent ? ' Additional context was provided from uploaded file content.' : ''}${totalSets > 1 ? ` This is set ${setNumber} of ${totalSets} with unique questions.` : ''}`,
+        description: `This questionnaire was generated based on: "${prompt}"${fileContent ? ' Questions are based strictly on the uploaded file content.' : ''}${totalSets > 1 ? ` This is set ${setNumber} of ${totalSets} with unique questions.` : ''}`,
         questions: [],
         createdAt: new Date().toISOString(),
         isActive: false,
@@ -77,28 +77,23 @@ class QuestionnaireServiceClass {
         totalSets
       };
 
-      // CRITICAL FIX: Immediate temp save to prevent data loss
       this.saveTempQuestionnaire(questionnaire);
       console.log('✅ TEMP SAVED: Questionnaire temporarily saved to prevent loss');
 
-      // Generate questionnaire if requested
+      // CRITICAL FIX: ABSOLUTELY REQUIRE FILE CONTENT FOR QUESTIONS
       if (options.includeQuestionnaire) {
-        console.log('🔍 FORCING file content validation for question generation...');
+        console.log('🔍 ENFORCING mandatory file content for question generation...');
         
-        // CRITICAL: Validate file content is substantial for question generation
-        if (!fileContent || fileContent.length < 200) {
-          console.error('❌ CRITICAL: Insufficient file content for question generation');
-          throw new Error('Question generation requires substantial file content (minimum 200 characters). Please upload files with sufficient readable text content.');
+        // CRITICAL: Block question generation without substantial file content
+        if (!fileContent || fileContent.length < 300) {
+          console.error('❌ BLOCKED: Question generation requires substantial file content');
+          throw new Error('Question generation requires substantial file content (minimum 300 characters). Please upload files with readable text content to generate accurate questions based on the document.');
         }
 
-        if (!this.validateFileContentForQuestions(fileContent)) {
-          console.error('❌ CRITICAL: File content validation failed for questions');
-          throw new Error('The provided file content is not suitable for question generation. Content appears to be corrupted or contains insufficient educational material.');
-        }
-
-        console.log('✅ VALIDATED: File content approved for question generation');
+        console.log('✅ PROCEEDING: File content validated for strict question generation');
         
         try {
+          // CRITICAL: Direct ChatGPT call with strict file content validation
           const chatGPTQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
@@ -108,7 +103,7 @@ class QuestionnaireServiceClass {
             totalSets
           );
 
-          console.log('✅ Questions generated successfully:', chatGPTQuestions.length);
+          console.log('✅ Questions generated successfully from file content:', chatGPTQuestions.length);
 
           let formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
             id: this.generateId(),
@@ -131,23 +126,21 @@ class QuestionnaireServiceClass {
           }
 
           questionnaire.questions = formattedQuestions;
-          
-          // CRITICAL: Immediate update to temp storage with questions
           this.saveTempQuestionnaire(questionnaire);
-          console.log('✅ TEMP UPDATED: Questions added to temp storage');
+          console.log('✅ TEMP UPDATED: File-based questions added to temp storage');
           
         } catch (error) {
-          console.error('❌ Error generating questions:', error);
-          throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.error('❌ Error generating questions from file content:', error);
+          throw error; // Re-throw to prevent fallback to fabricated content
         }
       }
 
       // Generate course if requested
       if (options.includeCourse) {
-        console.log('🔍 FORCING course generation with validated content...');
+        console.log('🔍 ENFORCING file content requirement for course generation...');
         
         if (!fileContent || fileContent.length < 200) {
-          console.error('❌ CRITICAL: Insufficient file content for course generation');
+          console.error('❌ BLOCKED: Course generation requires substantial file content');
           throw new Error('Course generation requires substantial file content (minimum 200 characters). Please upload files with sufficient readable text content.');
         }
 
@@ -183,8 +176,6 @@ class QuestionnaireServiceClass {
           }
           
           questionnaire.course = course;
-          
-          // CRITICAL: Final temp save with course
           this.saveTempQuestionnaire(questionnaire);
           console.log('✅ TEMP FINAL: Complete questionnaire saved to temp storage');
           
@@ -204,7 +195,6 @@ class QuestionnaireServiceClass {
         }
       }
 
-      // CRITICAL: Final temp save and immediate auto-save
       this.saveTempQuestionnaire(questionnaire);
       this.autoSaveQuestionnaire(questionnaire);
 
@@ -215,7 +205,8 @@ class QuestionnaireServiceClass {
         setNumber: questionnaire.setNumber,
         totalSets: questionnaire.totalSets,
         language: currentLanguage,
-        isAutoSaved: true
+        isAutoSaved: true,
+        isFileContentBased: fileContent.length > 0
       });
 
       return questionnaire;
@@ -225,19 +216,6 @@ class QuestionnaireServiceClass {
     }
   }
 
-  // CRITICAL: New method to validate file content for questions
-  private validateFileContentForQuestions(fileContent: string): boolean {
-    if (!fileContent || fileContent.length < 200) {
-      return false;
-    }
-
-    // Check for educational content indicators
-    const educationalTerms = (fileContent.match(/\b(?:chapter|section|introduction|conclusion|analysis|method|result|discussion|summary|overview|concept|principle|theory|practice|application|implementation|strategy|approach|technique|process|system|framework|model|design|development|research|study|data|information|knowledge|understanding|learning|education|training|course|lesson|topic|subject|content|material|resource|guide|manual|handbook|document|report|paper|article|book|text|definition|explanation|example|illustration|demonstration|case|scenario|problem|solution|question|answer|issue|challenge|opportunity|benefit|advantage|requirement|standard|criteria|guideline|recommendation|best|practices|methodology|procedure|step|stage|phase|level|degree|scope|range|scale|measure|metric|indicator|factor|element|component|aspect|feature|characteristic|property|quality|performance|effectiveness|efficiency|improvement|optimization|enhancement|innovation|technology|digital|platform|service|business|management|organization|operation|function|capability|capacity|resource|tool|equipment|facility|environment|condition|situation|context|background|history|evolution|development|progress|advancement|achievement|success|accomplishment|goal|objective|purpose|aim|target|mission|vision|value|benefit|impact|effect|influence|change|transformation|growth|expansion|increase|improvement|enhancement|optimization|innovation)+\b/gi) || []).length;
-    
-    return educationalTerms >= 5;
-  }
-
-  // CRITICAL: New method for temporary storage
   private saveTempQuestionnaire(questionnaire: Questionnaire): void {
     try {
       localStorage.setItem(this.TEMP_STORAGE_KEY, JSON.stringify(questionnaire));
@@ -247,12 +225,10 @@ class QuestionnaireServiceClass {
     }
   }
 
-  // CRITICAL: New method for auto-save (now public)
   public autoSaveQuestionnaire(questionnaire: Questionnaire): void {
     try {
       console.log('🔄 Auto-saving questionnaire:', questionnaire.id);
       
-      // Mark as saved and save to main storage
       questionnaire.isSaved = true;
       
       const questionnaires = this.getAllQuestionnaires();
@@ -267,7 +243,6 @@ class QuestionnaireServiceClass {
     }
   }
 
-  // CRITICAL: Method to recover from temp storage
   getTempQuestionnaire(): Questionnaire | null {
     try {
       const stored = localStorage.getItem(this.TEMP_STORAGE_KEY);
@@ -278,7 +253,6 @@ class QuestionnaireServiceClass {
     }
   }
 
-  // CRITICAL: Method to clear temp storage
   clearTempQuestionnaire(): void {
     try {
       localStorage.removeItem(this.TEMP_STORAGE_KEY);
@@ -307,7 +281,6 @@ class QuestionnaireServiceClass {
         localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       }
       
-      // Clear temp storage after successful save
       this.clearTempQuestionnaire();
       
       console.log('✅ Questionnaire saved successfully:', questionnaire.id);
