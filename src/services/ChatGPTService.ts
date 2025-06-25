@@ -38,7 +38,7 @@ class ChatGPTServiceClass {
     console.log('✅ VALIDATED: File content approved for strict generation');
 
     // CRITICAL: Zero-hallucination prompt with exact question count enforcement
-    const strictPrompt = `USER REQUEST: "${prompt}"
+    let strictPrompt = `USER REQUEST: "${prompt}"
 
 DOCUMENT CONTENT:
 """
@@ -80,7 +80,6 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
