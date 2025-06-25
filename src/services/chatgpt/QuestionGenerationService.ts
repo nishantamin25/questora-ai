@@ -3,10 +3,9 @@ import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
 import { PayloadValidator } from './PayloadValidator';
+import { ApiCallService } from './ApiCallService';
 
 export class QuestionGenerationService {
-  private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-
   async generateQuestions(
     prompt: string,
     numberOfQuestions: number,
@@ -15,17 +14,23 @@ export class QuestionGenerationService {
     setNumber: number = 1,
     totalSets: number = 1
   ): Promise<any[]> {
-    const apiKey = ApiKeyManager.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    console.log('🔍 STRICT GENERATION: Questions from file content only:', {
-      prompt,
+    console.log('🔍 QUESTION GENERATION START:', {
+      prompt: prompt.substring(0, 100) + '...',
       requestedQuestions: numberOfQuestions,
       hasFileContent: !!fileContent,
       fileContentLength: fileContent.length,
       setNumber,
-      totalSets
+      totalSets,
+      difficulty,
+      language
     });
+
+    // CRITICAL: Validate API key first
+    if (!ApiKeyManager.hasApiKey()) {
+      throw new Error('OpenAI API key not configured. Please set your API key in settings.');
+    }
 
     // ABSOLUTE REQUIREMENT: Block without substantial file content
     if (!fileContent || fileContent.length < 300) {
@@ -40,6 +45,15 @@ export class QuestionGenerationService {
     }
 
     console.log('✅ VALIDATED: File content approved for strict generation');
+
+    // Input validation
+    if (!prompt || prompt.trim().length === 0) {
+      throw new Error('Prompt is required for question generation');
+    }
+
+    if (numberOfQuestions < 1 || numberOfQuestions > 50) {
+      throw new Error('Number of questions must be between 1 and 50');
+    }
 
     // MERGE: Combine prompt and file content properly
     const mergedContent = PayloadValidator.mergePromptAndFileContent(prompt, fileContent);
@@ -67,10 +81,11 @@ STRICT GENERATION RULES:
 4. NEVER fabricate content, frameworks, methodologies, or concepts not in the document
 5. Each question must be answerable using ONLY the specific information provided
 6. Honor the user's intent: "${prompt}" while staying within document boundaries
+7. Difficulty level: ${difficulty}
 
 ${totalSets > 1 ? `Generate unique questions for set ${setNumber} of ${totalSets}.` : ''}
 
-RESPONSE FORMAT:
+RESPONSE FORMAT (JSON ONLY):
 {
   "questions": [
     {
@@ -85,14 +100,14 @@ RESPONSE FORMAT:
 Generate EXACTLY ${numberOfQuestions} questions now.`;
 
     if (language !== 'en') {
-      strictPrompt += ` Generate in ${language}.`;
+      strictPrompt += ` Generate in ${language} language.`;
     }
 
     // PREPARE: Create properly structured messages
     const messages = [
       {
         role: 'system',
-        content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology.'
+        content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology. You MUST respond with valid JSON only.'
       },
       {
         role: 'user',
@@ -123,39 +138,10 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       response_format: { type: "json_object" }
     };
 
-    console.log('🔍 FINAL PAYLOAD VALIDATION:', {
-      model: requestBody.model,
-      messagesCount: requestBody.messages.length,
-      maxTokens: requestBody.max_tokens,
-      hasSystemMessage: requestBody.messages.some(m => m.role === 'system'),
-      hasUserMessage: requestBody.messages.some(m => m.role === 'user'),
-      allMessagesHaveContent: requestBody.messages.every(m => m.content && m.content.length > 0)
-    });
-
     try {
       console.log('📤 Sending VALIDATED anti-hallucination request...');
 
-      const response = await fetch(this.OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('OpenAI API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorData
-        });
-        throw new Error(`OpenAI API request failed: ${response.status} - ${response.statusText}. ${errorData}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
+      const content = await ApiCallService.makeApiCall(requestBody, 'QUESTION GENERATION');
 
       if (!content) {
         console.error('❌ No content from OpenAI');
@@ -167,7 +153,7 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
 
       if (!Array.isArray(questions)) {
         console.error('❌ Invalid response format');
-        throw new Error('AI response format invalid');
+        throw new Error('AI response format invalid - expected questions array');
       }
 
       // STRICT: Validate each question against content and remove fabricated ones
@@ -195,6 +181,9 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
 
     } catch (error) {
       console.error('❌ Question generation failed:', error);
+      if (error instanceof SyntaxError) {
+        throw new Error('Failed to parse AI response. The AI may have returned invalid JSON.');
+      }
       throw error;
     }
   }

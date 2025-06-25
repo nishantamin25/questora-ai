@@ -1,19 +1,22 @@
 
-import { ApiKeyManager } from './ApiKeyManager';
 import { PayloadValidator } from './PayloadValidator';
+import { ApiCallService } from './ApiCallService';
 
 export class ImageAnalysisService {
-  private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-
   async analyzeImage(base64Image: string, prompt: string): Promise<string> {
-    const apiKey = ApiKeyManager.getApiKey();
-    
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
+    console.log('🔍 IMAGE ANALYSIS START:', {
+      promptLength: prompt.length,
+      hasImage: !!base64Image,
+      imageDataLength: base64Image.length
+    });
 
+    // Input validation
     if (!base64Image || !prompt) {
       throw new Error('Both image data and prompt are required');
+    }
+
+    if (!base64Image.match(/^[A-Za-z0-9+/]+=*$/)) {
+      throw new Error('Invalid base64 image format');
     }
 
     // VALIDATE: Check prompt length
@@ -24,84 +27,58 @@ export class ImageAnalysisService {
 
     console.log('✅ IMAGE ANALYSIS - Prompt validated:', wordValidation.wordCount, 'words');
     
-    try {
-      // PREPARE: Create properly structured vision messages
-      const messages = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: prompt
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`
-              }
+    // PREPARE: Create properly structured vision messages
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: prompt
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${base64Image}`
             }
-          ]
-        }
-      ];
-
-      const maxTokens = 1500;
-      const model = 'gpt-4o';
-
-      // VALIDATE: Ensure payload is properly structured for vision
-      const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
-      
-      if (!payloadValidation.isValid) {
-        console.error('❌ IMAGE ANALYSIS - Payload validation failed:', payloadValidation.error);
-        throw new Error(payloadValidation.error!);
+          }
+        ]
       }
+    ];
 
-      if (payloadValidation.error) {
-        console.warn('⚠️ IMAGE ANALYSIS - Payload warning:', payloadValidation.error);
-      }
+    const maxTokens = 1500;
+    const model = 'gpt-4o';
 
-      const requestBody = {
-        model,
-        messages: payloadValidation.messages,
-        max_tokens: maxTokens,
-        temperature: 0.7
-      };
+    // VALIDATE: Ensure payload is properly structured for vision
+    const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
+    
+    if (!payloadValidation.isValid) {
+      console.error('❌ IMAGE ANALYSIS - Payload validation failed:', payloadValidation.error);
+      throw new Error(payloadValidation.error!);
+    }
 
-      console.log('🔍 IMAGE ANALYSIS - Final payload validation:', {
-        model: requestBody.model,
-        messagesCount: requestBody.messages.length,
-        maxTokens: requestBody.max_tokens,
-        hasVisionContent: requestBody.messages.some(m => Array.isArray(m.content))
-      });
+    if (payloadValidation.error) {
+      console.warn('⚠️ IMAGE ANALYSIS - Payload warning:', payloadValidation.error);
+    }
 
-      const response = await fetch(this.OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
+    const requestBody = {
+      model,
+      messages: payloadValidation.messages,
+      max_tokens: maxTokens,
+      temperature: 0.7
+    };
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('OpenAI API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorData
-        });
-        throw new Error(`OpenAI API request failed: ${response.status} - ${response.statusText}. ${errorData}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
+    try {
+      const content = await ApiCallService.makeApiCall(requestBody, 'IMAGE ANALYSIS');
       
       if (!content) {
         throw new Error('No analysis result from OpenAI API');
       }
       
+      console.log('✅ IMAGE ANALYSIS SUCCESS:', content.length, 'characters');
       return content;
     } catch (error) {
-      console.error('Error analyzing image:', error);
+      console.error('❌ Image analysis failed:', error);
       throw new Error(`Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

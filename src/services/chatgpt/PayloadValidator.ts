@@ -1,3 +1,5 @@
+import { ValidationService } from './ValidationService';
+
 export class PayloadValidator {
   // Conservative token limits to prevent 400 errors
   private static readonly TOKEN_LIMITS = {
@@ -14,8 +16,11 @@ export class PayloadValidator {
     maxTokens: number = 2000
   ): { isValid: boolean; messages: any[]; error?: string } {
     
-    // Ensure messages array is valid
+    console.log('🔍 Starting comprehensive payload validation...');
+    
+    // Step 1: Ensure messages array is valid
     if (!Array.isArray(messages) || messages.length === 0) {
+      console.error('❌ Invalid messages array:', messages);
       return {
         isValid: false,
         messages: [],
@@ -23,62 +28,123 @@ export class PayloadValidator {
       };
     }
 
-    // Validate each message structure
-    const validatedMessages = messages.map(msg => {
+    // Step 2: Clean and validate each message structure
+    const cleanedMessages = messages.map((msg, index) => {
       if (!msg || typeof msg !== 'object') {
-        return { role: 'user', content: 'Invalid message' };
+        console.warn(`⚠️ Invalid message at index ${index}:`, msg);
+        return { role: 'user', content: 'Invalid message content' };
       }
       
-      if (!msg.role || !msg.content) {
-        return { role: 'user', content: msg.content || 'Empty message' };
+      // Ensure role is valid
+      if (!msg.role || !['system', 'user', 'assistant'].includes(msg.role)) {
+        console.warn(`⚠️ Invalid role at index ${index}:`, msg.role);
+        msg.role = 'user';
       }
 
-      // Ensure content is string for text messages
+      // Handle content based on type
+      if (!msg.content) {
+        console.warn(`⚠️ Empty content at index ${index}`);
+        return { role: msg.role, content: 'Empty content' };
+      }
+
+      // String content (most common)
       if (typeof msg.content === 'string') {
+        const trimmedContent = msg.content.trim();
+        if (trimmedContent.length === 0) {
+          console.warn(`⚠️ Empty string content at index ${index}`);
+          return { role: msg.role, content: 'Empty content' };
+        }
+        
+        // Remove any control characters that could cause issues
+        const cleanContent = trimmedContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        
         return {
           role: msg.role,
-          content: msg.content.trim() || 'Empty content'
+          content: cleanContent
         };
       }
 
-      // Handle vision messages with proper structure
+      // Array content (vision messages)
       if (Array.isArray(msg.content)) {
+        const validContentItems = msg.content.filter(item => {
+          if (!item || !item.type) return false;
+          
+          if (item.type === 'text') {
+            return item.text && typeof item.text === 'string' && item.text.trim().length > 0;
+          }
+          
+          if (item.type === 'image_url') {
+            return item.image_url && 
+                   item.image_url.url && 
+                   typeof item.image_url.url === 'string' &&
+                   item.image_url.url.startsWith('data:image/');
+          }
+          
+          return false;
+        });
+
+        if (validContentItems.length === 0) {
+          console.warn(`⚠️ No valid content items at index ${index}`);
+          return { role: msg.role, content: 'Invalid content items' };
+        }
+
         return {
           role: msg.role,
-          content: msg.content.filter(item => 
-            item && (item.type === 'text' || item.type === 'image_url')
-          )
+          content: validContentItems
         };
       }
 
-      return { role: 'user', content: String(msg.content) };
+      // Fallback for other content types
+      console.warn(`⚠️ Unexpected content type at index ${index}:`, typeof msg.content);
+      return { role: msg.role, content: String(msg.content) };
     });
 
-    // Estimate total tokens
-    const totalTokens = this.estimateTokens(validatedMessages);
-    const modelLimit = this.TOKEN_LIMITS[model as keyof typeof this.TOKEN_LIMITS] || 15000;
-    
-    console.log('🔍 Payload validation:', {
+    // Step 3: Comprehensive payload validation
+    const testPayload = {
       model,
-      totalTokens,
-      modelLimit,
-      maxTokens,
-      messagesCount: validatedMessages.length
-    });
+      messages: cleanedMessages,
+      max_tokens: maxTokens,
+      temperature: 0.7
+    };
 
-    // Check if within limits
-    if (totalTokens + maxTokens > modelLimit) {
-      // Attempt to truncate intelligently
-      const truncatedMessages = this.truncateMessages(validatedMessages, modelLimit - maxTokens);
+    const validation = ValidationService.validateCompletePayload(testPayload);
+    
+    if (!validation.isValid) {
+      console.error('❌ Payload validation failed:', validation.errors);
+      return {
+        isValid: false,
+        messages: [],
+        error: `Payload validation failed: ${validation.errors.join(', ')}`
+      };
+    }
+
+    if (validation.warnings.length > 0) {
+      console.warn('⚠️ Payload warnings:', validation.warnings);
+    }
+
+    // Step 4: Token limit validation
+    const tokenValidation = ValidationService.validateTokenLimits(cleanedMessages, model, maxTokens);
+    
+    if (!tokenValidation.isValid) {
+      console.error('❌ Token limit exceeded:', tokenValidation);
       
-      if (this.estimateTokens(truncatedMessages) + maxTokens > modelLimit) {
+      // Attempt intelligent truncation
+      const truncatedMessages = this.truncateMessagesIntelligently(
+        cleanedMessages, 
+        tokenValidation.modelLimit - maxTokens
+      );
+      
+      const retryTokenValidation = ValidationService.validateTokenLimits(truncatedMessages, model, maxTokens);
+      
+      if (!retryTokenValidation.isValid) {
         return {
           isValid: false,
           messages: [],
-          error: `Content exceeds model limit. Please reduce your input to under ${Math.floor(modelLimit * this.WORDS_PER_TOKEN)} words.`
+          error: `Content exceeds model limit. Estimated tokens: ${tokenValidation.estimatedTokens}, Model limit: ${tokenValidation.modelLimit}. Please reduce input size.`
         };
       }
 
+      console.log('✅ Content truncated to fit within limits');
       return {
         isValid: true,
         messages: truncatedMessages,
@@ -86,46 +152,41 @@ export class PayloadValidator {
       };
     }
 
+    console.log('✅ Payload validation successful:', {
+      model,
+      messagesCount: cleanedMessages.length,
+      estimatedTokens: tokenValidation.estimatedTokens,
+      modelLimit: tokenValidation.modelLimit,
+      maxTokens
+    });
+
     return {
       isValid: true,
-      messages: validatedMessages
+      messages: cleanedMessages
     };
   }
 
-  private static estimateTokens(messages: any[]): number {
-    let totalTokens = 0;
-    
-    for (const message of messages) {
-      if (typeof message.content === 'string') {
-        totalTokens += Math.ceil(message.content.length / this.WORDS_PER_TOKEN / 4); // ~4 chars per token
-      } else if (Array.isArray(message.content)) {
-        for (const item of message.content) {
-          if (item.type === 'text' && item.text) {
-            totalTokens += Math.ceil(item.text.length / this.WORDS_PER_TOKEN / 4);
-          } else if (item.type === 'image_url') {
-            totalTokens += 1000; // Estimate for image processing
-          }
-        }
-      }
-      totalTokens += 10; // Message overhead
-    }
-    
-    return totalTokens;
-  }
-
-  private static truncateMessages(messages: any[], maxTokens: number): any[] {
+  private static truncateMessagesIntelligently(messages: any[], targetTokens: number): any[] {
     const truncated = [...messages];
-    let currentTokens = this.estimateTokens(truncated);
+    let currentTokens = ValidationService.estimateTokensAccurate(
+      JSON.stringify(truncated.map(m => m.content))
+    );
     
-    // Keep system message if present, truncate user messages
-    for (let i = truncated.length - 1; i >= 0 && currentTokens > maxTokens; i--) {
+    console.log('🔄 Truncating messages:', { currentTokens, targetTokens });
+    
+    // Strategy 1: Truncate user messages from the end, keeping system messages
+    for (let i = truncated.length - 1; i >= 0 && currentTokens > targetTokens; i--) {
       if (truncated[i].role === 'user' && typeof truncated[i].content === 'string') {
-        const content = truncated[i].content;
-        const targetLength = Math.floor(content.length * 0.8); // Reduce by 20%
+        const originalLength = truncated[i].content.length;
+        const reductionFactor = Math.max(0.7, targetTokens / currentTokens);
+        const newLength = Math.floor(originalLength * reductionFactor);
         
-        if (targetLength > 100) {
-          truncated[i].content = content.substring(0, targetLength) + '...[truncated]';
-          currentTokens = this.estimateTokens(truncated);
+        if (newLength > 100) {
+          truncated[i].content = truncated[i].content.substring(0, newLength) + '...[truncated for length]';
+          currentTokens = ValidationService.estimateTokensAccurate(
+            JSON.stringify(truncated.map(m => m.content))
+          );
+          console.log(`🔄 Truncated message ${i}: ${originalLength} -> ${newLength} chars`);
         }
       }
     }
@@ -139,27 +200,45 @@ export class PayloadValidator {
     }
 
     if (!fileContent || fileContent.trim().length === 0) {
-      return userPrompt;
+      return userPrompt.trim();
     }
 
-    return `Here is the user instruction:
+    // Clean both inputs
+    const cleanPrompt = userPrompt.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    const cleanFileContent = fileContent.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-${userPrompt.trim()}
+    return `USER REQUEST: ${cleanPrompt}
 
-And here is the attached document content:
-
-${fileContent.trim()}`;
+DOCUMENT CONTENT:
+${cleanFileContent}`;
   }
 
   static validateWordCount(content: string, maxWords: number = 2000): { isValid: boolean; wordCount: number; error?: string } {
-    const words = content.trim().split(/\s+/).filter(word => word.length > 0);
+    if (!content || typeof content !== 'string') {
+      return {
+        isValid: false,
+        wordCount: 0,
+        error: 'Content is empty or invalid'
+      };
+    }
+
+    const cleanContent = content.trim().replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    const words = cleanContent.split(/\s+/).filter(word => word.length > 0);
     const wordCount = words.length;
     
     if (wordCount > maxWords) {
       return {
         isValid: false,
         wordCount,
-        error: `Your input exceeds the ${maxWords}-word limit (current: ${wordCount} words). Please shorten it or split into sections.`
+        error: `Input exceeds ${maxWords}-word limit (current: ${wordCount} words). Please reduce content size.`
+      };
+    }
+
+    if (wordCount === 0) {
+      return {
+        isValid: false,
+        wordCount: 0,
+        error: 'No valid words found in content'
       };
     }
 

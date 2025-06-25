@@ -1,15 +1,18 @@
 
-import { ApiKeyManager } from './ApiKeyManager';
 import { PayloadValidator } from './PayloadValidator';
+import { ApiCallService } from './ApiCallService';
 
 export class ContentGenerationService {
-  private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-
   async generateContent(prompt: string, fileContent: string = ''): Promise<string> {
-    const apiKey = ApiKeyManager.getApiKey();
-    
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
+    console.log('🔍 CONTENT GENERATION START:', {
+      promptLength: prompt.length,
+      hasFileContent: !!fileContent,
+      fileContentLength: fileContent.length
+    });
+
+    // Input validation
+    if (!prompt || prompt.trim().length === 0) {
+      throw new Error('Prompt is required for content generation');
     }
 
     // MERGE: Combine prompt and file content properly
@@ -23,9 +26,8 @@ export class ContentGenerationService {
 
     console.log('✅ CONTENT GENERATION - Word count validated:', wordValidation.wordCount, 'words');
     
-    try {
-      const strictPrompt = fileContent 
-        ? `USER REQUEST: "${prompt}"
+    const strictPrompt = fileContent 
+      ? `USER REQUEST: "${prompt}"
 
 DOCUMENT CONTENT:
 """
@@ -40,80 +42,55 @@ STRICT GENERATION RULES:
 - Generate content based on actual file information only
 
 Generate response now:`
-        : `USER REQUEST: "${prompt}"
+      : `USER REQUEST: "${prompt}"
 
 Generate focused content based strictly on this request. Do not add generic educational frameworks or methodologies unless specifically requested.`;
 
-      // PREPARE: Create properly structured messages
-      const messages = [
-        {
-          role: 'system',
-          content: 'You generate content that respects user intent and source material boundaries. When provided with source content, you use ONLY that content. You never fabricate educational frameworks, methodologies, or terminology not present in the source or explicitly requested by the user.'
-        },
-        {
-          role: 'user',
-          content: strictPrompt
-        }
-      ];
-
-      const maxTokens = 2000;
-      const model = 'gpt-4.1-2025-04-14';
-
-      // VALIDATE: Ensure payload is properly structured
-      const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
-      
-      if (!payloadValidation.isValid) {
-        console.error('❌ CONTENT GENERATION - Payload validation failed:', payloadValidation.error);
-        throw new Error(payloadValidation.error!);
+    // PREPARE: Create properly structured messages
+    const messages = [
+      {
+        role: 'system',
+        content: 'You generate content that respects user intent and source material boundaries. When provided with source content, you use ONLY that content. You never fabricate educational frameworks, methodologies, or terminology not present in the source or explicitly requested by the user.'
+      },
+      {
+        role: 'user',
+        content: strictPrompt
       }
+    ];
 
-      if (payloadValidation.error) {
-        console.warn('⚠️ CONTENT GENERATION - Payload warning:', payloadValidation.error);
-      }
+    const maxTokens = 2000;
+    const model = 'gpt-4.1-2025-04-14';
 
-      const requestBody = {
-        model,
-        messages: payloadValidation.messages,
-        max_tokens: maxTokens,
-        temperature: 0.2
-      };
+    // VALIDATE: Ensure payload is properly structured
+    const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
+    
+    if (!payloadValidation.isValid) {
+      console.error('❌ CONTENT GENERATION - Payload validation failed:', payloadValidation.error);
+      throw new Error(payloadValidation.error!);
+    }
 
-      console.log('🔍 CONTENT GENERATION - Final payload validation:', {
-        model: requestBody.model,
-        messagesCount: requestBody.messages.length,
-        maxTokens: requestBody.max_tokens,
-        allMessagesValid: requestBody.messages.every(m => m.content && m.content.length > 0)
-      });
+    if (payloadValidation.error) {
+      console.warn('⚠️ CONTENT GENERATION - Payload warning:', payloadValidation.error);
+    }
 
-      const response = await fetch(this.OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
+    const requestBody = {
+      model,
+      messages: payloadValidation.messages,
+      max_tokens: maxTokens,
+      temperature: 0.2
+    };
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('OpenAI API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorData
-        });
-        throw new Error(`OpenAI API request failed: ${response.status} - ${response.statusText}. ${errorData}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
+    try {
+      const content = await ApiCallService.makeApiCall(requestBody, 'CONTENT GENERATION');
       
       if (!content) {
         throw new Error('No content generated from OpenAI API');
       }
       
+      console.log('✅ CONTENT GENERATION SUCCESS:', content.length, 'characters');
       return content;
     } catch (error) {
-      console.error('Error generating content:', error);
+      console.error('❌ Content generation failed:', error);
       throw new Error(`Failed to generate content: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
