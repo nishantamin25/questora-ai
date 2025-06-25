@@ -56,12 +56,12 @@ class FileProcessingServiceClass {
 
       console.log(`✅ Successfully extracted valid content: ${content.length} characters`);
 
-      // Try ChatGPT enhancement for substantial content
-      if (content.length > 100) {
+      // Try ChatGPT enhancement for substantial content - but only if content is already good
+      if (content.length > 200 && this.hasSubstantialContent(content)) {
         try {
           console.log('Attempting ChatGPT content enhancement...');
           const enhancedContent = await ChatGPTService.enhanceTextContent(content);
-          if (enhancedContent && enhancedContent.length > content.length * 0.3) {
+          if (enhancedContent && enhancedContent.length > content.length * 0.5 && this.isRealReadableContent(enhancedContent)) {
             console.log(`ChatGPT enhanced content: ${enhancedContent.length} characters`);
             content = enhancedContent;
             metadata.extractionMethod += '-chatgpt-enhanced';
@@ -85,53 +85,83 @@ class FileProcessingServiceClass {
     };
   }
 
+  private hasSubstantialContent(content: string): boolean {
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const words = content.split(/\s+/).filter(word => /^[a-zA-Z]{3,}$/.test(word));
+    const topics = content.match(/\b(?:chapter|section|introduction|conclusion|analysis|method|result|discussion|summary|overview|concept|principle|theory|practice|application|implementation|strategy|approach|technique|process|system|framework|model|design|development|research|study|data|information|knowledge|understanding|learning|education|training|course|lesson|topic|subject|content|material|resource|guide|manual|handbook|document|report|paper|article|book|text|literature|reference|source|example|case|scenario|situation|problem|solution|answer|question|issue|challenge|opportunity|benefit|advantage|disadvantage|risk|factor|element|component|aspect|feature|characteristic|property|attribute|quality|standard|criteria|requirement|specification|detail|description|explanation|definition|meaning|purpose|objective|goal|target|aim|mission|vision|strategy|plan|approach|method|technique|procedure|process|step|stage|phase|level|degree|extent|scope|range|scale|size|amount|quantity|number|count|measure|metric|indicator|parameter|variable|factor|element|component|part|section|segment|division|category|type|kind|sort|class|group|set|collection|series|sequence|order|arrangement|organization|structure|pattern|format|style|design|layout|presentation|display|appearance|look|view|perspective|angle|point|position|location|place|site|area|region|zone|field|domain|sector|industry|market|business|company|organization|institution|agency|department|division|unit|team|group|member|individual|person|people|user|customer|client|audience|reader|viewer|participant|contributor|author|writer|creator|developer|designer|architect|engineer|analyst|researcher|scientist|expert|specialist|professional|practitioner|consultant|advisor|mentor|teacher|instructor|trainer|educator|student|learner|beginner|intermediate|advanced|expert|master|professional)\b/gi) || [];
+    
+    return sentences.length >= 5 && words.length >= 50 && topics.length >= 3;
+  }
+
   private isRealReadableContent(content: string): boolean {
-    if (!content || content.length < 50) {
+    if (!content || content.length < 100) {
       console.log('❌ Content validation failed: too short');
       return false;
     }
 
     const cleanContent = content.trim();
     
-    // Check for PDF garbage patterns
+    // Check for PDF garbage patterns - more comprehensive
     const pdfGarbagePatterns = [
       /PDF-[\d.]+/,
       /%%EOF/,
       /\/Type\s*\/\w+/,
       /\/Length\s+\d+/,
       /\/Filter\s*\/\w+/,
-      /stream.*?endstream/,
+      /stream.*?endstream/s,
       /\d+\s+\d+\s+obj/,
       /endobj/,
       /xref/,
       /startxref/,
-      /BT.*?ET/,
-      /Td|TD|Tm|T\*|TL|Tc|Tw|Tz|Tf|Tr|Ts/
+      /BT.*?ET/s,
+      /Td|TD|Tm|T\*|TL|Tc|Tw|Tz|Tf|Tr|Ts/,
+      /\/Root\s+\d+/,
+      /\/Info\s+\d+/,
+      /\/Size\s+\d+/,
+      /trailer/,
+      /<<\s*\/\w+/,
+      />>\s*endobj/,
+      /q\s+Q/,
+      /rg\s+RG/,
+      /cm\s+l\s+S/,
+      /BX.*?EX/s
     ];
 
-    // Reject if contains PDF garbage
+    // Reject if contains significant PDF garbage
+    let garbageCount = 0;
     for (const pattern of pdfGarbagePatterns) {
-      if (pattern.test(cleanContent)) {
-        console.log('❌ Content contains PDF garbage patterns');
-        return false;
+      const matches = cleanContent.match(pattern);
+      if (matches) {
+        garbageCount += matches.length;
       }
     }
 
+    if (garbageCount > 5) {
+      console.log('❌ Content contains too many PDF garbage patterns:', garbageCount);
+      return false;
+    }
+
     // Check for readable text characteristics
-    const words = cleanContent.split(/\s+/).filter(word => /^[a-zA-Z]+$/.test(word));
-    const sentences = cleanContent.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const words = cleanContent.split(/\s+/).filter(word => /^[a-zA-Z]{2,}$/.test(word));
+    const sentences = cleanContent.split(/[.!?]+/).filter(s => s.trim().length > 15);
     const readableChars = (cleanContent.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length;
     const readableRatio = readableChars / cleanContent.length;
+    
+    // Check for meaningful content patterns
+    const meaningfulPatterns = cleanContent.match(/\b(?:the|and|of|to|a|in|for|is|on|that|by|this|with|from|they|we|are|have|has|was|were|been|or|as|an|at|be|if|all|can|would|will|but|not|what|there|about|which|when|more|also|its|use|may|how|other|these|some|could|time|very|first|after|way|many|must|before|here|through|back|years|work|life|only|over|think|where|much|should|well|never|being|each|between|under|while|case|most|now|used|such|during|place|right|great|still|even|good|any|old|see|him|make|two|both|does|different|away|again|off|went|our|day|get|come|made|part|own|say|small|every|found|large|did|long|without|another|down|because|against|something|too|those|though|three|state|new|just|since|system|might|high|several|around|world|including|important|need|possible|known|become|example|however|therefore|following|according|analysis|research|study|results|conclusion|method|approach|data|information|evidence|findings|significant|important|process|development|understanding|knowledge|learning|education|theory|concept|application|practice|implementation|strategy|technology|business|management|service|quality|performance|effectiveness|efficiency|improvement|solution|problem|challenge|opportunity|future|current|present|potential|successful|professional|industry|market|customer|value|benefits|advantages|requirements|standards|guidelines|best|practices|recommendations|considerations|factors|elements|aspects|features|characteristics|properties|capabilities|functions|operations|procedures|methods|techniques|tools|resources|materials|content|structure|framework|model|design|architecture|platform|environment|context|situation|conditions|circumstances|issues|concerns|implications|outcomes|impact|effects|consequences|changes|developments|trends|patterns|relationships|connections|interactions|communication|collaboration|coordination|integration|optimization|enhancement|innovation|creativity|expertise|skills|experience|competence|qualifications|certification|training|preparation|planning|organization|administration|governance|leadership|direction|guidance|support|assistance|consultation|advice|feedback|evaluation|assessment|monitoring|control|measurement|tracking|reporting|documentation|records|archives|history|background|overview|introduction|summary|abstract|review|survey|comparison|contrast|discussion|debate|argument|position|perspective|viewpoint|opinion|interpretation|explanation|description|definition|clarification|illustration|demonstration|presentation|communication|expression|articulation|formulation|specification|detail|precision|accuracy|reliability|validity|consistency|coherence|logic|reasoning|rationale|justification|evidence|proof|confirmation|verification|validation|authentication|authorization|approval)\b/gi) || [];
 
-    const isValid = words.length >= 10 && 
-                   sentences.length >= 2 && 
-                   readableRatio > 0.7;
+    const isValid = words.length >= 20 && 
+                   sentences.length >= 3 && 
+                   readableRatio > 0.75 &&
+                   meaningfulPatterns.length >= 10;
 
     console.log('✅ Content validation:', { 
       length: cleanContent.length, 
       wordCount: words.length,
       sentenceCount: sentences.length,
       readableRatio: readableRatio.toFixed(2),
+      meaningfulPatterns: meaningfulPatterns.length,
+      garbageCount,
       isValid
     });
 
@@ -155,7 +185,7 @@ class FileProcessingServiceClass {
     const fileName = file.name.toLowerCase();
     
     if (fileName.endsWith('.pdf')) {
-      return await this.processRealPdfFile(file);
+      return await this.processAdvancedPdfFile(file);
     } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
       return await this.processWordFile(file);
     } else {
@@ -167,77 +197,166 @@ class FileProcessingServiceClass {
     }
   }
 
-  private async processRealPdfFile(file: File): Promise<{ content: string; method: string }> {
-    console.log('🔍 Processing PDF with real text extraction...');
+  private async processAdvancedPdfFile(file: File): Promise<{ content: string; method: string }> {
+    console.log('🔍 Processing PDF with advanced text extraction...');
     
     try {
       const arrayBuffer = await file.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Convert to string for text extraction
-      const decoder = new TextDecoder('utf-8', { fatal: false });
-      let pdfText = decoder.decode(uint8Array);
+      // Multiple extraction strategies
+      let bestContent = '';
+      let bestMethod = '';
       
-      console.log(`PDF file converted to text: ${pdfText.length} characters`);
-      
-      // Strategy 1: Extract text from PDF text objects
-      let extractedTexts = new Set<string>();
-      
-      // Look for text in parentheses (PDF text objects)
-      const textInParentheses = pdfText.match(/\(([^)]+)\)/g) || [];
-      textInParentheses.forEach(match => {
-        const text = match.slice(1, -1) // Remove parentheses
-          .replace(/\\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\\t/g, ' ')
-          .replace(/\\\(/g, '(')
-          .replace(/\\\)/g, ')')
-          .replace(/\\\\/g, '\\')
-          .trim();
-        
-        if (text.length > 3 && /[a-zA-Z]/.test(text)) {
-          extractedTexts.add(text);
+      // Strategy 1: UTF-8 text extraction
+      try {
+        console.log('Trying UTF-8 extraction...');
+        const utf8Content = await this.extractPdfTextUTF8(uint8Array);
+        if (this.isRealReadableContent(utf8Content) && utf8Content.length > bestContent.length) {
+          bestContent = utf8Content;
+          bestMethod = 'utf8-text-extraction';
+          console.log('✅ UTF-8 extraction successful:', utf8Content.length, 'characters');
         }
-      });
-      
-      // Strategy 2: Extract text from array format
-      const arrayTexts = pdfText.match(/\[([^\]]+)\]/g) || [];
-      arrayTexts.forEach(match => {
-        const content = match.slice(1, -1);
-        const textParts = content.match(/\(([^)]+)\)/g) || [];
-        textParts.forEach(part => {
-          const text = part.slice(1, -1).trim();
-          if (text.length > 3 && /[a-zA-Z]/.test(text)) {
-            extractedTexts.add(text);
-          }
-        });
-      });
-      
-      // Strategy 3: Look for readable word sequences
-      const wordSequences = pdfText.match(/[A-Za-z]{3,}(?:\s+[A-Za-z]{2,}){3,}/g) || [];
-      wordSequences.forEach(sequence => {
-        if (sequence.length > 15 && !sequence.includes('obj') && !sequence.includes('endobj')) {
-          extractedTexts.add(sequence);
+      } catch (error) {
+        console.log('UTF-8 extraction failed:', error);
+      }
+
+      // Strategy 2: Latin-1 text extraction
+      try {
+        console.log('Trying Latin-1 extraction...');
+        const latin1Content = await this.extractPdfTextLatin1(uint8Array);
+        if (this.isRealReadableContent(latin1Content) && latin1Content.length > bestContent.length) {
+          bestContent = latin1Content;
+          bestMethod = 'latin1-text-extraction';
+          console.log('✅ Latin-1 extraction successful:', latin1Content.length, 'characters');
         }
-      });
-      
-      const extractedContent = Array.from(extractedTexts).join(' ').trim();
-      
-      console.log(`PDF extraction results: ${extractedTexts.size} text fragments, ${extractedContent.length} total characters`);
-      
-      if (extractedContent.length < 50) {
+      } catch (error) {
+        console.log('Latin-1 extraction failed:', error);
+      }
+
+      // Strategy 3: Pattern-based extraction
+      try {
+        console.log('Trying pattern-based extraction...');
+        const patternContent = await this.extractPdfTextPatterns(uint8Array);
+        if (this.isRealReadableContent(patternContent) && patternContent.length > bestContent.length) {
+          bestContent = patternContent;
+          bestMethod = 'pattern-based-extraction';
+          console.log('✅ Pattern extraction successful:', patternContent.length, 'characters');
+        }
+      } catch (error) {
+        console.log('Pattern extraction failed:', error);
+      }
+
+      if (!bestContent || bestContent.length < 100) {
         throw new Error('PDF contains no readable text content. This may be a scanned document that requires OCR processing.');
       }
+
+      console.log(`✅ Best PDF extraction method: ${bestMethod}, content length: ${bestContent.length}`);
       
       return {
-        content: extractedContent,
-        method: 'real-pdf-text-extraction'
+        content: bestContent,
+        method: bestMethod
       };
       
     } catch (error) {
       console.error('PDF processing failed:', error);
       throw new Error(`PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private async extractPdfTextUTF8(uint8Array: Uint8Array): Promise<string> {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const pdfText = decoder.decode(uint8Array);
+    return this.extractTextFromPdfString(pdfText);
+  }
+
+  private async extractPdfTextLatin1(uint8Array: Uint8Array): Promise<string> {
+    const decoder = new TextDecoder('latin1', { fatal: false });
+    const pdfText = decoder.decode(uint8Array);
+    return this.extractTextFromPdfString(pdfText);
+  }
+
+  private async extractPdfTextPatterns(uint8Array: Uint8Array): Promise<string> {
+    // Convert bytes to string for pattern matching
+    let pdfString = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      pdfString += String.fromCharCode(uint8Array[i]);
+    }
+    return this.extractTextFromPdfString(pdfString);
+  }
+
+  private extractTextFromPdfString(pdfText: string): string {
+    const extractedTexts = new Set<string>();
+    
+    // Strategy 1: Extract text from parentheses (PDF text objects)
+    const textInParentheses = pdfText.match(/\(([^)]{10,})\)/g) || [];
+    textInParentheses.forEach(match => {
+      const text = match.slice(1, -1)
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (text.length > 5 && /[a-zA-Z]{3,}/.test(text) && !/^[\d\s\.\-\(\)]+$/.test(text)) {
+        extractedTexts.add(text);
+      }
+    });
+    
+    // Strategy 2: Extract text from array format
+    const arrayTexts = pdfText.match(/\[([^\]]{20,})\]/g) || [];
+    arrayTexts.forEach(match => {
+      const content = match.slice(1, -1);
+      const textParts = content.match(/\(([^)]{5,})\)/g) || [];
+      textParts.forEach(part => {
+        const text = part.slice(1, -1).replace(/\s+/g, ' ').trim();
+        if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
+          extractedTexts.add(text);
+        }
+      });
+    });
+    
+    // Strategy 3: Extract from Tj and TJ operators
+    const tjTexts = pdfText.match(/\(([^)]{8,})\)\s*Tj/g) || [];
+    tjTexts.forEach(match => {
+      const text = match.replace(/\)\s*Tj$/, '').slice(1).replace(/\s+/g, ' ').trim();
+      if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
+        extractedTexts.add(text);
+      }
+    });
+    
+    // Strategy 4: Look for readable sequences between text markers
+    const btEtBlocks = pdfText.match(/BT(.*?)ET/gs) || [];
+    btEtBlocks.forEach(block => {
+      const cleanBlock = block.replace(/^BT|ET$/g, '').trim();
+      const textMatches = cleanBlock.match(/\(([^)]{8,})\)/g) || [];
+      textMatches.forEach(match => {
+        const text = match.slice(1, -1).replace(/\s+/g, ' ').trim();
+        if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
+          extractedTexts.add(text);
+        }
+      });
+    });
+    
+    // Combine and structure the extracted text
+    const textArray = Array.from(extractedTexts).filter(text => 
+      text.length > 5 && 
+      /[a-zA-Z]/.test(text) &&
+      !text.match(/^\d+[\.\s]*$/) &&
+      !text.match(/^[\/\\\(\)\[\]<>]+$/)
+    );
+    
+    // Sort by length to prioritize longer, more meaningful text
+    textArray.sort((a, b) => b.length - a.length);
+    
+    const extractedContent = textArray.join(' ').replace(/\s+/g, ' ').trim();
+    
+    console.log(`PDF text extraction: ${extractedTexts.size} fragments found, ${extractedContent.length} characters total`);
+    
+    return extractedContent;
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
