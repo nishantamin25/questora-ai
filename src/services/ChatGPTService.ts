@@ -234,6 +234,33 @@ Generate exactly ${numberOfQuestions} questions now. Use only the content provid
     return selectedContent || fileContent.substring(0, 2000);
   }
 
+  private extractQuestionsFromResponse(parsedResponse: any): any[] {
+    // Extract questions from various possible response formats
+    if (parsedResponse.questions && Array.isArray(parsedResponse.questions)) {
+      return parsedResponse.questions;
+    } else if (Array.isArray(parsedResponse)) {
+      return parsedResponse;
+    } else if (parsedResponse.data && Array.isArray(parsedResponse.data)) {
+      return parsedResponse.data;
+    } else if (parsedResponse.items && Array.isArray(parsedResponse.items)) {
+      return parsedResponse.items;
+    }
+    
+    // If no array found, try to extract from object properties
+    const keys = Object.keys(parsedResponse);
+    for (const key of keys) {
+      if (Array.isArray(parsedResponse[key]) && parsedResponse[key].length > 0) {
+        // Check if it looks like questions (has question and options properties)
+        const firstItem = parsedResponse[key][0];
+        if (firstItem && firstItem.question && firstItem.options) {
+          return parsedResponse[key];
+        }
+      }
+    }
+    
+    return [];
+  }
+
   private createStrictContentOnlyFallbackQuestions(fileContent: string, prompt: string, numberOfQuestions: number, difficulty: 'easy' | 'medium' | 'hard'): any[] {
     console.log('🔒 Creating STRICT content-only fallback questions');
     

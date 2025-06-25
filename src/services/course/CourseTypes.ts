@@ -1,8 +1,10 @@
 
 export interface CourseMaterial {
+  id: string;
   type: 'text' | 'image' | 'video';
   content: string;
   title: string;
+  order: number;
 }
 
 export interface Course {
