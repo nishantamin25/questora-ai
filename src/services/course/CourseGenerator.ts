@@ -1,4 +1,3 @@
-
 import { Course, CourseMaterial } from './CourseTypes';
 import { ContentProcessor } from './ContentProcessor';
 import { FileProcessingService } from '../FileProcessingService';
@@ -35,8 +34,8 @@ export class CourseGenerator {
             // CRITICAL FIX: Only use extracted content if it's substantial and real
             if (processedFile.content && processedFile.content.length > 100 && ContentProcessor.isRealContent(processedFile.content)) {
               console.log('Using REAL extracted content for course generation');
-              // Create course materials from the ACTUAL processed content
-              const sections = await ContentProcessor.createCourseSectionsFromRealContent(processedFile.content, file.name);
+              // Create course materials STRICTLY from the actual processed content
+              const sections = await this.createStrictFileBasedSections(processedFile.content, file.name);
               materials.push(...sections);
             } else {
               console.error(`CRITICAL: Insufficient or fake content extracted from ${file.name}`);
@@ -52,7 +51,7 @@ export class CourseGenerator {
       // Use provided file content string if available
       else if (fileContent && fileContent.trim().length > 100 && ContentProcessor.isRealContent(fileContent)) {
         console.log('Using provided REAL file content for course generation');
-        const sections = await ContentProcessor.createCourseSectionsFromRealContent(fileContent, 'Content');
+        const sections = await this.createStrictFileBasedSections(fileContent, 'Content');
         materials.push(...sections);
       } 
       // Only generate from prompt if no files provided
@@ -103,6 +102,108 @@ export class CourseGenerator {
       console.error('Error generating course:', error);
       throw new Error(`Failed to generate course: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * NEW METHOD: Creates course sections strictly from file content without hallucination
+   */
+  private static async createStrictFileBasedSections(fileContent: string, fileName: string): Promise<CourseMaterial[]> {
+    console.log('Creating STRICT file-based sections from content:', fileContent.length, 'characters');
+    
+    try {
+      // Use ChatGPT to structure the content but NOT to add new content
+      const structuredContent = await ChatGPTService.generateContent(
+        `Based STRICTLY on the content of the attached file below, generate a 2-3 page structured course.
+        
+        CRITICAL INSTRUCTIONS:
+        - Do NOT include any sections or material that are not explicitly present in the document
+        - Do NOT add generic academic sections like "assessment prep" or "professional methodologies" unless they are specifically mentioned in the source material
+        - Do NOT expand beyond the file content or add your own knowledge
+        - Only reorganize and structure the existing content from the file
+        - Create clear section titles based on the actual topics covered in the document
+        - Preserve all original information while organizing it logically
+        
+        SOURCE FILE CONTENT:
+        """
+        ${fileContent}
+        """
+        
+        Structure this content into 2-3 logical sections with clear titles that reflect the actual content of the document. Do not invent new content.`
+      );
+
+      // Parse the structured content into sections
+      const sections = this.parseStructuredContent(structuredContent, fileName);
+      
+      // Validate that sections contain only file-based content
+      const validatedSections = sections.filter(section => {
+        // Check if section content has reasonable overlap with original file content
+        const sectionWords = section.content.toLowerCase().split(/\s+/);
+        const fileWords = fileContent.toLowerCase().split(/\s+/);
+        const commonWords = sectionWords.filter(word => 
+          word.length > 3 && fileWords.includes(word)
+        ).length;
+        
+        // Section should have significant overlap with original content
+        return commonWords > Math.min(sectionWords.length * 0.3, 10);
+      });
+
+      if (validatedSections.length === 0) {
+        console.log('No validated sections found, falling back to direct content splitting');
+        return this.createDirectContentSections(fileContent, fileName);
+      }
+
+      return validatedSections;
+    } catch (error) {
+      console.error('Error creating structured sections:', error);
+      // Fallback to direct content splitting without AI enhancement
+      return this.createDirectContentSections(fileContent, fileName);
+    }
+  }
+
+  /**
+   * Fallback method: Creates sections directly from file content without AI processing
+   */
+  private static createDirectContentSections(fileContent: string, fileName: string): CourseMaterial[] {
+    console.log('Creating direct content sections from file content');
+    
+    const sections: CourseMaterial[] = [];
+    const chunks = this.splitContentIntoChunks(fileContent, 1200);
+    
+    chunks.forEach((chunk, index) => {
+      if (chunk.trim().length > 100) {
+        sections.push({
+          type: 'text',
+          title: `${fileName} - Section ${index + 1}`,
+          content: chunk.trim()
+        });
+      }
+    });
+
+    return sections.slice(0, 3);
+  }
+
+  /**
+   * Parses AI-structured content into course sections
+   */
+  private static parseStructuredContent(content: string, fileName: string): CourseMaterial[] {
+    const sections: CourseMaterial[] = [];
+    
+    // Split by common section indicators
+    const parts = content.split(/(?:\n\s*(?:Section|Chapter|Part|Topic)\s*\d+|\n\s*#{1,3}\s*|\n\s*\*\*[^*]+\*\*|\n\s*[A-Z][^:\n]{10,50}:\s*)/i);
+    
+    parts.forEach((part, index) => {
+      const trimmedPart = part.trim();
+      if (trimmedPart.length > 150) {
+        const title = this.extractSectionTitle(trimmedPart, index + 1, fileName);
+        sections.push({
+          type: 'text',
+          title,
+          content: trimmedPart
+        });
+      }
+    });
+
+    return sections;
   }
 
   private static async generateLessonsFromPrompt(prompt: string): Promise<CourseMaterial[]> {

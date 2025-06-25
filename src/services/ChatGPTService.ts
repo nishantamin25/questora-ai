@@ -432,7 +432,7 @@ ${textContent}`
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator. Create comprehensive, well-structured educational material suitable for course generation and assessment.'
+              content: 'You are an educational content generator. When provided with source content, strictly organize and structure ONLY that content without adding new information. When generating original content, create comprehensive, well-structured educational material.'
             },
             {
               role: 'user',
@@ -440,7 +440,7 @@ ${textContent}`
             }
           ],
           max_tokens: 2000,
-          temperature: 0.7
+          temperature: 0.3 // Lower temperature for more faithful content reproduction
         })
       });
 
