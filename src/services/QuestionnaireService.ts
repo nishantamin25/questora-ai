@@ -1,4 +1,3 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { CourseService } from './CourseService';
 import { LanguageService } from './LanguageService';
@@ -40,6 +39,7 @@ interface Questionnaire {
 class QuestionnaireServiceClass {
   private readonly STORAGE_KEY = 'questionnaires';
   private readonly ACTIVE_STORAGE_KEY = 'active_questionnaires';
+  private readonly TEMP_STORAGE_KEY = 'temp_questionnaire'; // For immediate persistence
 
   async generateQuestionnaire(
     prompt: string, 
@@ -48,7 +48,7 @@ class QuestionnaireServiceClass {
     setNumber: number = 1,
     totalSets: number = 1
   ): Promise<Questionnaire> {
-    console.log('QuestionnaireService.generateQuestionnaire called with:', {
+    console.log('🔍 CRITICAL: QuestionnaireService generation starting with strict validation:', {
       prompt,
       options,
       hasFileContent: !!fileContent,
@@ -60,8 +60,6 @@ class QuestionnaireServiceClass {
     const questionnaireId = this.generateId();
     const testId = `${questionnaireId}-set${setNumber}`;
     const currentLanguage = LanguageService.getCurrentLanguage();
-    
-    console.log(`Current interface language: ${currentLanguage}`);
     
     try {
       let questionnaire: Questionnaire = {
@@ -79,12 +77,28 @@ class QuestionnaireServiceClass {
         totalSets
       };
 
+      // CRITICAL FIX: Immediate temp save to prevent data loss
+      this.saveTempQuestionnaire(questionnaire);
+      console.log('✅ TEMP SAVED: Questionnaire temporarily saved to prevent loss');
+
       // Generate questionnaire if requested
       if (options.includeQuestionnaire) {
-        console.log('Generating questions via ChatGPT...');
+        console.log('🔍 FORCING file content validation for question generation...');
+        
+        // CRITICAL: Validate file content is substantial for question generation
+        if (!fileContent || fileContent.length < 200) {
+          console.error('❌ CRITICAL: Insufficient file content for question generation');
+          throw new Error('Question generation requires substantial file content (minimum 200 characters). Please upload files with sufficient readable text content.');
+        }
+
+        if (!this.validateFileContentForQuestions(fileContent)) {
+          console.error('❌ CRITICAL: File content validation failed for questions');
+          throw new Error('The provided file content is not suitable for question generation. Content appears to be corrupted or contains insufficient educational material.');
+        }
+
+        console.log('✅ VALIDATED: File content approved for question generation');
         
         try {
-          // Always generate in English first for consistency
           const chatGPTQuestions = await ChatGPTService.generateQuestions(
             prompt,
             options.numberOfQuestions,
@@ -94,9 +108,8 @@ class QuestionnaireServiceClass {
             totalSets
           );
 
-          console.log('ChatGPT returned questions:', chatGPTQuestions.length);
+          console.log('✅ Questions generated successfully:', chatGPTQuestions.length);
 
-          // Convert ChatGPT questions to our format
           let formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
             id: this.generateId(),
             text: q.question,
@@ -106,59 +119,46 @@ class QuestionnaireServiceClass {
             explanation: q.explanation
           }));
 
-          // If current language is not English, translate questions immediately
+          // Translate if needed
           if (currentLanguage !== 'en') {
-            console.log(`Interface language is ${currentLanguage}, translating questions immediately...`);
+            console.log(`🌐 Translating questions to ${currentLanguage}...`);
             try {
               formattedQuestions = await LanguageService.translateQuestions(formattedQuestions, currentLanguage);
-              console.log('Questions translated successfully to', currentLanguage);
+              console.log('✅ Questions translated successfully');
             } catch (error) {
-              console.error('Error translating questions:', error);
-              // Continue with English questions if translation fails
-              console.warn('Continuing with English questions due to translation failure');
+              console.error('⚠️ Translation failed, continuing with English:', error);
             }
           }
 
           questionnaire.questions = formattedQuestions;
-          console.log('Formatted questions for questionnaire:', formattedQuestions.length);
+          
+          // CRITICAL: Immediate update to temp storage with questions
+          this.saveTempQuestionnaire(questionnaire);
+          console.log('✅ TEMP UPDATED: Questions added to temp storage');
+          
         } catch (error) {
-          console.error('Error generating questions:', error);
+          console.error('❌ Error generating questions:', error);
           throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      // Translate title and description if not in English
-      if (currentLanguage !== 'en') {
-        console.log(`Translating questionnaire metadata to ${currentLanguage}...`);
-        try {
-          questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
-          questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
-          console.log('Questionnaire metadata translated successfully');
-        } catch (error) {
-          console.error('Error translating questionnaire metadata:', error);
-          // Continue with English metadata if translation fails
-        }
-      }
-
-      // Generate course if requested and file content is available
+      // Generate course if requested
       if (options.includeCourse) {
-        console.log('Generating course content...');
+        console.log('🔍 FORCING course generation with validated content...');
         
-        if (!fileContent || fileContent.trim().length < 50) {
-          console.warn('Course generation requested but insufficient file content available');
-          throw new Error('Course generation requires uploaded files with content. Please upload files and ensure they are processed before generating a course.');
+        if (!fileContent || fileContent.length < 200) {
+          console.error('❌ CRITICAL: Insufficient file content for course generation');
+          throw new Error('Course generation requires substantial file content (minimum 200 characters). Please upload files with sufficient readable text content.');
         }
 
         try {
-          // For course generation, we pass the file content directly
           let course = await CourseService.generateCourse(prompt, [], fileContent);
           
-          // Translate course content if not in English
+          // Translate course if needed
           if (currentLanguage !== 'en' && course) {
             try {
-              console.log(`Translating course content to ${currentLanguage}...`);
+              console.log(`🌐 Translating course content to ${currentLanguage}...`);
               
-              // Translate course name and description (using correct property names)
               if (course.name) {
                 course.name = await LanguageService.translateContent(course.name, currentLanguage);
               }
@@ -166,7 +166,6 @@ class QuestionnaireServiceClass {
                 course.description = await LanguageService.translateContent(course.description, currentLanguage);
               }
               
-              // Translate course materials
               if (course.materials && Array.isArray(course.materials)) {
                 course.materials = await Promise.all(
                   course.materials.map(async (material: any) => ({
@@ -177,55 +176,130 @@ class QuestionnaireServiceClass {
                 );
               }
               
-              console.log('Course content translated successfully');
+              console.log('✅ Course content translated successfully');
             } catch (error) {
-              console.error('Error translating course content:', error);
-              // Continue with English course content if translation fails
+              console.error('⚠️ Course translation failed, continuing with English:', error);
             }
           }
           
           questionnaire.course = course;
-          console.log('Course generated successfully:', course.id);
+          
+          // CRITICAL: Final temp save with course
+          this.saveTempQuestionnaire(questionnaire);
+          console.log('✅ TEMP FINAL: Complete questionnaire saved to temp storage');
+          
         } catch (error) {
-          console.error('Error generating course:', error);
+          console.error('❌ Error generating course:', error);
           throw new Error(`Failed to generate course: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      console.log('Questionnaire generation completed successfully:', {
+      // Translate questionnaire metadata if needed
+      if (currentLanguage !== 'en') {
+        try {
+          questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
+          questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
+        } catch (error) {
+          console.error('⚠️ Questionnaire metadata translation failed:', error);
+        }
+      }
+
+      // CRITICAL: Final temp save and immediate auto-save
+      this.saveTempQuestionnaire(questionnaire);
+      this.autoSaveQuestionnaire(questionnaire);
+
+      console.log('✅ QUESTIONNAIRE GENERATION SUCCESS:', {
         id: questionnaire.id,
         questionsCount: questionnaire.questions.length,
         hasCourse: !!questionnaire.course,
         setNumber: questionnaire.setNumber,
         totalSets: questionnaire.totalSets,
         language: currentLanguage,
-        questionsInLanguage: currentLanguage !== 'en' ? 'Translated' : 'English'
+        isAutoSaved: true
       });
 
       return questionnaire;
     } catch (error) {
-      console.error('Error in generateQuestionnaire:', error);
+      console.error('❌ CRITICAL QUESTIONNAIRE GENERATION FAILURE:', error);
       throw error;
     }
   }
 
-  saveQuestionnaire(questionnaire: Questionnaire): void {
+  // CRITICAL: New method to validate file content for questions
+  private validateFileContentForQuestions(fileContent: string): boolean {
+    if (!fileContent || fileContent.length < 200) {
+      return false;
+    }
+
+    // Check for educational content indicators
+    const educationalTerms = (fileContent.match(/\b(?:chapter|section|introduction|conclusion|analysis|method|result|discussion|summary|overview|concept|principle|theory|practice|application|implementation|strategy|approach|technique|process|system|framework|model|design|development|research|study|data|information|knowledge|understanding|learning|education|training|course|lesson|topic|subject|content|material|resource|guide|manual|handbook|document|report|paper|article|book|text|definition|explanation|example|illustration|demonstration|case|scenario|problem|solution|question|answer|issue|challenge|opportunity|benefit|advantage|requirement|standard|criteria|guideline|recommendation|best|practices|methodology|procedure|step|stage|phase|level|degree|scope|range|scale|measure|metric|indicator|factor|element|component|aspect|feature|characteristic|property|quality|performance|effectiveness|efficiency|improvement|optimization|enhancement|innovation|technology|digital|platform|service|business|management|organization|operation|function|capability|capacity|resource|tool|equipment|facility|environment|condition|situation|context|background|history|evolution|development|progress|advancement|achievement|success|accomplishment|goal|objective|purpose|aim|target|mission|vision|value|benefit|impact|effect|influence|change|transformation|growth|expansion|increase|improvement|enhancement|optimization|innovation)+\b/gi) || []).length;
+    
+    return educationalTerms >= 5;
+  }
+
+  // CRITICAL: New method for temporary storage
+  private saveTempQuestionnaire(questionnaire: Questionnaire): void {
     try {
-      console.log('Saving questionnaire:', questionnaire.id);
+      localStorage.setItem(this.TEMP_STORAGE_KEY, JSON.stringify(questionnaire));
+      console.log('✅ Questionnaire saved to temp storage:', questionnaire.id);
+    } catch (error) {
+      console.error('❌ Failed to save to temp storage:', error);
+    }
+  }
+
+  // CRITICAL: New method for auto-save
+  private autoSaveQuestionnaire(questionnaire: Questionnaire): void {
+    try {
+      console.log('🔄 Auto-saving questionnaire:', questionnaire.id);
       
-      // Mark as saved
+      // Mark as saved and save to main storage
       questionnaire.isSaved = true;
       
-      // Save to main storage
       const questionnaires = this.getAllQuestionnaires();
-      
-      // Remove existing questionnaire with same ID if it exists
       const filteredQuestionnaires = questionnaires.filter(q => q.id !== questionnaire.id);
       filteredQuestionnaires.push(questionnaire);
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredQuestionnaires));
       
-      // Also save to active storage for guest access
+      console.log('✅ Questionnaire auto-saved successfully:', questionnaire.id);
+    } catch (error) {
+      console.error('❌ Auto-save failed:', error);
+    }
+  }
+
+  // CRITICAL: Method to recover from temp storage
+  getTempQuestionnaire(): Questionnaire | null {
+    try {
+      const stored = localStorage.getItem(this.TEMP_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('❌ Failed to recover temp questionnaire:', error);
+      return null;
+    }
+  }
+
+  // CRITICAL: Method to clear temp storage
+  clearTempQuestionnaire(): void {
+    try {
+      localStorage.removeItem(this.TEMP_STORAGE_KEY);
+      console.log('✅ Temp questionnaire cleared');
+    } catch (error) {
+      console.error('❌ Failed to clear temp questionnaire:', error);
+    }
+  }
+
+  saveQuestionnaire(questionnaire: Questionnaire): void {
+    try {
+      console.log('💾 Saving questionnaire:', questionnaire.id);
+      
+      questionnaire.isSaved = true;
+      
+      const questionnaires = this.getAllQuestionnaires();
+      const filteredQuestionnaires = questionnaires.filter(q => q.id !== questionnaire.id);
+      filteredQuestionnaires.push(questionnaire);
+      
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredQuestionnaires));
+      
       if (questionnaire.isActive) {
         const activeQuestionnaires = this.getActiveQuestionnaires();
         const filteredActive = activeQuestionnaires.filter(q => q.id !== questionnaire.id);
@@ -233,9 +307,12 @@ class QuestionnaireServiceClass {
         localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       }
       
-      console.log('Questionnaire saved successfully:', questionnaire.id);
+      // Clear temp storage after successful save
+      this.clearTempQuestionnaire();
+      
+      console.log('✅ Questionnaire saved successfully:', questionnaire.id);
     } catch (error) {
-      console.error('Error saving questionnaire:', error);
+      console.error('❌ Error saving questionnaire:', error);
       throw new Error('Failed to save questionnaire');
     }
   }
@@ -246,7 +323,7 @@ class QuestionnaireServiceClass {
       const questionnaires = stored ? JSON.parse(stored) : [];
       return Array.isArray(questionnaires) ? questionnaires : [];
     } catch (error) {
-      console.error('Error loading questionnaires:', error);
+      console.error('❌ Error loading questionnaires:', error);
       return [];
     }
   }
@@ -257,7 +334,7 @@ class QuestionnaireServiceClass {
       const questionnaires = stored ? JSON.parse(stored) : [];
       return Array.isArray(questionnaires) ? questionnaires : [];
     } catch (error) {
-      console.error('Error loading active questionnaires:', error);
+      console.error('❌ Error loading active questionnaires:', error);
       return [];
     }
   }
@@ -269,70 +346,61 @@ class QuestionnaireServiceClass {
 
   deleteQuestionnaire(id: string): void {
     try {
-      console.log('Deleting questionnaire:', id);
+      console.log('🗑️ Deleting questionnaire:', id);
       
-      // Remove from main storage
       const questionnaires = this.getAllQuestionnaires();
       const filteredQuestionnaires = questionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredQuestionnaires));
       
-      // Remove from active storage
       const activeQuestionnaires = this.getActiveQuestionnaires();
       const filteredActive = activeQuestionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       
-      console.log('Questionnaire deleted successfully:', id);
+      console.log('✅ Questionnaire deleted successfully:', id);
     } catch (error) {
-      console.error('Error deleting questionnaire:', error);
+      console.error('❌ Error deleting questionnaire:', error);
       throw new Error('Failed to delete questionnaire');
     }
   }
 
   activateQuestionnaire(id: string): void {
     try {
-      console.log('Activating questionnaire:', id);
+      console.log('🔄 Activating questionnaire:', id);
       
       const questionnaire = this.getQuestionnaireById(id);
       if (!questionnaire) {
         throw new Error('Questionnaire not found');
       }
       
-      // Mark as active
       questionnaire.isActive = true;
-      
-      // Save to main storage
       this.saveQuestionnaire(questionnaire);
       
-      console.log('Questionnaire activated successfully:', id);
+      console.log('✅ Questionnaire activated successfully:', id);
     } catch (error) {
-      console.error('Error activating questionnaire:', error);
+      console.error('❌ Error activating questionnaire:', error);
       throw new Error('Failed to activate questionnaire');
     }
   }
 
   deactivateQuestionnaire(id: string): void {
     try {
-      console.log('Deactivating questionnaire:', id);
+      console.log('🔄 Deactivating questionnaire:', id);
       
       const questionnaire = this.getQuestionnaireById(id);
       if (!questionnaire) {
         throw new Error('Questionnaire not found');
       }
       
-      // Mark as inactive
       questionnaire.isActive = false;
-      
-      // Save to main storage
       this.saveQuestionnaire(questionnaire);
       
-      // Remove from active storage
       const activeQuestionnaires = this.getActiveQuestionnaires();
       const filteredActive = activeQuestionnaires.filter(q => q.id !== id);
       localStorage.setItem(this.ACTIVE_STORAGE_KEY, JSON.stringify(filteredActive));
       
-      console.log('Questionnaire deactivated successfully:', id);
+      console.log('✅ Questionnaire deactivated successfully:', id);
     } catch (error) {
-      console.error('Error deactivating questionnaire:', error);
+      console.error('❌ Error deactivating questionnaire:', error);
       throw new Error('Failed to deactivate questionnaire');
     }
   }
