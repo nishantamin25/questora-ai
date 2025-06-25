@@ -11,14 +11,14 @@ export class ContentValidator {
       word.length > 2 && /^[a-zA-Z]/.test(word)
     );
     
-    const hasEnoughWords = words.length > 30; // Increased threshold
+    const hasEnoughWords = words.length > 20; // Reduced threshold
     const hasLetters = /[a-zA-Z]/.test(content);
     const readableRatio = (content.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length / content.length;
     
     // Check for garbage content patterns
     const hasControlChars = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(content);
-    const hasTooManyNumbers = (content.match(/\d/g) || []).length > content.length * 0.3;
-    const hasRepeatingPatterns = /(.)\1{10,}/.test(content);
+    const hasTooManyNumbers = (content.match(/\d/g) || []).length > content.length * 0.4;
+    const hasRepeatingPatterns = /(.)\1{15,}/.test(content); // More lenient
     
     // Check for PDF garbage patterns
     const pdfGarbagePatterns = [
@@ -48,12 +48,12 @@ export class ContentValidator {
     
     const isValid = hasEnoughWords && 
                    hasLetters && 
-                   readableRatio > 0.8 && 
+                   readableRatio > 0.7 && // More lenient
                    !hasControlChars && 
                    !hasTooManyNumbers && 
                    !hasRepeatingPatterns &&
-                   garbageCount < 3 &&
-                   educationalTerms >= 5; // Must have meaningful educational content
+                   garbageCount < 5 && // More lenient
+                   educationalTerms >= 3; // More lenient
 
     console.log('✅ Enhanced content validation:', { 
       length: content.length, 

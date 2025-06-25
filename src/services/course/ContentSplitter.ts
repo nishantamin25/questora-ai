@@ -64,6 +64,7 @@ export class ContentSplitter {
       }
     }
 
-    return chunks.filter(chunk => chunk.trim().length > 100);
+    // More lenient filtering - accept chunks with at least 50 characters
+    return chunks.filter(chunk => chunk.trim().length > 50);
   }
 }

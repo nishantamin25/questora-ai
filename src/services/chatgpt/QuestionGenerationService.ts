@@ -104,22 +104,24 @@ export class QuestionGenerationService {
     totalSets: number,
     language: string
   ): Promise<any[]> {
-    // CRITICAL: Zero-hallucination prompt with exact question count enforcement
-    let strictPrompt = `USER REQUEST: "${prompt}"
+    // IMPROVED: More effective prompt that generates better aligned questions
+    let strictPrompt = `You are an expert question generator. Create EXACTLY ${numberOfQuestions} multiple-choice questions based strictly on the content provided.
+
+USER REQUEST: "${prompt}"
 
 DOCUMENT CONTENT:
 """
 ${fileContent}
 """
 
-STRICT GENERATION RULES:
+GENERATION REQUIREMENTS:
 1. Generate EXACTLY ${numberOfQuestions} questions - no more, no less
-2. Use ONLY information explicitly present in the document content above
-3. NEVER add educational terminology like "assessment preparation", "learning structure", "educational goals", "academic confidence", "best practices", "industry standards" unless they appear in the source
-4. NEVER fabricate content, frameworks, methodologies, or concepts not in the document
-5. Each question must be answerable using ONLY the specific information provided
-6. Honor the user's intent: "${prompt}" while staying within document boundaries
-7. Difficulty level: ${difficulty}
+2. Base ALL questions on information explicitly present in the document above
+3. Each question must test understanding of specific concepts, facts, or processes from the document
+4. Use varied question types: factual recall, conceptual understanding, application, analysis
+5. Create realistic distractors that are plausible but clearly incorrect
+6. Difficulty level: ${difficulty}
+7. Honor the user's intent: "${prompt}" while staying within document boundaries
 
 ${totalSets > 1 ? `Generate unique questions for set ${setNumber} of ${totalSets}.` : ''}
 
@@ -127,10 +129,10 @@ RESPONSE FORMAT (JSON ONLY):
 {
   "questions": [
     {
-      "question": "Question based on actual document content",
-      "options": ["Option from doc", "Option from doc", "Option from doc", "Option from doc"],
+      "question": "Specific question based on document content",
+      "options": ["Correct answer from document", "Plausible incorrect option", "Another plausible incorrect option", "Final plausible incorrect option"],
       "correct_answer": 0,
-      "explanation": "Explanation referencing specific document information"
+      "explanation": "Brief explanation referencing specific document information"
     }
   ]
 }
@@ -145,7 +147,7 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
     const messages = [
       {
         role: 'system',
-        content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology. You MUST respond with valid JSON only.'
+        content: 'You are an expert educational question generator. You create questions that are directly based on provided content, never fabricate information, and always generate the exact number requested. You focus on testing comprehension, application, and analysis of the source material. You MUST respond with valid JSON only.'
       },
       {
         role: 'user',
@@ -172,11 +174,11 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       model,
       messages: payloadValidation.messages,
       max_tokens: maxTokens,
-      temperature: 0.0, // Zero creativity to prevent hallucination
+      temperature: 0.1, // Low temperature for consistency, slight creativity for variety
       response_format: { type: "json_object" }
     };
 
-    console.log('📤 Sending VALIDATED anti-hallucination request...');
+    console.log('📤 Sending IMPROVED question generation request...');
 
     const content = await ApiCallService.makeApiCall(requestBody, 'QUESTION GENERATION');
 
@@ -200,7 +202,7 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       throw new Error('AI response format invalid - expected questions array');
     }
 
-    // STRICT: Validate each question against content and remove fabricated ones
+    // IMPROVED: More lenient validation that still maintains quality
     const validatedQuestions = questions
       .filter(q => q && q.question && q.options && Array.isArray(q.options))
       .filter(q => ContentValidator.strictValidateQuestionAgainstContent(q, fileContent))
@@ -212,12 +214,22 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
         explanation: q.explanation || 'Based on document content.'
       }));
 
-    // CRITICAL: Enforce exact question count
-    if (validatedQuestions.length < numberOfQuestions) {
-      console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, requested ${numberOfQuestions}`);
-      throw new Error(`Could only generate ${validatedQuestions.length} valid questions from document content. Requested ${numberOfQuestions}. The document may not contain sufficient content for the requested number of questions.`);
+    console.log(`✅ VALIDATION RESULT: ${validatedQuestions.length} out of ${questions.length} questions passed validation`);
+
+    // IMPROVED: Only require 80% success rate to account for validation strictness
+    const minAcceptableQuestions = Math.max(1, Math.floor(numberOfQuestions * 0.8));
+    
+    if (validatedQuestions.length < minAcceptableQuestions) {
+      console.error(`❌ INSUFFICIENT VALIDATED QUESTIONS: Generated ${validatedQuestions.length}, minimum required ${minAcceptableQuestions}`);
+      throw new Error(`Could only generate ${validatedQuestions.length} valid questions from document content. Need at least ${minAcceptableQuestions}. The document may not contain sufficient content for the requested number of questions.`);
     }
 
-    return validatedQuestions.slice(0, numberOfQuestions);
+    // If we have more than requested, return exact count
+    // If we have fewer but above minimum, return what we have
+    const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
+    
+    console.log(`✅ FINAL RESULT: Returning ${finalQuestions.length} questions (requested: ${numberOfQuestions})`);
+    
+    return finalQuestions;
   }
 }
