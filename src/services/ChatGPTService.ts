@@ -14,83 +14,73 @@ class ChatGPTServiceClass {
     const apiKey = this.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    console.log('🔍 CRITICAL: Question generation respecting BOTH prompt and file content:', {
+    console.log('🔍 STRICT GENERATION: Questions from file content only:', {
       prompt,
+      requestedQuestions: numberOfQuestions,
       hasFileContent: !!fileContent,
       fileContentLength: fileContent.length,
       setNumber,
       totalSets
     });
 
-    // CRITICAL FIX: ABSOLUTELY NO QUESTION GENERATION WITHOUT SUBSTANTIAL FILE CONTENT
+    // ABSOLUTE REQUIREMENT: Block without substantial file content
     if (!fileContent || fileContent.length < 300) {
       console.error('❌ BLOCKED: Insufficient file content for question generation');
-      throw new Error('Question generation requires substantial file content (minimum 300 characters). The system will not generate questions without actual document content to prevent fabrication.');
+      throw new Error(`Question generation requires substantial file content (minimum 300 characters). Current content: ${fileContent?.length || 0} characters. Upload a file with readable text to generate accurate questions.`);
     }
 
-    // CRITICAL: Validate file content quality
+    // STRICT: Validate content quality
     if (!this.validateFileContentQuality(fileContent)) {
       console.error('❌ BLOCKED: File content quality validation failed');
-      throw new Error('The provided file content is not suitable for question generation. Content appears to be corrupted, incomplete, or lacks educational substance.');
+      throw new Error('The file content is not suitable for question generation. Content appears corrupted, incomplete, or lacks educational substance.');
     }
 
-    console.log('✅ VALIDATED: File content approved for combined prompt + content generation');
+    console.log('✅ VALIDATED: File content approved for strict generation');
 
-    // NEW: CRITICAL FIX - COMBINE USER PROMPT WITH FILE CONTENT
-    let combinedPrompt = `Based on the following user request:
-"${prompt}"
+    // CRITICAL: Zero-hallucination prompt with exact question count enforcement
+    const strictPrompt = `USER REQUEST: "${prompt}"
 
-And the following content extracted from the attached file:
+DOCUMENT CONTENT:
 """
 ${fileContent}
 """
 
-Generate exactly ${numberOfQuestions} multiple-choice questions that strictly reflect BOTH the user's request AND the actual file content.
+STRICT GENERATION RULES:
+1. Generate EXACTLY ${numberOfQuestions} questions - no more, no less
+2. Use ONLY information explicitly present in the document content above
+3. NEVER add educational terminology like "assessment preparation", "learning structure", "educational goals", "academic confidence", "best practices", "industry standards" unless they appear in the source
+4. NEVER fabricate content, frameworks, methodologies, or concepts not in the document
+5. Each question must be answerable using ONLY the specific information provided
+6. Honor the user's intent: "${prompt}" while staying within document boundaries
 
-CRITICAL REQUIREMENTS:
-- Honor the user's specific intent from their request: "${prompt}"
-- Use ONLY information explicitly present in the document content above
-- Do NOT invent learning areas, skills, frameworks, methodologies, or concepts not found in the source
-- Do NOT add generic educational terms unless they appear in the user request or document
-- Questions must be answerable using ONLY the specific information provided in the content
-- Focus on actual facts, concepts, definitions, processes, examples, and specific details from the document
-- Each answer option must be based on information present in or derivable from the document content
-- Ensure questions align with the user's intent while staying within document boundaries
+${totalSets > 1 ? `Generate unique questions for set ${setNumber} of ${totalSets}.` : ''}
 
-${totalSets > 1 ? `This is set ${setNumber} of ${totalSets}, so ensure questions are unique and don't overlap with other sets while staying strictly within the document content above.` : ''}
-
-RESPONSE FORMAT REQUIREMENTS:
-Return a JSON object with a "questions" array. Each question MUST have:
-- question: string (specific question about actual content from the document that aligns with user intent)
-- options: array of exactly 4 strings (answer choices based on document content)
-- correct_answer: number (index 0-3 of correct option)
-- explanation: string (explanation referencing specific information from the source document)
-
-Example format:
+RESPONSE FORMAT:
 {
   "questions": [
     {
-      "question": "According to the document, what specific [concept/process/fact] is mentioned regarding [user's topic of interest]?",
-      "options": ["Actual info from doc", "Actual info from doc", "Actual info from doc", "Actual info from doc"],
+      "question": "Question based on actual document content",
+      "options": ["Option from doc", "Option from doc", "Option from doc", "Option from doc"],
       "correct_answer": 0,
-      "explanation": "The document specifically states that..."
+      "explanation": "Explanation referencing specific document information"
     }
   ]
 }
 
-Generate exactly ${numberOfQuestions} questions now, respecting both the user request and using ONLY the document content provided above.`;
+Generate EXACTLY ${numberOfQuestions} questions now.`;
 
     if (language !== 'en') {
-      combinedPrompt += ` Generate questions in ${language}.`;
+      strictPrompt += ` Generate in ${language}.`;
     }
 
     try {
-      console.log('📤 Sending COMBINED prompt + file content request to OpenAI...');
+      console.log('📤 Sending STRICT anti-hallucination request...');
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -98,192 +88,144 @@ Generate exactly ${numberOfQuestions} questions now, respecting both the user re
           messages: [
             {
               role: 'system',
-              content: 'You are a strict content-based question generator that respects both user intent and source material. You combine the user\'s specific request with the exact content provided. You NEVER add content, frameworks, methodologies, learning objectives, or educational concepts not explicitly present in the source material or requested by the user. You follow the user\'s intent while staying within the bounds of the provided content.'
+              content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology.'
             },
             {
               role: 'user',
-              content: combinedPrompt
+              content: strictPrompt
             }
           ],
-          max_tokens: 3000,
-          temperature: 0.0, // Zero temperature to prevent any creativity/fabrication
+          max_tokens: Math.max(2000, numberOfQuestions * 400), // Scale tokens with question count
+          temperature: 0.0, // Zero creativity to prevent hallucination
           response_format: { type: "json_object" }
         })
       });
 
       if (!response.ok) {
         console.error('OpenAI API Error:', response.status, response.statusText);
-        const errorData = await response.json();
-        console.error('OpenAI API Error Details:', errorData);
-        throw new Error(`OpenAI API request failed with status ${response.status}: ${response.statusText}`);
+        throw new Error(`OpenAI API request failed: ${response.status}`);
       }
 
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
-      console.log('📥 Raw OpenAI response received');
-
       if (!content) {
-        console.error('❌ No content received from OpenAI');
-        throw new Error('Failed to generate questions - no response from AI service');
+        console.error('❌ No content from OpenAI');
+        throw new Error('Failed to generate questions - no AI response');
       }
 
-      try {
-        const parsedResponse = JSON.parse(content);
-        console.log('✅ Parsed OpenAI response successfully');
+      const parsedResponse = JSON.parse(content);
+      let questions = parsedResponse.questions || [];
 
-        let questions = [];
-        
-        if (parsedResponse.questions && Array.isArray(parsedResponse.questions)) {
-          questions = parsedResponse.questions;
-        } else if (Array.isArray(parsedResponse)) {
-          questions = parsedResponse;
-        } else {
-          console.warn('Unexpected response format, extracting questions...');
-          questions = this.extractQuestionsFromResponse(parsedResponse);
-        }
-
-        if (!Array.isArray(questions) || questions.length === 0) {
-          console.error('❌ No valid questions found in response');
-          throw new Error('AI service failed to generate valid questions based on the combined prompt and document content');
-        }
-
-        // CRITICAL: Validate questions are strictly content-adherent
-        const validQuestions = questions
-          .filter(q => q && q.question && q.options && Array.isArray(q.options))
-          .filter(q => this.validateQuestionAgainstContent(q, fileContent))
-          .map(q => ({
-            question: q.question,
-            options: Array.isArray(q.options) ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
-            correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
-                          typeof q.correct_answer === 'number' ? q.correct_answer : 0,
-            explanation: q.explanation || 'Based on the document content.'
-          }))
-          .slice(0, numberOfQuestions);
-
-        if (validQuestions.length === 0) {
-          console.error('❌ CRITICAL: No questions passed content validation');
-          throw new Error('All generated questions were rejected for containing fabricated content not present in the document. Please ensure the uploaded file contains substantial educational content.');
-        }
-
-        console.log(`✅ SUCCESS: Generated ${validQuestions.length} questions respecting both prompt intent and file content`);
-        return validQuestions;
-
-      } catch (parseError) {
-        console.error('❌ Error parsing JSON from OpenAI:', parseError);
-        throw new Error('Failed to parse AI response for question generation');
+      if (!Array.isArray(questions)) {
+        console.error('❌ Invalid response format');
+        throw new Error('AI response format invalid');
       }
+
+      // STRICT: Validate each question against content and remove fabricated ones
+      const validatedQuestions = questions
+        .filter(q => q && q.question && q.options && Array.isArray(q.options))
+        .filter(q => this.strictValidateQuestionAgainstContent(q, fileContent))
+        .map(q => ({
+          question: q.question,
+          options: q.options.slice(0, 4), // Ensure exactly 4 options
+          correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
+                         typeof q.correct_answer === 'number' ? q.correct_answer : 0,
+          explanation: q.explanation || 'Based on document content.'
+        }));
+
+      // CRITICAL: Enforce exact question count
+      if (validatedQuestions.length < numberOfQuestions) {
+        console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, requested ${numberOfQuestions}`);
+        throw new Error(`Could only generate ${validatedQuestions.length} valid questions from document content. Requested ${numberOfQuestions}. The document may not contain sufficient content for the requested number of questions.`);
+      }
+
+      const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
+      
+      console.log(`✅ SUCCESS: Generated exactly ${finalQuestions.length} validated questions`);
+      return finalQuestions;
+
     } catch (error) {
-      console.error('❌ CRITICAL: Question generation failed:', error);
+      console.error('❌ Question generation failed:', error);
       throw error;
     }
   }
 
-  // NEW: Strict file content quality validation
+  // ENHANCED: Stricter content quality validation
   private validateFileContentQuality(fileContent: string): boolean {
-    if (!fileContent || fileContent.length < 300) {
-      return false;
-    }
+    if (!fileContent || fileContent.length < 300) return false;
 
-    // Check for meaningful educational content
-    const educationalIndicators = [
-      // Structural indicators
-      /\b(?:chapter|section|introduction|conclusion|summary|overview)\b/gi,
-      // Content indicators  
-      /\b(?:analysis|method|result|process|system|approach|technique|procedure)\b/gi,
-      // Conceptual indicators
-      /\b(?:concept|principle|theory|practice|application|implementation|strategy)\b/gi,
-      // Informational indicators
-      /\b(?:data|information|research|study|finding|evidence|example|case)\b/gi
+    // Check for meaningful content indicators
+    const contentIndicators = [
+      /\b(?:chapter|section|introduction|conclusion|summary|overview|definition|concept|principle|process|method|approach|technique|procedure|system|analysis|result|finding|example|case|data|information|research|study)\b/gi
     ];
 
     let indicatorCount = 0;
-    for (const pattern of educationalIndicators) {
+    contentIndicators.forEach(pattern => {
       const matches = fileContent.match(pattern);
-      if (matches) {
-        indicatorCount += matches.length;
-      }
-    }
-
-    // Must have substantial educational content
-    const hasEducationalContent = indicatorCount >= 8;
-    
-    // Check readability
-    const words = fileContent.split(/\s+/).filter(word => word.length > 2);
-    const hasEnoughWords = words.length >= 100;
-    
-    // Check for coherent sentences
-    const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
-    const hasCoherentContent = sentences.length >= 5;
-
-    console.log('📊 Content quality validation:', {
-      length: fileContent.length,
-      wordCount: words.length,
-      sentenceCount: sentences.length,
-      educationalIndicators: indicatorCount,
-      hasEducationalContent,
-      hasEnoughWords,
-      hasCoherentContent,
-      isValid: hasEducationalContent && hasEnoughWords && hasCoherentContent
+      if (matches) indicatorCount += matches.length;
     });
 
-    return hasEducationalContent && hasEnoughWords && hasCoherentContent;
+    const words = fileContent.split(/\s+/).filter(word => word.length > 2);
+    const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
+
+    const isValid = indicatorCount >= 5 && words.length >= 100 && sentences.length >= 5;
+    
+    console.log('📊 Content validation:', {
+      length: fileContent.length,
+      words: words.length,
+      sentences: sentences.length,
+      indicators: indicatorCount,
+      isValid
+    });
+
+    return isValid;
   }
 
-  // NEW: Strict validation of questions against source content
-  private validateQuestionAgainstContent(question: any, fileContent: string): boolean {
+  // ENHANCED: Ultra-strict question validation
+  private strictValidateQuestionAgainstContent(question: any, fileContent: string): boolean {
     const questionText = question.question?.toLowerCase() || '';
     const fileContentLower = fileContent.toLowerCase();
 
-    // CRITICAL: Check for fabricated educational terms not in source
-    const fabricatedTerms = [
-      'assessment preparation',
-      'professional methodologies', 
-      'critical evaluation frameworks',
-      'confidence-building',
-      'best practices',
-      'industry standards',
-      'professional development',
-      'strategic approaches',
-      'theoretical frameworks',
-      'advanced techniques',
-      'comprehensive analysis',
-      'systematic evaluation',
-      'key learning areas',
-      'learning objectives',
-      'educational outcomes',
-      'skill development',
-      'competency building',
-      'knowledge assessment',
-      'performance evaluation'
+    // CRITICAL: Block fabricated educational terms
+    const bannedFabricatedTerms = [
+      'assessment preparation', 'assessment readiness', 'educational structure', 
+      'learning structure', 'educational goals', 'learning objectives', 'academic confidence',
+      'confidence-building', 'professional methodologies', 'best practices', 
+      'industry standards', 'professional development', 'strategic approaches',
+      'theoretical frameworks', 'advanced techniques', 'comprehensive analysis',
+      'systematic evaluation', 'key learning areas', 'skill development',
+      'competency building', 'knowledge assessment', 'performance evaluation',
+      'progression from basic to advanced', 'purpose of learning', 'educational outcomes'
     ];
 
-    // Reject questions with fabricated terms not in source
-    for (const term of fabricatedTerms) {
+    // Reject if contains banned terms not in source
+    for (const term of bannedFabricatedTerms) {
       if (questionText.includes(term) && !fileContentLower.includes(term)) {
-        console.warn(`❌ REJECTED: Question contains fabricated term "${term}" not in source:`, question.question);
+        console.warn(`❌ REJECTED: Fabricated term "${term}":`, question.question?.substring(0, 80));
         return false;
       }
     }
 
-    // CRITICAL: Question must reference concepts that exist in the source
+    // STRICT: Question must have strong alignment with source content
     const questionWords = questionText.split(/\s+/).filter(word => word.length > 4);
-    let sourceMatchCount = 0;
+    let sourceAlignmentCount = 0;
     
-    for (const word of questionWords.slice(0, 10)) { // Check first 10 meaningful words
+    for (const word of questionWords.slice(0, 15)) {
       if (fileContentLower.includes(word)) {
-        sourceMatchCount++;
+        sourceAlignmentCount++;
       }
     }
 
-    const hasSourceAlignment = sourceMatchCount >= Math.min(3, questionWords.length * 0.3);
-    
-    if (!hasSourceAlignment) {
-      console.warn('❌ REJECTED: Question lacks alignment with source content:', question.question);
+    const alignmentRatio = sourceAlignmentCount / Math.max(questionWords.length, 1);
+    const hasStrongAlignment = alignmentRatio >= 0.4; // At least 40% word overlap
+
+    if (!hasStrongAlignment) {
+      console.warn('❌ REJECTED: Insufficient source alignment:', question.question?.substring(0, 80));
       return false;
     }
 
-    console.log('✅ VALIDATED: Question approved:', question.question.substring(0, 80) + '...');
+    console.log('✅ VALIDATED:', question.question?.substring(0, 80));
     return true;
   }
 
@@ -315,17 +257,21 @@ Generate exactly ${numberOfQuestions} questions now, respecting both the user re
     const apiKey = this.getApiKey();
     
     try {
-      // NEW: Combine user prompt with content organization
       const organizationPrompt = userPrompt 
-        ? `Based on the user request: "${userPrompt}"
+        ? `USER REQUEST: "${userPrompt}"
 
-Clean and organize the provided text content for educational use while respecting the user's intent. ${userPrompt.toLowerCase().includes('course') ? 'Organize into logical course sections.' : ''} ${userPrompt.toLowerCase().includes('page') && userPrompt.match(/\d+/) ? `Structure into approximately ${userPrompt.match(/\d+/)[0]} main sections.` : ''}
+DOCUMENT CONTENT:
+${textContent}
 
-CRITICAL INSTRUCTION: Do not add any information, frameworks, methodologies, or concepts not present in the source text. Only reorganize and clarify existing content while honoring the user's structural request.
+STRICT INSTRUCTIONS:
+- Organize the document content according to the user's request
+- Use ONLY information present in the source text
+- Do NOT add educational frameworks, methodologies, or concepts not in the source
+- Do NOT add terms like "assessment preparation", "learning structure", "educational goals" unless present in source
+- Simply reorganize and clarify existing content while honoring user intent
 
-ACTUAL DOCUMENT CONTENT:
-${textContent}`
-        : `Please clean and organize this extracted text content for educational use. Organize it logically and fix formatting issues while preserving ALL original information. Do not add any sections, summaries, frameworks, or concepts not present in the source:
+Organize the content now:`
+        : `Clean and organize this text content for educational use. Preserve ALL original information. Do NOT add frameworks, methodologies, or educational concepts not present in the source:
 
 ${textContent}`;
 
@@ -340,7 +286,7 @@ ${textContent}`;
           messages: [
             {
               role: 'system',
-              content: 'You are a content organizer that respects both user intent and source material integrity. Clean and organize the provided text content while preserving ALL original information and following any structural guidance from the user. Do not add any new information, frameworks, methodologies, or concepts not present in the source text.'
+              content: 'You organize content while preserving source integrity. You NEVER add information, frameworks, or educational terminology not present in the source. You follow user structural requests while staying within source boundaries.'
             },
             {
               role: 'user',
@@ -377,23 +323,18 @@ ${textContent}`;
       return false;
     }
 
-    const fabricatedTerms = [
-      'assessment preparation',
-      'professional methodologies',
-      'critical evaluation frameworks',
-      'confidence-building',
-      'strategic approaches',
-      'theoretical frameworks',
-      'comprehensive analysis',
-      'systematic evaluation',
-      'best practices',
-      'industry standards'
+    const bannedTerms = [
+      'assessment preparation', 'educational structure', 'learning structure',
+      'educational goals', 'academic confidence', 'confidence-building',
+      'professional methodologies', 'best practices', 'industry standards',
+      'strategic approaches', 'theoretical frameworks', 'comprehensive analysis',
+      'systematic evaluation', 'skill development', 'competency building'
     ];
 
     const originalLower = original.toLowerCase();
     const enhancedLower = enhanced.toLowerCase();
 
-    for (const term of fabricatedTerms) {
+    for (const term of bannedTerms) {
       if (enhancedLower.includes(term) && !originalLower.includes(term)) {
         console.warn(`Enhanced content contains fabricated term: ${term}`);
         return false;
@@ -407,17 +348,25 @@ ${textContent}`;
     const apiKey = this.getApiKey();
     
     try {
-      // NEW: Create combined prompt that respects both user intent and file content
-      const combinedPrompt = fileContent 
-        ? `Based on the user request: "${prompt}"
+      const strictPrompt = fileContent 
+        ? `USER REQUEST: "${prompt}"
 
-And the following content extracted from the attached file:
+DOCUMENT CONTENT:
 """
 ${fileContent}
 """
 
-Generate a response that strictly reflects both the user's intent and the provided file content. Do not fabricate or inject unrelated educational structure unless clearly asked in the prompt or present in the file. Honor the user's specific request while using only the information available in the file content.`
-        : prompt;
+STRICT GENERATION RULES:
+- Respond to the user's request using ONLY the document content provided
+- Do NOT add educational terminology, frameworks, or concepts not in the document
+- Do NOT fabricate "learning objectives", "assessment preparation", "educational structure" unless in source
+- Honor the user's intent while staying strictly within document boundaries
+- Generate content based on actual file information only
+
+Generate response now:`
+        : `USER REQUEST: "${prompt}"
+
+Generate focused content based strictly on this request. Do not add generic educational frameworks or methodologies unless specifically requested.`;
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -430,11 +379,11 @@ Generate a response that strictly reflects both the user's intent and the provid
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator that respects both user intent and source material. When provided with source content, organize and structure ONLY that content while following the user\'s specific request. When generating original content, create focused educational material based strictly on the provided prompt without adding generic frameworks or methodologies unless specifically requested.'
+              content: 'You generate content that respects user intent and source material boundaries. When provided with source content, you use ONLY that content. You never fabricate educational frameworks, methodologies, or terminology not present in the source or explicitly requested by the user.'
             },
             {
               role: 'user',
-              content: combinedPrompt
+              content: strictPrompt
             }
           ],
           max_tokens: 2000,
