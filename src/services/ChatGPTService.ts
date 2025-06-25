@@ -46,7 +46,7 @@ CRITICAL INSTRUCTIONS:
       sourceInstruction = `Create educational questions based on the topic.`;
     }
 
-    const fullPrompt = `You are an expert question generator. ${sourceInstruction}
+    let fullPrompt = `You are an expert question generator. ${sourceInstruction}
 
 ${contentBasedPrompt}
 
