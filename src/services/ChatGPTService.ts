@@ -37,7 +37,7 @@ class ChatGPTServiceClass {
     console.log('✅ VALIDATED: File content approved for strict question generation');
 
     // CRITICAL FIX: INJECT FULL FILE CONTENT INTO PROMPT - NO FABRICATION ALLOWED
-    const strictContentPrompt = `Based strictly on the content from the uploaded file below, generate exactly ${numberOfQuestions} multiple-choice questions that reflect the actual information, examples, and topics discussed in the document.
+    let strictContentPrompt = `Based strictly on the content from the uploaded file below, generate exactly ${numberOfQuestions} multiple-choice questions that reflect the actual information, examples, and topics discussed in the document.
 
 CRITICAL REQUIREMENTS:
 - Use ONLY information explicitly present in the document content below
