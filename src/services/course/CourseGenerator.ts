@@ -6,7 +6,7 @@ import { PDFGenerationService } from '../PDFGenerationService';
 
 export class CourseGenerator {
   static async generateCourse(prompt: string, files: File[] = [], fileContent: string = '', testName?: string): Promise<Course> {
-    console.log('🔍 CRITICAL: Starting course generation with strict file content validation:', { 
+    console.log('🔍 STRICT MODE: Course generation with NO content fabrication:', { 
       prompt, 
       fileCount: files.length, 
       hasFileContent: !!fileContent,
@@ -18,20 +18,19 @@ export class CourseGenerator {
     const courseId = this.generateId();
 
     try {
-      // CRITICAL FIX: Force file content requirement - NO GENERIC FALLBACKS
+      // CRITICAL FIX: STRICT FILE CONTENT REQUIREMENT - NO FABRICATION
       let validatedFileContent = '';
       
       if (files && files.length > 0) {
-        console.log('🔍 Processing uploaded files for REAL content extraction...');
+        console.log('📄 Processing files for STRICT content extraction...');
         
         for (const file of files) {
           try {
             const processedFile = await FileProcessingService.processFile(file);
-            console.log(`📄 File processing result for ${file.name}:`, {
+            console.log(`📋 File processing result for ${file.name}:`, {
               type: processedFile.type,
               contentLength: processedFile.content?.length || 0,
-              extractionMethod: processedFile.metadata.extractionMethod,
-              contentPreview: processedFile.content?.substring(0, 200) + '...'
+              extractionMethod: processedFile.metadata.extractionMethod
             });
 
             if (!processedFile.content || processedFile.content.length < 200) {
@@ -41,7 +40,7 @@ export class CourseGenerator {
 
             if (!ContentProcessor.isRealContent(processedFile.content)) {
               console.error(`❌ CRITICAL: Invalid content detected from ${file.name}`);
-              throw new Error(`The content extracted from ${file.name} appears to be corrupted, incomplete, or not suitable for course generation. Please ensure the file is not corrupted and contains readable text.`);
+              throw new Error(`The content extracted from ${file.name} appears to be corrupted, incomplete, or not suitable for course generation.`);
             }
 
             validatedFileContent += processedFile.content + '\n\n';
@@ -64,17 +63,9 @@ export class CourseGenerator {
         throw new Error('Course generation requires uploaded files with substantial content. Please upload files containing at least 200 characters of readable text. Generic course generation without file content is not supported.');
       }
 
-      // CRITICAL: Debug preview for admin
-      console.log('🔍 DEBUG PREVIEW - EXTRACTED CONTENT:', {
-        totalLength: validatedFileContent.length,
-        preview: validatedFileContent.substring(0, 500) + '...',
-        wordCount: validatedFileContent.split(/\s+/).length,
-        hasEducationalTerms: (validatedFileContent.match(/\b(?:chapter|section|introduction|conclusion|analysis|method|result|discussion|summary|overview|concept|principle|theory|practice|application)\b/gi) || []).length
-      });
-
-      // Generate course materials STRICTLY from validated file content
-      console.log('✅ FORCING strict file-based course generation...');
-      const materials = await ContentProcessor.createCourseSectionsFromRealContent(validatedFileContent, 'Uploaded Content');
+      // CRITICAL: Generate course materials STRICTLY from file content - NO FABRICATION
+      console.log('🔒 STRICT MODE: Creating course sections from file content ONLY');
+      const materials = await this.createStrictFileOnlyCourseSections(validatedFileContent, 'Uploaded Content');
 
       if (!materials || materials.length === 0) {
         console.error('❌ CRITICAL: Failed to create course sections from file content');
@@ -103,12 +94,12 @@ export class CourseGenerator {
         console.error('⚠️ Error generating course PDF:', error);
       }
 
-      console.log('✅ COURSE GENERATION SUCCESS:', {
+      console.log('✅ STRICT COURSE GENERATION SUCCESS:', {
         id: course.id,
         materialsCount: course.materials.length,
         estimatedTime: course.estimatedTime,
         hasPDF: !!course.pdfUrl,
-        contentSource: 'REAL_FILE_CONTENT_ONLY'
+        contentSource: 'STRICT_FILE_CONTENT_ONLY'
       });
 
       return course;
@@ -116,6 +107,141 @@ export class CourseGenerator {
       console.error('❌ CRITICAL COURSE GENERATION FAILURE:', error);
       throw new Error(`Course generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // NEW: Create course sections strictly from file content only
+  private static async createStrictFileOnlyCourseSections(fileContent: string, sourceTitle: string): Promise<CourseMaterial[]> {
+    console.log('🔒 Creating course sections STRICTLY from file content - NO FABRICATION');
+
+    try {
+      // First, try to use ChatGPT to organize the content WITHOUT adding new information
+      const organizedContent = await ChatGPTService.generateContent(
+        `Based strictly on the content extracted from the uploaded file below, organize this content into educational sections. 
+
+CRITICAL INSTRUCTION: Do not add any sections, summaries, learning goals, frameworks, methodologies, assessment preparation, professional development, or best practices unless they are explicitly found in the document itself.
+
+ACTUAL DOCUMENT CONTENT:
+"""
+${fileContent}
+"""
+
+Organize the existing content into 2-3 logical sections using ONLY the information present in the document. Do not invent new concepts or add academic frameworks not present in the source.
+
+Format as:
+## Section Title (from actual content)
+Content from the document...
+
+## Another Section Title (from actual content)  
+More content from the document...`
+      );
+
+      // Parse the organized content into sections
+      const sections = this.parseContentIntoSections(organizedContent);
+      
+      if (sections.length > 0) {
+        console.log('✅ Successfully organized file content into sections');
+        return sections;
+      } else {
+        console.warn('⚠️ ChatGPT organization failed, using direct content splitting');
+        return this.createDirectContentSections(fileContent, sourceTitle);
+      }
+
+    } catch (error) {
+      console.error('❌ Error organizing content with ChatGPT:', error);
+      console.log('🔄 Falling back to direct content splitting');
+      return this.createDirectContentSections(fileContent, sourceTitle);
+    }
+  }
+
+  // NEW: Parse organized content into course sections
+  private static parseContentIntoSections(organizedContent: string): CourseMaterial[] {
+    const sections: CourseMaterial[] = [];
+    const sectionRegex = /##\s*(.+?)\n([\s\S]*?)(?=##|$)/g;
+    let match;
+    let sectionIndex = 1;
+
+    while ((match = sectionRegex.exec(organizedContent)) !== null) {
+      const title = match[1].trim();
+      const content = match[2].trim();
+      
+      if (content.length > 100) { // Only include sections with substantial content
+        sections.push({
+          id: `section_${sectionIndex}`,
+          title,
+          content,
+          type: 'text',
+          order: sectionIndex
+        });
+        sectionIndex++;
+      }
+    }
+
+    // If no sections found, treat the entire content as one section
+    if (sections.length === 0 && organizedContent.trim().length > 100) {
+      sections.push({
+        id: 'section_1',
+        title: 'Document Content',
+        content: organizedContent.trim(),
+        type: 'text',
+        order: 1
+      });
+    }
+
+    return sections;
+  }
+
+  // NEW: Create sections by directly splitting file content
+  private static createDirectContentSections(fileContent: string, sourceTitle: string): CourseMaterial[] {
+    console.log('📋 Creating direct content sections from file content');
+    
+    const materials: CourseMaterial[] = [];
+    
+    // Split content into paragraphs
+    const paragraphs = fileContent.split(/\n\s*\n/).filter(p => p.trim().length > 100);
+    
+    if (paragraphs.length === 0) {
+      // If no clear paragraphs, split by sentences
+      const sentences = fileContent.split(/[.!?]+/).filter(s => s.trim().length > 50);
+      const chunkedSentences = this.chunkArray(sentences, Math.ceil(sentences.length / 3));
+      
+      chunkedSentences.forEach((chunk, index) => {
+        if (chunk.length > 0) {
+          materials.push({
+            id: `section_${index + 1}`,
+            title: `${sourceTitle} - Part ${index + 1}`,
+            content: chunk.join('. ').trim() + '.',
+            type: 'text',
+            order: index + 1
+          });
+        }
+      });
+    } else {
+      // Group paragraphs into sections
+      const chunkedParagraphs = this.chunkArray(paragraphs, Math.ceil(paragraphs.length / 3));
+      
+      chunkedParagraphs.forEach((chunk, index) => {
+        if (chunk.length > 0) {
+          materials.push({
+            id: `section_${index + 1}`,
+            title: `${sourceTitle} - Section ${index + 1}`,
+            content: chunk.join('\n\n').trim(),
+            type: 'text',
+            order: index + 1
+          });
+        }
+      });
+    }
+
+    return materials.slice(0, 3); // Limit to 3 sections
+  }
+
+  // NEW: Utility method to chunk arrays
+  private static chunkArray<T>(array: T[], chunkSize: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
   }
 
   private static calculateEstimatedTime(materials: CourseMaterial[]): number {

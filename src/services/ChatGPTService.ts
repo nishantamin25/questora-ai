@@ -14,39 +14,41 @@ class ChatGPTServiceClass {
     const apiKey = this.getApiKey();
     const language = LanguageService.getCurrentLanguage();
 
-    // CRITICAL FIX: Ensure we use actual file content, not generic prompts
+    // CRITICAL FIX: STRICT FILE CONTENT ONLY - NO FABRICATION
     let contentBasedPrompt = '';
-    let sourceInstruction = '';
 
     if (fileContent && fileContent.trim().length > 100) {
-      console.log('✅ Using REAL file content for question generation:', fileContent.length, 'characters');
+      console.log('✅ STRICT MODE: Using ONLY file content for question generation');
       
-      // Extract the most important parts of the content for focused questions
+      // Extract key content sections for focused questions
       const contentSummary = this.extractKeyContentForQuestions(fileContent);
       
-      contentBasedPrompt = `Based EXCLUSIVELY on the following actual extracted content from the uploaded document, create ${numberOfQuestions} specific multiple-choice questions at ${difficulty} difficulty level.
+      contentBasedPrompt = `Based strictly on the content extracted from the uploaded file below, generate ${numberOfQuestions} specific multiple-choice questions at ${difficulty} difficulty level.
+
+CRITICAL INSTRUCTION: Use ONLY the information present in the document below. Do not add any sections, summaries, learning goals, frameworks, methodologies, or best practices unless they are explicitly found in the document itself.
 
 ACTUAL DOCUMENT CONTENT:
 """
 ${contentSummary}
 """
 
-CRITICAL INSTRUCTIONS:
-- Create questions ONLY about the specific information, concepts, terms, and topics mentioned in the above content
-- Do NOT create generic questions about the general topic
+STRICT REQUIREMENTS:
+- Create questions EXCLUSIVELY about the specific information mentioned in the above content
+- Do NOT create generic educational questions about the general topic
+- Do NOT add academic frameworks, methodologies, or theoretical concepts not present in the content
+- Do NOT create assessment preparation, professional development, or confidence-building questions unless explicitly mentioned
 - Questions must be answerable using ONLY the information provided in the content above
-- Focus on key facts, concepts, definitions, processes, and relationships mentioned in the content
-- Make questions specific to the actual text, not general knowledge about the topic
-- Each question should test understanding of specific content from the document`;
+- Focus on actual facts, concepts, definitions, and specific details from the document
+- Each question should test understanding of content that exists in the document, not general knowledge`;
 
-      sourceInstruction = `Questions must be directly based on the provided document content, not general knowledge.`;
     } else {
-      console.log('⚠️ No substantial file content available, using prompt-based generation');
-      contentBasedPrompt = `Create ${numberOfQuestions} multiple-choice questions about "${prompt}" at ${difficulty} difficulty level.`;
-      sourceInstruction = `Create educational questions based on the topic.`;
+      console.log('⚠️ No file content available - using prompt-based generation with restrictions');
+      contentBasedPrompt = `Create ${numberOfQuestions} multiple-choice questions about "${prompt}" at ${difficulty} difficulty level.
+
+IMPORTANT: Keep questions focused on the specific topic mentioned. Do not add generic academic frameworks or methodologies unless specifically requested.`;
     }
 
-    let fullPrompt = `You are an expert question generator. ${sourceInstruction}
+    let fullPrompt = `You are an expert question generator that creates questions based strictly on provided content.
 
 ${contentBasedPrompt}
 
@@ -54,7 +56,7 @@ ${totalSets > 1 ? `This is set ${setNumber} of ${totalSets}, so ensure questions
 
 RESPONSE FORMAT REQUIREMENTS:
 Return a JSON object with a "questions" array. Each question MUST have:
-- question: string (specific question based on the content)
+- question: string (specific question based on the actual content)
 - options: array of exactly 4 strings (answer choices)  
 - correct_answer: number (index 0-3 of correct option)
 - explanation: string (explanation referencing the source content)
@@ -63,22 +65,22 @@ Example format:
 {
   "questions": [
     {
-      "question": "According to the document, what is the main concept discussed?",
-      "options": ["Specific Option A from content", "Specific Option B from content", "Specific Option C from content", "Specific Option D from content"],
+      "question": "According to the document, what specific concept is discussed?",
+      "options": ["Actual Option A from content", "Actual Option B from content", "Actual Option C from content", "Actual Option D from content"],
       "correct_answer": 0,
-      "explanation": "Based on the document content, Option A is correct because it directly states..."
+      "explanation": "Based on the document content, Option A is correct because the document specifically states..."
     }
   ]
 }
 
-Generate exactly ${numberOfQuestions} questions now.`;
+Generate exactly ${numberOfQuestions} questions now. Use only the content provided above.`;
 
     if (language !== 'en') {
       fullPrompt += ` Generate questions in ${language}.`;
     }
 
     try {
-      console.log('Sending focused content-based request to OpenAI...');
+      console.log('📤 Sending STRICT content-only request to OpenAI...');
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -91,7 +93,7 @@ Generate exactly ${numberOfQuestions} questions now.`;
           messages: [
             {
               role: 'system',
-              content: 'You are an expert question generator specializing in creating specific, content-based questions. Always base questions on the actual provided content, never on general knowledge. Create questions that test specific understanding of the given material.'
+              content: 'You are an expert question generator that creates questions based strictly on provided source content. NEVER add content, frameworks, methodologies, or concepts not present in the source material. Only use what is explicitly provided in the document content.'
             },
             {
               role: 'user',
@@ -99,7 +101,7 @@ Generate exactly ${numberOfQuestions} questions now.`;
             }
           ],
           max_tokens: 3000,
-          temperature: 0.3, // Lower temperature for more focused, content-specific questions
+          temperature: 0.1, // Very low temperature to prevent fabrication
           response_format: { type: "json_object" }
         })
       });
@@ -114,16 +116,16 @@ Generate exactly ${numberOfQuestions} questions now.`;
       const data = await response.json();
       const content = data.choices[0]?.message?.content;
 
-      console.log('Raw OpenAI response:', content);
+      console.log('📥 Raw OpenAI response received');
 
       if (!content) {
-        console.warn('No content received from OpenAI. Full response:', data);
-        return this.createContentSpecificFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
+        console.warn('No content received from OpenAI');
+        return this.createStrictContentOnlyFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
       }
 
       try {
         const parsedResponse = JSON.parse(content);
-        console.log('Parsed OpenAI response:', parsedResponse);
+        console.log('✅ Parsed OpenAI response successfully');
 
         let questions = [];
         
@@ -132,18 +134,19 @@ Generate exactly ${numberOfQuestions} questions now.`;
         } else if (Array.isArray(parsedResponse)) {
           questions = parsedResponse;
         } else {
-          console.warn('Unexpected response format, trying to extract questions...');
+          console.warn('Unexpected response format, extracting questions...');
           questions = this.extractQuestionsFromResponse(parsedResponse);
         }
 
         if (!Array.isArray(questions) || questions.length === 0) {
-          console.error('No valid questions found in response. Creating content-specific fallback questions.');
-          return this.createContentSpecificFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
+          console.error('No valid questions found. Creating strict content-only fallback.');
+          return this.createStrictContentOnlyFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
         }
 
-        // Validate questions are content-specific
+        // Validate questions are content-specific and don't contain fabricated content
         const validQuestions = questions
           .filter(q => q && q.question && q.options && Array.isArray(q.options))
+          .filter(q => this.validateQuestionContentAdherence(q, fileContent))
           .map(q => ({
             question: q.question,
             options: Array.isArray(q.options) ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
@@ -154,29 +157,58 @@ Generate exactly ${numberOfQuestions} questions now.`;
           .slice(0, numberOfQuestions);
 
         if (validQuestions.length === 0) {
-          console.error('No valid questions after filtering. Creating content-specific fallback questions.');
-          return this.createContentSpecificFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
+          console.error('No valid content-adherent questions after filtering');
+          return this.createStrictContentOnlyFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
         }
 
-        console.log(`✅ Successfully generated ${validQuestions.length} content-specific questions`);
+        console.log(`✅ Generated ${validQuestions.length} strictly content-based questions`);
         return validQuestions;
 
       } catch (parseError) {
         console.error('Error parsing JSON from OpenAI:', parseError);
-        console.error('Content received from OpenAI:', content);
-        
-        const extractedQuestions = this.extractQuestionsFromText(content);
-        if (extractedQuestions.length > 0) {
-          console.log('Successfully extracted questions from malformed response');
-          return extractedQuestions.slice(0, numberOfQuestions);
-        }
-        
-        return this.createContentSpecificFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
+        return this.createStrictContentOnlyFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
       }
     } catch (error) {
       console.error('Error generating questions:', error);
-      return this.createContentSpecificFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
+      return this.createStrictContentOnlyFallbackQuestions(fileContent, prompt, numberOfQuestions, difficulty);
     }
+  }
+
+  // NEW: Validate questions don't contain fabricated content
+  private validateQuestionContentAdherence(question: any, fileContent: string): boolean {
+    if (!fileContent || fileContent.length < 100) {
+      return true; // Allow if no file content to validate against
+    }
+
+    const questionText = question.question?.toLowerCase() || '';
+    const fabricatedTerms = [
+      'assessment preparation',
+      'professional methodologies',
+      'critical evaluation frameworks',
+      'confidence-building',
+      'best practices',
+      'industry standards',
+      'professional development',
+      'strategic approaches',
+      'theoretical frameworks',
+      'advanced techniques',
+      'comprehensive analysis',
+      'systematic evaluation'
+    ];
+
+    // Check if question contains fabricated academic terms not in source
+    const containsFabricatedTerms = fabricatedTerms.some(term => {
+      const termInQuestion = questionText.includes(term);
+      const termInSource = fileContent.toLowerCase().includes(term);
+      return termInQuestion && !termInSource;
+    });
+
+    if (containsFabricatedTerms) {
+      console.warn('❌ Question contains fabricated content not in source:', question.question);
+      return false;
+    }
+
+    return true;
   }
 
   private extractKeyContentForQuestions(fileContent: string): string {
@@ -202,76 +234,72 @@ Generate exactly ${numberOfQuestions} questions now.`;
     return selectedContent || fileContent.substring(0, 2000);
   }
 
-  private createContentSpecificFallbackQuestions(fileContent: string, prompt: string, numberOfQuestions: number, difficulty: 'easy' | 'medium' | 'hard'): any[] {
-    console.log('Creating content-specific fallback questions');
+  private createStrictContentOnlyFallbackQuestions(fileContent: string, prompt: string, numberOfQuestions: number, difficulty: 'easy' | 'medium' | 'hard'): any[] {
+    console.log('🔒 Creating STRICT content-only fallback questions');
     
     const questions = [];
     
     if (fileContent && fileContent.length > 100) {
-      // Extract key terms and concepts from the actual content
-      const keyTerms = this.extractTermsFromContent(fileContent);
-      const concepts = this.extractConceptsFromContent(fileContent);
-      const facts = this.extractFactsFromContent(fileContent);
+      // Extract only actual terms and concepts from the file content
+      const actualTerms = this.extractActualTermsFromContent(fileContent);
+      const actualConcepts = this.extractActualConceptsFromContent(fileContent);
       
       for (let i = 0; i < numberOfQuestions; i++) {
         let questionData;
         
-        if (i < keyTerms.length) {
+        if (i < actualTerms.length) {
           questionData = {
-            question: `Based on the document content, what is the significance of "${keyTerms[i]}"?`,
+            question: `According to the document, what is mentioned about "${actualTerms[i]}"?`,
             options: [
-              `It is a key concept mentioned in the document`,
-              `It is unrelated to the document content`,
-              `It is only briefly mentioned`,
-              `It is not discussed in the document`
+              `Information as stated in the document`,
+              `Information not mentioned in the document`,
+              `Contradictory information`,
+              `Unrelated concept`
             ],
             correctAnswer: 0,
-            explanation: `According to the document content, "${keyTerms[i]}" is specifically discussed as an important concept.`
+            explanation: `The document specifically mentions "${actualTerms[i]}" in the provided content.`
           };
-        } else if (i < concepts.length) {
+        } else if (i < actualConcepts.length) {
           questionData = {
-            question: `According to the document, which statement about "${concepts[i % concepts.length]}" is correct?`,
+            question: `Based on the document content, which statement about "${actualConcepts[i % actualConcepts.length]}" is accurate?`,
             options: [
-              `It is explained as a relevant concept in the document`,
-              `It is mentioned as irrelevant`,
-              `It is not covered in the content`,
-              `It contradicts the document's main points`
+              `As described in the document`,
+              `Not mentioned in the document`,
+              `Contradicts the document`,
+              `Unrelated information`
             ],
             correctAnswer: 0,
-            explanation: `The document specifically discusses "${concepts[i % concepts.length]}" as part of its content.`
+            explanation: `The document discusses "${actualConcepts[i % actualConcepts.length]}" as part of its content.`
           };
         } else {
           questionData = {
-            question: `Based on the document content, what is a key theme discussed?`,
+            question: `What type of content is primarily discussed in the document?`,
             options: [
-              `Concepts and information specific to the uploaded document`,
-              `Generic information not related to the document`,
-              `Unrelated theoretical concepts`,
-              `Information contradicting the document`
+              `Content specific to the uploaded document`,
+              `Generic theoretical frameworks`,
+              `Unrelated academic concepts`,
+              `Fabricated methodologies`
             ],
             correctAnswer: 0,
-            explanation: `The question focuses on the specific content and themes present in the uploaded document.`
+            explanation: `The question focuses on the actual content present in the uploaded document.`
           };
         }
         
         questions.push(questionData);
       }
     } else {
-      // Fallback to prompt-based questions
-      const topics = this.extractTopicsFromPrompt(prompt);
-      
+      // Very basic prompt-based questions without fabrication
       for (let i = 0; i < numberOfQuestions; i++) {
-        const topic = topics[i % topics.length] || 'the specified topic';
         questions.push({
-          question: `What is an important aspect of ${topic}?`,
+          question: `What is a key aspect related to "${prompt}"?`,
           options: [
-            `Key concept related to ${topic}`,
-            `Alternative approach to ${topic}`,
-            `Common misconception about ${topic}`,
-            `Unrelated concept`
+            `Direct concept from the topic`,
+            `Unrelated information`,
+            `Fabricated framework`,
+            `Generic methodology`
           ],
           correctAnswer: 0,
-          explanation: `This question covers fundamental concepts related to ${topic}.`
+          explanation: `This question focuses on the specific topic mentioned: "${prompt}".`
         });
       }
     }
@@ -279,94 +307,40 @@ Generate exactly ${numberOfQuestions} questions now.`;
     return questions;
   }
 
-  private extractTermsFromContent(content: string): string[] {
-    // Extract meaningful terms from content
-    const terms = content.match(/\b[A-Z][a-z]{3,}(?:\s+[A-Z][a-z]{2,}){0,2}\b/g) || [];
-    const uniqueTerms = [...new Set(terms)].filter(term => 
-      term.length > 4 && 
-      !['This', 'That', 'These', 'Those', 'When', 'Where', 'What', 'Which', 'While'].includes(term)
-    );
-    return uniqueTerms.slice(0, 10);
-  }
-
-  private extractConceptsFromContent(content: string): string[] {
-    // Extract conceptual phrases
-    const concepts = content.match(/\b(?:concept|principle|theory|method|approach|strategy|technique|process|system|framework|model|structure|design|implementation|application|practice|procedure|analysis|evaluation|assessment|measurement|development|improvement|optimization|solution|innovation|technology|methodology|standard|guideline|requirement|specification|criterion|factor|element|component|aspect|feature|characteristic|property|function|operation|capability|capacity|performance|effectiveness|efficiency|quality|value|benefit|advantage|outcome|result|impact|effect|influence|change|transformation|evolution|progress|advancement|achievement|success|accomplishment|result|consequence|implication|consideration|issue|challenge|problem|difficulty|obstacle|barrier|limitation|constraint|restriction|requirement|specification|criteria|parameter|variable|factor|indicator|measure|metric|value|number|percentage|ratio|rate|frequency|duration|time|period|interval|schedule|timeline|deadline|milestone|target|benchmark|threshold|limit|boundary)\b/gi) || [];
-    return [...new Set(concepts)].slice(0, 8);
-  }
-
-  private extractFactsFromContent(content: string): string[] {
-    // Extract factual statements (sentences with specific information)
-    const sentences = content.split(/[.!?]+/).filter(s => 
-      s.trim().length > 30 && 
-      s.trim().length < 150 &&
-      /\b(?:is|are|was|were|has|have|contains|includes|provides|offers|demonstrates|shows|indicates|suggests|reveals|explains|describes|defines|establishes|determines|identifies|measures|evaluates|analyzes|compares|contrasts|implements|applies|uses|utilizes|employs|requires|needs|must|should|can|will|may)\b/i.test(s)
-    );
-    return sentences.slice(0, 5);
-  }
-
-  private extractQuestionsFromResponse(response: any): any[] {
-    const questions = [];
+  // NEW: Extract only actual terms present in content
+  private extractActualTermsFromContent(content: string): string[] {
+    // Extract meaningful terms that actually appear in the content
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    const terms = [];
     
-    for (const key in response) {
-      const value = response[key];
-      if (Array.isArray(value) && value.length > 0 && value[0].question) {
-        questions.push(...value);
-      }
-    }
-    
-    return questions;
-  }
-
-  private extractQuestionsFromText(text: string): any[] {
-    const questions = [];
-    console.log('Attempting to extract questions from text:', text.substring(0, 500));
-    
-    try {
-      const questionBlocks = text.split(/(?:\d+\.|\n\n|\*\*Question)/);
+    for (const sentence of sentences.slice(0, 10)) {
+      const words = sentence.split(/\s+/).filter(word => 
+        word.length > 4 && 
+        /^[A-Za-z]+$/.test(word) &&
+        !['this', 'that', 'these', 'those', 'when', 'where', 'what', 'which', 'while', 'they', 'their', 'there', 'then'].includes(word.toLowerCase())
+      );
       
-      for (const block of questionBlocks) {
-        if (block.trim().length < 20) continue;
-        
-        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-        if (lines.length < 5) continue;
-        
-        const questionText = lines[0].replace(/^[\d\.\*\-\s]+/, '');
-        const options = [];
-        let correctAnswer = 0;
-        
-        for (let i = 1; i < Math.min(lines.length, 6); i++) {
-          const line = lines[i];
-          if (line.match(/^[A-D][\.\)\:]?\s*/)) {
-            options.push(line.replace(/^[A-D][\.\)\:]?\s*/, ''));
-            if (line.toLowerCase().includes('correct') || line.includes('*')) {
-              correctAnswer = options.length - 1;
-            }
-          }
-        }
-        
-        if (questionText && options.length >= 4) {
-          questions.push({
-            question: questionText,
-            options: options.slice(0, 4),
-            correctAnswer,
-            explanation: 'Extracted from response text.'
-          });
-        }
+      if (words.length > 0) {
+        terms.push(words[0]);
       }
-    } catch (error) {
-      console.error('Error extracting questions from text:', error);
     }
     
-    return questions;
+    return [...new Set(terms)].slice(0, 5);
   }
 
-  private extractTopicsFromPrompt(prompt: string): string[] {
-    const words = prompt.toLowerCase().split(/\s+/)
-      .filter(word => word.length > 3)
-      .filter(word => !['the', 'and', 'for', 'with', 'from', 'create', 'course', 'questions', 'about'].includes(word));
+  // NEW: Extract only actual concepts present in content
+  private extractActualConceptsFromContent(content: string): string[] {
+    // Look for noun phrases that actually appear in the content
+    const phrases = content.match(/\b[A-Z][a-z]+(?:\s+[a-z]+){1,2}\b/g) || [];
+    const validPhrases = phrases.filter(phrase => 
+      phrase.length > 8 && 
+      phrase.length < 50 &&
+      !phrase.toLowerCase().includes('the ') &&
+      !phrase.toLowerCase().includes('this ') &&
+      !phrase.toLowerCase().includes('that ')
+    );
     
-    return words.slice(0, 5);
+    return [...new Set(validPhrases)].slice(0, 5);
   }
 
   async enhanceTextContent(textContent: string): Promise<string> {
@@ -384,17 +358,17 @@ Generate exactly ${numberOfQuestions} questions now.`;
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content enhancer. Clean, organize, and enhance the provided text content while preserving all original information. Focus on making the content clear and educational without adding new information not present in the source.'
+              content: 'You are a content organizer. Clean and organize the provided text content while preserving ALL original information. Do not add any new information, frameworks, methodologies, or concepts not present in the source text. Only reorganize and clarify existing content.'
             },
             {
               role: 'user',
-              content: `Please clean and enhance this extracted text content for educational use. Organize it logically, fix formatting issues, and make it more readable while preserving ALL original information and concepts:
+              content: `Please clean and organize this extracted text content for educational use. Organize it logically and fix formatting issues while preserving ALL original information. Do not add any sections, summaries, frameworks, or concepts not present in the source:
 
 ${textContent}`
             }
           ],
           max_tokens: 2000,
-          temperature: 0.3 // Lower temperature to stay closer to original content
+          temperature: 0.1 // Very low temperature to prevent content addition
         })
       });
 
@@ -405,16 +379,52 @@ ${textContent}`
       const data = await response.json();
       const enhancedContent = data.choices[0]?.message?.content || textContent;
       
-      // Validate that enhanced content is substantially better
-      if (enhancedContent.length > textContent.length * 0.5) {
+      // Validate that enhanced content doesn't add fabricated sections
+      if (this.validateContentIntegrity(textContent, enhancedContent)) {
         return enhancedContent;
       } else {
+        console.warn('Enhanced content failed integrity check, returning original');
         return textContent;
       }
     } catch (error) {
       console.error('Error enhancing text content:', error);
       return textContent;
     }
+  }
+
+  // NEW: Validate content integrity to prevent fabrication
+  private validateContentIntegrity(original: string, enhanced: string): boolean {
+    // Check if enhanced content is suspiciously longer (indicating potential fabrication)
+    if (enhanced.length > original.length * 1.5) {
+      console.warn('Enhanced content significantly longer than original - potential fabrication');
+      return false;
+    }
+
+    // Check for fabricated academic terms
+    const fabricatedTerms = [
+      'assessment preparation',
+      'professional methodologies',
+      'critical evaluation frameworks',
+      'confidence-building',
+      'strategic approaches',
+      'theoretical frameworks',
+      'comprehensive analysis',
+      'systematic evaluation',
+      'best practices',
+      'industry standards'
+    ];
+
+    const originalLower = original.toLowerCase();
+    const enhancedLower = enhanced.toLowerCase();
+
+    for (const term of fabricatedTerms) {
+      if (enhancedLower.includes(term) && !originalLower.includes(term)) {
+        console.warn(`Enhanced content contains fabricated term: ${term}`);
+        return false;
+      }
+    }
+
+    return true;
   }
 
   async generateContent(prompt: string): Promise<string> {
@@ -432,7 +442,7 @@ ${textContent}`
           messages: [
             {
               role: 'system',
-              content: 'You are an educational content generator. When provided with source content, strictly organize and structure ONLY that content without adding new information. When generating original content, create comprehensive, well-structured educational material.'
+              content: 'You are an educational content generator. When provided with source content, organize and structure ONLY that content without adding new information. When generating original content, create focused educational material based strictly on the provided prompt without adding generic frameworks or methodologies unless specifically requested.'
             },
             {
               role: 'user',
@@ -440,7 +450,7 @@ ${textContent}`
             }
           ],
           max_tokens: 2000,
-          temperature: 0.3 // Lower temperature for more faithful content reproduction
+          temperature: 0.2 // Low temperature to prevent fabrication
         })
       });
 
