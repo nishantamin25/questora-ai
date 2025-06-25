@@ -2,6 +2,7 @@
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
+import { PayloadValidator } from './PayloadValidator';
 
 export class QuestionGenerationService {
   private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -40,6 +41,17 @@ export class QuestionGenerationService {
 
     console.log('✅ VALIDATED: File content approved for strict generation');
 
+    // MERGE: Combine prompt and file content properly
+    const mergedContent = PayloadValidator.mergePromptAndFileContent(prompt, fileContent);
+    
+    // VALIDATE: Check word count before processing
+    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 2000);
+    if (!wordValidation.isValid) {
+      throw new Error(wordValidation.error!);
+    }
+
+    console.log('✅ WORD COUNT VALIDATED:', wordValidation.wordCount, 'words');
+
     // CRITICAL: Zero-hallucination prompt with exact question count enforcement
     let strictPrompt = `USER REQUEST: "${prompt}"
 
@@ -76,8 +88,52 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       strictPrompt += ` Generate in ${language}.`;
     }
 
+    // PREPARE: Create properly structured messages
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology.'
+      },
+      {
+        role: 'user',
+        content: strictPrompt
+      }
+    ];
+
+    const maxTokens = Math.max(2000, numberOfQuestions * 400);
+    const model = 'gpt-4.1-2025-04-14';
+
+    // VALIDATE: Ensure payload is properly structured
+    const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
+    
+    if (!payloadValidation.isValid) {
+      console.error('❌ PAYLOAD VALIDATION FAILED:', payloadValidation.error);
+      throw new Error(payloadValidation.error!);
+    }
+
+    if (payloadValidation.error) {
+      console.warn('⚠️ PAYLOAD WARNING:', payloadValidation.error);
+    }
+
+    const requestBody = {
+      model,
+      messages: payloadValidation.messages,
+      max_tokens: maxTokens,
+      temperature: 0.0, // Zero creativity to prevent hallucination
+      response_format: { type: "json_object" }
+    };
+
+    console.log('🔍 FINAL PAYLOAD VALIDATION:', {
+      model: requestBody.model,
+      messagesCount: requestBody.messages.length,
+      maxTokens: requestBody.max_tokens,
+      hasSystemMessage: requestBody.messages.some(m => m.role === 'system'),
+      hasUserMessage: requestBody.messages.some(m => m.role === 'user'),
+      allMessagesHaveContent: requestBody.messages.every(m => m.content && m.content.length > 0)
+    });
+
     try {
-      console.log('📤 Sending STRICT anti-hallucination request...');
+      console.log('📤 Sending VALIDATED anti-hallucination request...');
 
       const response = await fetch(this.OPENAI_API_URL, {
         method: 'POST',
@@ -85,27 +141,17 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a strict content-based question generator. You NEVER fabricate, hallucinate, or add content not present in the source. You generate EXACTLY the requested number of questions. You combine user intent with source material without adding educational fluff or generic terminology.'
-            },
-            {
-              role: 'user',
-              content: strictPrompt
-            }
-          ],
-          max_tokens: Math.max(2000, numberOfQuestions * 400), // Scale tokens with question count
-          temperature: 0.0, // Zero creativity to prevent hallucination
-          response_format: { type: "json_object" }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        console.error('OpenAI API Error:', response.status, response.statusText);
-        throw new Error(`OpenAI API request failed: ${response.status}`);
+        const errorData = await response.text();
+        console.error('OpenAI API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorData
+        });
+        throw new Error(`OpenAI API request failed: ${response.status} - ${response.statusText}. ${errorData}`);
       }
 
       const data = await response.json();
@@ -151,29 +197,5 @@ Generate EXACTLY ${numberOfQuestions} questions now.`;
       console.error('❌ Question generation failed:', error);
       throw error;
     }
-  }
-
-  private extractQuestionsFromResponse(parsedResponse: any): any[] {
-    if (parsedResponse.questions && Array.isArray(parsedResponse.questions)) {
-      return parsedResponse.questions;
-    } else if (Array.isArray(parsedResponse)) {
-      return parsedResponse;
-    } else if (parsedResponse.data && Array.isArray(parsedResponse.data)) {
-      return parsedResponse.data;
-    } else if (parsedResponse.items && Array.isArray(parsedResponse.items)) {
-      return parsedResponse.items;
-    }
-    
-    const keys = Object.keys(parsedResponse);
-    for (const key of keys) {
-      if (Array.isArray(parsedResponse[key]) && parsedResponse[key].length > 0) {
-        const firstItem = parsedResponse[key][0];
-        if (firstItem && firstItem.question && firstItem.options) {
-          return parsedResponse[key];
-        }
-      }
-    }
-    
-    return [];
   }
 }
