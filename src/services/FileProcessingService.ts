@@ -1,4 +1,3 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { createWorker } from 'tesseract.js';
 
