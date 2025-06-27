@@ -18,11 +18,24 @@ const AdminConfig = () => {
   });
 
   useEffect(() => {
-    const savedConfig = ConfigService.getConfig();
-    setConfig(savedConfig);
+    const loadConfig = async () => {
+      try {
+        const savedConfig = await ConfigService.getConfig();
+        setConfig(savedConfig);
+      } catch (error) {
+        console.error('Failed to load config:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load configuration",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    loadConfig();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (config.numberOfQuestions < 1 || config.numberOfQuestions > 20) {
       toast({
         title: "Error",
@@ -32,21 +45,39 @@ const AdminConfig = () => {
       return;
     }
 
-    ConfigService.saveConfig(config);
-    toast({
-      title: "Success",
-      description: "Configuration saved successfully",
-    });
+    try {
+      await ConfigService.saveConfig(config);
+      toast({
+        title: "Success",
+        description: "Configuration saved successfully",
+      });
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save configuration",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleReset = () => {
-    const defaultConfig = ConfigService.getDefaultConfig();
-    setConfig(defaultConfig);
-    ConfigService.saveConfig(defaultConfig);
-    toast({
-      title: "Success",
-      description: "Configuration reset to defaults",
-    });
+  const handleReset = async () => {
+    try {
+      const defaultConfig = ConfigService.getDefaultConfig();
+      setConfig(defaultConfig);
+      await ConfigService.saveConfig(defaultConfig);
+      toast({
+        title: "Success",
+        description: "Configuration reset to defaults",
+      });
+    } catch (error) {
+      console.error('Failed to reset config:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reset configuration",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

@@ -12,31 +12,50 @@ const Leaderboard = () => {
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
   const [expandedTest, setExpandedTest] = useState<string | null>(null);
+  const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadQuestionnaires();
   }, []);
 
   const loadQuestionnaires = async () => {
-    const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
-    setQuestionnaires(allQuestionnaires.filter(q => q.isSaved));
+    try {
+      const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
+      const savedQuestionnaires = allQuestionnaires.filter(q => q.isSaved);
+      setQuestionnaires(savedQuestionnaires);
+      
+      // Load response counts for each questionnaire
+      const counts: Record<string, number> = {};
+      for (const questionnaire of savedQuestionnaires) {
+        const responses = await ResponseService.getResponsesByQuestionnaire(questionnaire.id);
+        counts[questionnaire.id] = responses.length;
+      }
+      setResponseCounts(counts);
+    } catch (error) {
+      console.error('Failed to load questionnaires:', error);
+    }
   };
 
-  const loadLeaderboard = (questionnaireId: string) => {
-    const responses = ResponseService.getResponsesByQuestionnaire(questionnaireId);
-    
-    // Sort responses by score (highest first), then by submission time (earliest first)
-    const sortedResponses = responses
-      .filter(response => response.score !== undefined)
-      .sort((a, b) => {
-        if (b.score !== a.score) {
-          return (b.score || 0) - (a.score || 0);
-        }
-        return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
-      });
+  const loadLeaderboard = async (questionnaireId: string) => {
+    try {
+      const responses = await ResponseService.getResponsesByQuestionnaire(questionnaireId);
+      
+      // Sort responses by score (highest first), then by submission time (earliest first)
+      const sortedResponses = responses
+        .filter(response => response.score !== undefined)
+        .sort((a, b) => {
+          if (b.score !== a.score) {
+            return (b.score || 0) - (a.score || 0);
+          }
+          return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
+        });
 
-    setLeaderboardData(sortedResponses);
-    setSelectedTest(questionnaireId);
+      setLeaderboardData(sortedResponses);
+      setSelectedTest(questionnaireId);
+    } catch (error) {
+      console.error('Failed to load leaderboard:', error);
+      setLeaderboardData([]);
+    }
   };
 
   const toggleTestExpansion = (testId: string) => {
@@ -166,7 +185,7 @@ const Leaderboard = () => {
           <h3 className="text-sm font-medium text-gray-300 mb-3">Select Test to View Rankings</h3>
           <div className="space-y-2">
             {questionnaires.map((questionnaire) => {
-              const responseCount = ResponseService.getResponsesByQuestionnaire(questionnaire.id).length;
+              const responseCount = responseCounts[questionnaire.id] || 0;
               const isExpanded = expandedTest === questionnaire.id;
               
               return (

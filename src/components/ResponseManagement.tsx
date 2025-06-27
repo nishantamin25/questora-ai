@@ -14,23 +14,43 @@ const ResponseManagement = () => {
   const [responses, setResponses] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
+  const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadQuestionnaires();
   }, []);
 
   const loadQuestionnaires = async () => {
-    const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
-    setQuestionnaires(allQuestionnaires.filter(q => q.isSaved));
+    try {
+      const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
+      const savedQuestionnaires = allQuestionnaires.filter(q => q.isSaved);
+      setQuestionnaires(savedQuestionnaires);
+      
+      // Load response counts for each questionnaire
+      const counts: Record<string, number> = {};
+      for (const questionnaire of savedQuestionnaires) {
+        const responses = await ResponseService.getResponsesByQuestionnaire(questionnaire.id);
+        counts[questionnaire.id] = responses.length;
+      }
+      setResponseCounts(counts);
+    } catch (error) {
+      console.error('Failed to load questionnaires:', error);
+    }
   };
 
   const loadResponses = async (questionnaireId: string) => {
-    const questionnaireResponses = await ResponseService.getResponsesByQuestionnaire(questionnaireId);
-    const questionnaireStats = await ResponseService.getResponseStats(questionnaireId);
-    
-    setResponses(questionnaireResponses);
-    setStats(questionnaireStats);
-    setSelectedQuestionnaire(questionnaireId);
+    try {
+      const questionnaireResponses = await ResponseService.getResponsesByQuestionnaire(questionnaireId);
+      const questionnaireStats = await ResponseService.getResponseStats(questionnaireId);
+      
+      setResponses(questionnaireResponses);
+      setStats(questionnaireStats);
+      setSelectedQuestionnaire(questionnaireId);
+    } catch (error) {
+      console.error('Failed to load responses:', error);
+      setResponses([]);
+      setStats(null);
+    }
   };
 
   const toggleDetailedStats = () => {
@@ -142,7 +162,7 @@ const ResponseManagement = () => {
           <h3 className="text-sm font-medium text-gray-300 mb-3">Select Test to View Responses</h3>
           <div className="space-y-2">
             {questionnaires.map((questionnaire) => {
-              const responseCount = ResponseService.getResponsesByQuestionnaire(questionnaire.id).length;
+              const responseCount = responseCounts[questionnaire.id] || 0;
               const isSelected = selectedQuestionnaire === questionnaire.id;
               
               return (
