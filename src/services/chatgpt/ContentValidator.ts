@@ -1,4 +1,3 @@
-
 export class ContentValidator {
   static validateFileContentQuality(content: string): boolean {
     if (!content || content.length < 300) {
@@ -122,6 +121,59 @@ export class ContentValidator {
       isValid
     });
     
+    return isValid;
+  }
+
+  static validateContentIntegrity(originalContent: string, enhancedContent: string): boolean {
+    if (!originalContent || !enhancedContent) {
+      console.log('❌ Content integrity check: Missing content');
+      return false;
+    }
+
+    // Check if enhanced content is significantly shorter (possible truncation)
+    const lengthRatio = enhancedContent.length / originalContent.length;
+    if (lengthRatio < 0.5) {
+      console.log('❌ Content integrity check: Enhanced content too short', { lengthRatio });
+      return false;
+    }
+
+    // Check if enhanced content is excessively long (possible hallucination)
+    if (lengthRatio > 3) {
+      console.log('❌ Content integrity check: Enhanced content too long', { lengthRatio });
+      return false;
+    }
+
+    // Extract key terms from original content
+    const originalWords = originalContent.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 4 && /^[a-zA-Z]+$/.test(word))
+      .slice(0, 20); // Check top 20 key terms
+
+    const enhancedLower = enhancedContent.toLowerCase();
+    let termMatches = 0;
+
+    for (const word of originalWords) {
+      if (enhancedLower.includes(word)) {
+        termMatches++;
+      }
+    }
+
+    const termPreservationRatio = originalWords.length > 0 ? termMatches / originalWords.length : 1;
+    const hasMinimumTermPreservation = termPreservationRatio >= 0.4; // At least 40% of key terms preserved
+
+    const isValid = hasMinimumTermPreservation;
+
+    console.log('✅ Content integrity validation:', {
+      originalLength: originalContent.length,
+      enhancedLength: enhancedContent.length,
+      lengthRatio: lengthRatio.toFixed(2),
+      termMatches,
+      totalTerms: originalWords.length,
+      termPreservationRatio: termPreservationRatio.toFixed(2),
+      hasMinimumTermPreservation,
+      isValid
+    });
+
     return isValid;
   }
 }
