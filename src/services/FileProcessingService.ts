@@ -1,3 +1,4 @@
+
 import { ChatGPTService } from './ChatGPTService';
 import { createWorker } from 'tesseract.js';
 
@@ -28,7 +29,8 @@ class FileProcessingServiceClass {
       processedAt: new Date().toISOString(),
       extractionMethod: '',
       ocrAttempted: false,
-      ocrSuccessful: false
+      ocrSuccessful: false,
+      ocrError: undefined as string | undefined
     };
 
     let content = '';
