@@ -11,7 +11,6 @@ import { Upload, FileText, Image, Video, Music, File, CheckCircle, AlertCircle }
 
 interface GenerateTestDialogProps {
   open: boolean;
-  prompt: string;
   uploadedFiles: File[];
   processedFileContent?: string;
   onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets: number) => void;
@@ -20,7 +19,6 @@ interface GenerateTestDialogProps {
 
 const GenerateTestDialog = ({ 
   open, 
-  prompt, 
   uploadedFiles, 
   processedFileContent = '',
   onGenerate, 
