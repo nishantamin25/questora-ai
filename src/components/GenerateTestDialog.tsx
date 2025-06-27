@@ -106,45 +106,62 @@ const GenerateTestDialog = ({
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* File Upload Status */}
-          {uploadedFiles.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-medium text-slate-700">Uploaded Files</Label>
-                  <div className="flex items-center space-x-1">
-                    {processedFileContent.length > 0 ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                        <span className="text-xs text-green-600">Processed</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="h-4 w-4 text-amber-500" />
-                        <span className="text-xs text-amber-600">Processing...</span>
-                      </>
-                    )}
-                  </div>
+          {/* File Attachment Section */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <Label className="text-base font-medium text-slate-700">Attach Files</Label>
+                <Upload className="h-5 w-5 text-slate-500" />
+              </div>
+              
+              {uploadedFiles.length === 0 ? (
+                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+                  <Upload className="h-8 w-8 text-slate-400 mx-auto mb-3" />
+                  <p className="text-sm text-slate-600 mb-2">Upload files to generate questions from your content</p>
+                  <p className="text-xs text-slate-500">Supported formats: PDF, DOC, TXT, CSV, and more</p>
                 </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {uploadedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center space-x-2 text-sm text-slate-600 bg-slate-50 p-2 rounded border">
-                      {getFileIcon(file)}
-                      <span className="flex-1 truncate">{file.name}</span>
-                      <span className="text-xs text-slate-500">{Math.round(file.size / 1024)}KB</span>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-slate-700">
+                      {uploadedFiles.length} file{uploadedFiles.length > 1 ? 's' : ''} uploaded
+                    </span>
+                    <div className="flex items-center space-x-1">
+                      {processedFileContent.length > 0 ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-xs text-green-600">Processed</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span className="text-xs text-amber-600">Processing...</span>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
-                {processedFileContent.length > 0 && (
-                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-xs text-green-700">
-                      ✅ Content extracted successfully ({processedFileContent.length} characters)
-                    </p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {uploadedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center space-x-2 text-sm text-slate-600 bg-slate-50 p-2 rounded border">
+                        {getFileIcon(file)}
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <span className="text-xs text-slate-500">{Math.round(file.size / 1024)}KB</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {processedFileContent.length > 0 && (
+                    <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
+                      <p className="text-xs text-green-700">
+                        ✅ Content extracted successfully ({processedFileContent.length} characters)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Test Configuration */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
