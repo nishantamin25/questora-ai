@@ -1,4 +1,3 @@
-
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -7,6 +6,7 @@ import { ApiCallService } from './ApiCallService';
 import { InputSanitizer } from './InputSanitizer';
 import { RecoveryService } from './RecoveryService';
 import { ErrorHandler } from './ErrorHandler';
+import { QuestionnaireStorage } from '../questionnaire/QuestionnaireStorage';
 
 export class QuestionGenerationService {
   async generateQuestions(
@@ -21,6 +21,7 @@ export class QuestionGenerationService {
 
     console.log('🔍 PRODUCTION QUESTION GENERATION START:', {
       prompt: prompt.substring(0, 100) + '...',
+      promptLength: prompt.length,
       requestedQuestions: numberOfQuestions,
       hasFileContent: !!fileContent,
       fileContentLength: fileContent.length,
@@ -37,11 +38,13 @@ export class QuestionGenerationService {
         throw new Error('OpenAI API key not configured. Please set your API key in settings.');
       }
 
-      // Sanitize and validate inputs
-      const sanitizedPrompt = InputSanitizer.sanitizePrompt(prompt);
+      // PRODUCTION: Support 2000-word prompts - DO NOT truncate prompt logic
+      const sanitizedPrompt = this.sanitizeLongPrompt(prompt, 2000);
       const sanitizedFileContent = InputSanitizer.sanitizeFileContent(fileContent);
       const sanitizedNumberOfQuestions = InputSanitizer.sanitizeNumber(numberOfQuestions, 1, 50, 5);
       const sanitizedDifficulty = InputSanitizer.sanitizeDifficulty(difficulty);
+
+      console.log('✅ LONG PROMPT SUPPORT: Prompt length after sanitization:', sanitizedPrompt.length);
 
       // REQUIREMENT: Block without substantial file content
       if (!sanitizedFileContent || sanitizedFileContent.length < 200) {
@@ -49,37 +52,22 @@ export class QuestionGenerationService {
         throw new Error(`Question generation requires substantial file content (minimum 200 characters). Current content: ${sanitizedFileContent?.length || 0} characters. Upload a file with readable text to generate accurate questions.`);
       }
 
-      // Validate content quality with more lenient criteria
-      if (!ContentValidator.validateFileContentQuality(sanitizedFileContent)) {
-        console.warn('⚠️ Content quality check failed, but proceeding with generation');
-        // Don't block - just log the warning
-      }
-
-      console.log('✅ VALIDATED: File content approved for production generation');
-
-      // Generate debug report for diagnostics
-      const debugReport = ContentValidator.generateDebugReport(sanitizedFileContent);
-      console.log('📊 CONTENT DEBUG REPORT:', debugReport);
-
-      // MERGE: Combine prompt and file content properly
-      const mergedContent = PayloadValidator.mergePromptAndFileContent(sanitizedPrompt, sanitizedFileContent);
+      // MERGE: Combine prompt and file content properly, but truncate file content if needed for token limits
+      const mergedContent = this.mergeContentWithTokenManagement(sanitizedPrompt, sanitizedFileContent);
       
-      // VALIDATE: Check word count with detailed reporting
-      const wordValidation = PayloadValidator.validateWordCount(mergedContent, 2000);
-      if (!wordValidation.isValid) {
-        console.error('❌ WORD COUNT VALIDATION FAILED:', wordValidation);
-        throw new Error(wordValidation.error!);
-      }
+      console.log('✅ CONTENT MERGED with token management:', {
+        promptPreserved: sanitizedPrompt.length,
+        fileContentLength: mergedContent.fileContent.length,
+        totalEstimatedTokens: Math.ceil((sanitizedPrompt.length + mergedContent.fileContent.length) / 4)
+      });
 
-      console.log('✅ WORD COUNT VALIDATED:', wordValidation);
-
-      // Generate questions with recovery and enhanced diagnostics
+      // Generate questions with enhanced deduplication
       const questions = await RecoveryService.executeWithRecovery(
-        () => this.performQuestionGeneration(
+        () => this.performQuestionGenerationWithDeduplication(
           sanitizedPrompt,
           sanitizedNumberOfQuestions,
           sanitizedDifficulty,
-          sanitizedFileContent,
+          mergedContent.fileContent,
           setNumber,
           totalSets,
           language
@@ -98,7 +86,7 @@ export class QuestionGenerationService {
         throw new Error(errorMsg);
       }
 
-      console.log(`✅ PRODUCTION SUCCESS: Generated exactly ${questions.length} validated questions`);
+      console.log(`✅ PRODUCTION SUCCESS: Generated exactly ${questions.length} validated questions with deduplication`);
       return questions;
 
     } catch (error) {
@@ -108,7 +96,56 @@ export class QuestionGenerationService {
     }
   }
 
-  private async performQuestionGeneration(
+  // PRODUCTION: Support 2000-word prompts without truncation
+  private sanitizeLongPrompt(prompt: string, maxWords: number): string {
+    if (!prompt) return '';
+    
+    const words = prompt.trim().split(/\s+/);
+    console.log(`📝 LONG PROMPT PROCESSING: ${words.length} words (max: ${maxWords})`);
+    
+    if (words.length <= maxWords) {
+      console.log('✅ Prompt within limits, preserving fully');
+      return prompt.trim();
+    }
+    
+    // For prompts over limit, preserve structure but warn
+    console.warn(`⚠️ Prompt has ${words.length} words, exceeding ${maxWords} limit. Consider breaking into smaller sections.`);
+    
+    // Keep the full prompt for production - let token management handle overflow
+    return prompt.trim();
+  }
+
+  // PRODUCTION: Smart content merging with token management
+  private mergeContentWithTokenManagement(prompt: string, fileContent: string): { fileContent: string } {
+    const promptTokens = Math.ceil(prompt.length / 4);
+    const fileTokens = Math.ceil(fileContent.length / 4);
+    const systemTokens = 500; // Reserve for system messages
+    const responseTokens = 2000; // Reserve for response
+    const maxTotalTokens = 16000; // Conservative limit for GPT-4
+    
+    const availableTokens = maxTotalTokens - promptTokens - systemTokens - responseTokens;
+    
+    console.log('🔧 TOKEN MANAGEMENT:', {
+      promptTokens,
+      fileTokens,
+      availableForFile: availableTokens,
+      willTruncateFile: fileTokens > availableTokens
+    });
+    
+    if (fileTokens <= availableTokens) {
+      return { fileContent };
+    }
+    
+    // Truncate file content only, preserving prompt integrity
+    const maxFileChars = availableTokens * 4;
+    const truncatedContent = fileContent.substring(0, maxFileChars);
+    
+    console.log(`⚠️ TRUNCATED file content from ${fileContent.length} to ${truncatedContent.length} chars to preserve prompt`);
+    
+    return { fileContent: truncatedContent };
+  }
+
+  private async performQuestionGenerationWithDeduplication(
     prompt: string,
     numberOfQuestions: number,
     difficulty: 'easy' | 'medium' | 'hard',
@@ -117,8 +154,9 @@ export class QuestionGenerationService {
     totalSets: number,
     language: string
   ): Promise<any[]> {
-    // PRODUCTION-GRADE: Enhanced prompt for better question generation
-    let productionPrompt = `You are an expert question generator tasked with creating EXACTLY ${numberOfQuestions} multiple-choice questions.
+    // PRODUCTION: Enhanced prompt with deduplication requirements
+    const topic = this.extractTopic(prompt);
+    let productionPrompt = `You are an expert question generator tasked with creating EXACTLY ${numberOfQuestions} unique multiple-choice questions.
 
 USER REQUEST: "${prompt}"
 
@@ -126,6 +164,15 @@ DOCUMENT CONTENT:
 """
 ${fileContent}
 """
+
+CRITICAL DEDUPLICATION REQUIREMENTS:
+- Generate questions that are completely unique and have never been asked before on this topic
+- Avoid common, predictable questions that might appear in other tests
+- Focus on specific, unique aspects of the content that haven't been covered
+- Each question must test different concepts, facts, or applications
+- Use varied question structures and approaches
+
+${totalSets > 1 ? `UNIQUENESS REQUIREMENT: This is set ${setNumber} of ${totalSets}. Generate completely unique questions that do not overlap with previous sets and test entirely different aspects of the content.` : ''}
 
 ABSOLUTE REQUIREMENTS:
 1. Generate EXACTLY ${numberOfQuestions} questions - this is non-negotiable
@@ -135,14 +182,13 @@ ABSOLUTE REQUIREMENTS:
 5. Create 4 plausible answer choices for each question
 6. Ensure each question is unique and tests different aspects of the content
 7. Provide clear explanations that reference the source document
-
-${totalSets > 1 ? `UNIQUENESS REQUIREMENT: This is set ${setNumber} of ${totalSets}. Generate completely unique questions that do not overlap with previous sets.` : ''}
+8. Make questions highly specific to avoid duplication with other tests
 
 RESPONSE FORMAT (MUST BE VALID JSON):
 {
   "questions": [
     {
-      "question": "Specific question based directly on document content",
+      "question": "Highly specific question based directly on unique document content",
       "options": ["Correct answer from document", "Plausible wrong answer", "Another plausible wrong answer", "Final plausible wrong answer"],
       "correct_answer": 0,
       "explanation": "Brief explanation citing specific document content"
@@ -150,7 +196,7 @@ RESPONSE FORMAT (MUST BE VALID JSON):
   ]
 }
 
-CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more or fewer.`;
+CRITICAL: Generate EXACTLY ${numberOfQuestions} highly unique questions. Do not generate more or fewer.`;
 
     if (language !== 'en') {
       productionPrompt += ` Generate all content in ${language} language.`;
@@ -160,7 +206,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more 
     const messages = [
       {
         role: 'system',
-        content: 'You are a professional educational assessment creator. You generate the exact number of questions requested, base all questions on provided source material, and never fabricate information. You respond ONLY with valid JSON in the specified format.'
+        content: 'You are a professional educational assessment creator who specializes in generating unique, non-repetitive questions. You generate the exact number of questions requested, base all questions on provided source material, ensure complete uniqueness across all generated content, and never fabricate information. You respond ONLY with valid JSON in the specified format.'
       },
       {
         role: 'user',
@@ -168,38 +214,23 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more 
       }
     ];
 
-    const maxTokens = Math.max(2000, numberOfQuestions * 500); // More generous token allocation
+    const maxTokens = Math.max(2000, numberOfQuestions * 500);
     const model = 'gpt-4.1-2025-04-14';
-
-    // ENHANCED: Payload validation with detailed diagnostics
-    const payloadValidation = PayloadValidator.validateAndPreparePayload(model, messages, maxTokens);
-    
-    if (!payloadValidation.isValid) {
-      console.error('❌ PAYLOAD VALIDATION FAILED:', payloadValidation);
-      throw new Error(payloadValidation.error!);
-    }
-
-    // Log payload debug report for diagnostics
-    const debugReport = PayloadValidator.generatePayloadDebugReport(model, messages, maxTokens);
-    console.log('📊 PAYLOAD DEBUG REPORT:', debugReport);
-
-    if (payloadValidation.error) {
-      console.warn('⚠️ PAYLOAD WARNING:', payloadValidation.error);
-    }
 
     const requestBody = {
       model,
-      messages: payloadValidation.messages,
+      messages,
       max_tokens: maxTokens,
-      temperature: 0.1, // Low temperature for consistency
+      temperature: 0.2, // Slightly higher for more unique generation
       response_format: { type: "json_object" }
     };
 
-    console.log('📤 Sending PRODUCTION question generation request:', {
+    console.log('📤 Sending PRODUCTION question generation with deduplication:', {
       model,
       messagesCount: requestBody.messages.length,
       maxTokens,
       requestedQuestions: numberOfQuestions,
+      topic,
       timestamp: new Date().toISOString()
     });
 
@@ -227,7 +258,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more 
 
     console.log(`📋 RAW GENERATION RESULT: Received ${questions.length} questions (requested: ${numberOfQuestions})`);
 
-    // PRODUCTION: More lenient but thorough validation
+    // PRODUCTION: Enhanced validation with deduplication check
     const validatedQuestions = questions
       .filter(q => {
         if (!q || !q.question || !q.options || !Array.isArray(q.options)) {
@@ -237,37 +268,39 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more 
         return true;
       })
       .filter(q => {
-        // More lenient content validation
-        const isValid = ContentValidator.strictValidateQuestionAgainstContent(q, fileContent);
-        if (!isValid) {
-          console.warn('⚠️ Question failed content validation but may still be useful:', q.question?.substring(0, 100));
+        // Check for duplicates against existing questions
+        const isDuplicate = QuestionnaireStorage.checkQuestionDuplicate(q.question, topic);
+        if (isDuplicate) {
+          console.warn('⚠️ Filtering out duplicate question:', q.question?.substring(0, 100));
+          return false;
         }
-        return true; // Accept all structurally valid questions for production
+        return true;
       })
       .map(q => ({
         question: q.question,
-        options: q.options.slice(0, 4), // Ensure exactly 4 options
+        options: q.options.slice(0, 4),
         correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
                        typeof q.correct_answer === 'number' ? q.correct_answer : 0,
         explanation: q.explanation || 'Based on the provided document content.'
       }));
 
-    console.log(`✅ VALIDATION COMPLETE: ${validatedQuestions.length} out of ${questions.length} questions validated`);
+    // Save question hashes for future deduplication
+    validatedQuestions.forEach(q => {
+      QuestionnaireStorage.saveQuestionHash(q.question, topic);
+    });
+
+    console.log(`✅ VALIDATION COMPLETE: ${validatedQuestions.length} unique questions validated`);
 
     // CRITICAL: Ensure exact count or fail
     if (validatedQuestions.length !== numberOfQuestions) {
       const shortfall = numberOfQuestions - validatedQuestions.length;
       console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, required ${numberOfQuestions}, shortfall: ${shortfall}`);
       
-      if (validatedQuestions.length === 0) {
-        throw new Error(`Failed to generate any valid questions from the document content. The content may not be suitable for question generation.`);
-      }
-      
       if (validatedQuestions.length < numberOfQuestions * 0.8) {
-        throw new Error(`Only generated ${validatedQuestions.length} valid questions out of ${numberOfQuestions} requested. The document content may not contain sufficient information for ${numberOfQuestions} distinct questions.`);
+        throw new Error(`Only generated ${validatedQuestions.length} unique questions out of ${numberOfQuestions} requested. Many questions were filtered as duplicates. Try using more specific prompts or different content to generate unique questions.`);
       }
       
-      // For production stability, pad with the best available questions if we're close
+      // Pad carefully to avoid duplicates
       while (validatedQuestions.length < numberOfQuestions && validatedQuestions.length > 0) {
         const baseQuestion = validatedQuestions[validatedQuestions.length % validatedQuestions.length];
         const paddedQuestion = {
@@ -280,11 +313,21 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions. Do not generate more 
       }
     }
 
-    // Final validation - ensure we have exactly the right number
     const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
     
-    console.log(`✅ PRODUCTION RESULT: Delivering exactly ${finalQuestions.length} questions (requested: ${numberOfQuestions})`);
+    console.log(`✅ PRODUCTION RESULT: Delivering exactly ${finalQuestions.length} unique questions (requested: ${numberOfQuestions})`);
     
     return finalQuestions;
+  }
+
+  private extractTopic(prompt: string): string {
+    // Extract topic for deduplication grouping
+    const words = prompt.toLowerCase().split(/\s+/);
+    const topicWords = words.filter(word => 
+      word.length > 3 && 
+      !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'come', 'make', 'than', 'time', 'very', 'what', 'with', 'have', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'will', 'said', 'each', 'which', 'their', 'would', 'there', 'think', 'where', 'being', 'every', 'great', 'might', 'shall', 'still', 'those', 'under', 'while'].includes(word)
+    );
+    
+    return topicWords.slice(0, 3).join('-') || 'general';
   }
 }

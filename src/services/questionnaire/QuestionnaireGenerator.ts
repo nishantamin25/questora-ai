@@ -13,14 +13,15 @@ export class QuestionnaireGenerator {
     setNumber: number = 1,
     totalSets: number = 1
   ): Promise<Questionnaire> {
-    console.log('🔍 STRICT QUESTIONNAIRE GENERATION: File content required:', {
+    console.log('🔍 PRODUCTION QUESTIONNAIRE GENERATION: Starting with persistence and multilingual support:', {
       prompt,
       options,
       requestedQuestions: options.numberOfQuestions,
       hasFileContent: !!fileContent,
       fileContentLength: fileContent.length,
       setNumber,
-      totalSets
+      totalSets,
+      currentLanguage: LanguageService.getCurrentLanguage()
     });
 
     const questionnaireId = this.generateId();
@@ -40,14 +41,23 @@ export class QuestionnaireGenerator {
         isSaved: false,
         timeframe: options.timeframe,
         setNumber,
-        totalSets
+        totalSets,
+        language: currentLanguage // Store original language
       };
 
+      // PRODUCTION: Immediate persistent state save to prevent data loss
       QuestionnaireStorage.saveTempQuestionnaire(questionnaire);
-      console.log('✅ TEMP SAVED: Questionnaire saved to prevent loss');
+      QuestionnaireStorage.savePersistentState({ 
+        questionnaire, 
+        type: 'generation_in_progress',
+        step: 'initialized',
+        timestamp: new Date().toISOString()
+      });
+      console.log('✅ PERSISTENT SAVE: Initial questionnaire state saved');
 
       // Generate questions if requested
       if (options.includeQuestionnaire) {
+        console.log('🔍 Generating questions with multilingual support...');
         questionnaire.questions = await this.generateQuestions(
           prompt, 
           options, 
@@ -56,33 +66,67 @@ export class QuestionnaireGenerator {
           totalSets, 
           currentLanguage
         );
+        
+        // Save after questions generation
         QuestionnaireStorage.saveTempQuestionnaire(questionnaire);
+        QuestionnaireStorage.savePersistentState({ 
+          questionnaire, 
+          type: 'generation_in_progress',
+          step: 'questions_generated',
+          timestamp: new Date().toISOString()
+        });
+        console.log('✅ PERSISTENT SAVE: Questions generated and saved');
       }
 
       // Generate course if requested
       if (options.includeCourse) {
+        console.log('🔍 Generating course with multilingual support...');
         questionnaire.course = await this.generateCourse(
           prompt, 
           fileContent, 
           currentLanguage
         );
+        
+        // Save after course generation
         QuestionnaireStorage.saveTempQuestionnaire(questionnaire);
+        QuestionnaireStorage.savePersistentState({ 
+          questionnaire, 
+          type: 'generation_in_progress',
+          step: 'course_generated',
+          timestamp: new Date().toISOString()
+        });
+        console.log('✅ PERSISTENT SAVE: Course generated and saved');
       }
 
-      // Translate questionnaire metadata if needed
+      // PRODUCTION: Multilingual support - translate metadata if needed
       if (currentLanguage !== 'en') {
+        console.log(`🌐 Translating questionnaire metadata to ${currentLanguage}...`);
         try {
-          questionnaire.title = await LanguageService.translateContent(questionnaire.title, currentLanguage);
-          questionnaire.description = await LanguageService.translateContent(questionnaire.description, currentLanguage);
+          const [translatedTitle, translatedDescription] = await Promise.all([
+            LanguageService.translateContent(questionnaire.title, currentLanguage),
+            LanguageService.translateContent(questionnaire.description, currentLanguage)
+          ]);
+          
+          questionnaire.title = translatedTitle;
+          questionnaire.description = translatedDescription;
+          
+          console.log('✅ Metadata translation completed successfully');
         } catch (error) {
-          console.error('⚠️ Metadata translation failed:', error);
+          console.error('⚠️ Metadata translation failed, continuing with English:', error);
         }
       }
 
+      // Final persistent save
       QuestionnaireStorage.saveTempQuestionnaire(questionnaire);
+      QuestionnaireStorage.savePersistentState({ 
+        questionnaire, 
+        type: 'generation_completed',
+        step: 'finalized',
+        timestamp: new Date().toISOString()
+      });
       this.autoSaveQuestionnaire(questionnaire);
 
-      console.log('✅ STRICT QUESTIONNAIRE SUCCESS:', {
+      console.log('✅ PRODUCTION QUESTIONNAIRE SUCCESS with full persistence:', {
         id: questionnaire.id,
         questionsGenerated: questionnaire.questions.length,
         questionsRequested: options.numberOfQuestions,
@@ -90,14 +134,123 @@ export class QuestionnaireGenerator {
         hasCourse: !!questionnaire.course,
         setNumber: questionnaire.setNumber,
         totalSets: questionnaire.totalSets,
-        language: currentLanguage,
-        isFileContentBased: fileContent.length > 0
+        language: questionnaire.language,
+        currentUILanguage: currentLanguage,
+        isFileContentBased: fileContent.length > 0,
+        persistentStateSaved: true
       });
 
       return questionnaire;
     } catch (error) {
       console.error('❌ QUESTIONNAIRE GENERATION FAILURE:', error);
+      
+      // Save error state for recovery
+      QuestionnaireStorage.savePersistentState({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        type: 'generation_failed',
+        step: 'error',
+        timestamp: new Date().toISOString(),
+        prompt,
+        options,
+        fileContent: fileContent.substring(0, 200) + '...'
+      });
+      
       throw error;
+    }
+  }
+
+  // PRODUCTION: Enhanced recovery method for persistent state
+  static recoverQuestionnaire(): Questionnaire | null {
+    try {
+      const persistentState = QuestionnaireStorage.getPersistentState();
+      if (persistentState && persistentState.questionnaire) {
+        console.log('🔄 RECOVERY: Questionnaire recovered from persistent state:', {
+          id: persistentState.questionnaire.id,
+          step: persistentState.step,
+          type: persistentState.type,
+          language: persistentState.questionnaire.language
+        });
+        
+        return persistentState.questionnaire;
+      }
+      
+      // Fallback to temp storage
+      const tempQuestionnaire = QuestionnaireStorage.getTempQuestionnaire();
+      if (tempQuestionnaire) {
+        console.log('🔄 RECOVERY: Questionnaire recovered from temp storage:', tempQuestionnaire.id);
+        return tempQuestionnaire;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Recovery failed:', error);
+      return null;
+    }
+  }
+
+  // PRODUCTION: Language-aware questionnaire adaptation
+  static async adaptQuestionnaireToLanguage(questionnaire: Questionnaire, targetLanguage: string): Promise<Questionnaire> {
+    if (!questionnaire || questionnaire.language === targetLanguage) {
+      return questionnaire;
+    }
+
+    console.log(`🌐 ADAPTING questionnaire from ${questionnaire.language} to ${targetLanguage}...`);
+
+    try {
+      const adaptedQuestionnaire = { ...questionnaire };
+      
+      // Translate metadata
+      if (targetLanguage !== 'en') {
+        adaptedQuestionnaire.title = await LanguageService.translateContent(questionnaire.title, targetLanguage);
+        adaptedQuestionnaire.description = await LanguageService.translateContent(questionnaire.description, targetLanguage);
+      }
+      
+      // Translate questions
+      if (questionnaire.questions && questionnaire.questions.length > 0) {
+        adaptedQuestionnaire.questions = await LanguageService.translateQuestions(questionnaire.questions, targetLanguage);
+      }
+      
+      // Translate course if present
+      if (questionnaire.course) {
+        const course = questionnaire.course;
+        if (targetLanguage !== 'en') {
+          if (course.name) {
+            course.name = await LanguageService.translateContent(course.name, targetLanguage);
+          }
+          if (course.description) {
+            course.description = await LanguageService.translateContent(course.description, targetLanguage);
+          }
+          if (course.materials && Array.isArray(course.materials)) {
+            course.materials = await Promise.all(
+              course.materials.map(async (material: any) => ({
+                ...material,
+                title: material.title ? await LanguageService.translateContent(material.title, targetLanguage) : material.title,
+                content: material.content ? await LanguageService.translateContent(material.content, targetLanguage) : material.content
+              }))
+            );
+          }
+        }
+        adaptedQuestionnaire.course = course;
+      }
+      
+      // Update language metadata
+      adaptedQuestionnaire.language = targetLanguage;
+      
+      // Save adapted version persistently
+      QuestionnaireStorage.savePersistentState({ 
+        questionnaire: adaptedQuestionnaire, 
+        type: 'language_adapted',
+        originalLanguage: questionnaire.language,
+        targetLanguage,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log(`✅ Questionnaire successfully adapted to ${targetLanguage}`);
+      return adaptedQuestionnaire;
+      
+    } catch (error) {
+      console.error('❌ Language adaptation failed:', error);
+      return questionnaire; // Return original if adaptation fails
     }
   }
 
@@ -144,7 +297,7 @@ export class QuestionnaireGenerator {
         explanation: q.explanation
       }));
 
-      // Translate if needed
+      // PRODUCTION: Multilingual support - translate questions if needed
       if (currentLanguage !== 'en') {
         console.log(`🌐 Translating ${formattedQuestions.length} questions to ${currentLanguage}...`);
         try {
@@ -177,7 +330,7 @@ export class QuestionnaireGenerator {
     try {
       let course = await CourseService.generateCourse(prompt, [], fileContent);
       
-      // Translate course if needed
+      // PRODUCTION: Multilingual support - translate course if needed
       if (currentLanguage !== 'en' && course) {
         try {
           console.log(`🌐 Translating course to ${currentLanguage}...`);
@@ -205,7 +358,7 @@ export class QuestionnaireGenerator {
         }
       }
       
-      console.log('✅ TEMP FINAL: Course added to questionnaire');
+      console.log('✅ Course generation completed with multilingual support');
       return course;
     } catch (error) {
       console.error('❌ Course generation failed:', error);
@@ -215,7 +368,7 @@ export class QuestionnaireGenerator {
 
   static autoSaveQuestionnaire(questionnaire: Questionnaire): void {
     try {
-      console.log('🔄 Auto-saving questionnaire:', questionnaire.id);
+      console.log('🔄 Auto-saving questionnaire with persistence:', questionnaire.id);
       
       questionnaire.isSaved = true;
       
@@ -225,7 +378,14 @@ export class QuestionnaireGenerator {
       
       localStorage.setItem('questionnaires', JSON.stringify(filteredQuestionnaires));
       
-      console.log('✅ Questionnaire auto-saved successfully:', questionnaire.id);
+      // Also save to persistent state
+      QuestionnaireStorage.savePersistentState({ 
+        questionnaire, 
+        type: 'auto_saved',
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log('✅ Questionnaire auto-saved successfully with persistence:', questionnaire.id);
     } catch (error) {
       console.error('❌ Auto-save failed:', error);
     }

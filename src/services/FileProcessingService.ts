@@ -1,3 +1,4 @@
+
 import { ChatGPTService } from './ChatGPTService';
 import { createWorker } from 'tesseract.js';
 
@@ -9,6 +10,9 @@ interface ProcessedFileContent {
     fileSize: number;
     processedAt: string;
     extractionMethod: string;
+    ocrAttempted?: boolean;
+    ocrSuccessful?: boolean;
+    ocrError?: string;
   };
 }
 
@@ -23,7 +27,9 @@ class FileProcessingServiceClass {
       fileName: file.name,
       fileSize: file.size,
       processedAt: new Date().toISOString(),
-      extractionMethod: ''
+      extractionMethod: '',
+      ocrAttempted: false,
+      ocrSuccessful: false
     };
 
     let content = '';
@@ -49,36 +55,45 @@ class FileProcessingServiceClass {
       }
 
       console.log(`Raw extraction result: ${content.length} characters`);
-      console.log(`Content preview: ${content.substring(0, 200)}...`);
 
-      // ENHANCED: OCR fallback for PDFs with insufficient content
+      // PRODUCTION: OCR fallback for image-based PDFs with clear error handling
       if (!this.isRealReadableContent(content)) {
         console.log('❌ Initial extraction failed validation, checking for OCR fallback...');
         
-        // Trigger OCR fallback for PDFs and images with insufficient content
         if (this.shouldUseOCRFallback(file, content)) {
-          console.log('🔄 File appears to be image-based or lacks text layer. Triggering OCR fallback...');
+          console.log('🔄 File appears to be image-based. Starting OCR fallback process...');
+          metadata.ocrAttempted = true;
+          
           try {
             const ocrContent = await this.performOCRExtraction(file);
-            if (ocrContent && ocrContent.length > 50 && this.isRealReadableContent(ocrContent)) {
+            if (ocrContent && ocrContent.length > 100 && this.isRealReadableContent(ocrContent)) {
               console.log('✅ OCR extraction successful:', ocrContent.length, 'characters');
               content = ocrContent;
-              metadata.extractionMethod += '-ocr-fallback';
+              metadata.extractionMethod += '-ocr-success';
+              metadata.ocrSuccessful = true;
             } else {
-              console.log('⚠️ OCR extraction produced insufficient content, using enhanced fallback');
-              content = await this.generateEnhancedFallbackContent(file);
-              metadata.extractionMethod += '-enhanced-fallback';
+              console.log('❌ OCR produced insufficient readable content');
+              metadata.ocrSuccessful = false;
+              metadata.ocrError = 'OCR completed but produced insufficient readable text';
+              throw new Error(`OCR processing completed but could not extract sufficient readable text from ${file.name}. The file may be corrupted, heavily formatted, or contain non-standard text. Please try uploading a different file or a text-based version of the document.`);
             }
           } catch (ocrError) {
-            console.error('OCR fallback failed:', ocrError);
-            console.log('📝 Using enhanced fallback content generation');
-            content = await this.generateEnhancedFallbackContent(file);
-            metadata.extractionMethod += '-enhanced-fallback';
+            console.error('❌ OCR fallback failed:', ocrError);
+            metadata.ocrSuccessful = false;
+            metadata.ocrError = ocrError instanceof Error ? ocrError.message : 'OCR processing failed';
+            
+            // Provide specific error message based on error type
+            if (ocrError instanceof Error && ocrError.message.includes('network')) {
+              throw new Error(`OCR processing failed due to network issues. Please check your internet connection and try again with ${file.name}.`);
+            } else if (ocrError instanceof Error && ocrError.message.includes('format')) {
+              throw new Error(`The file ${file.name} is in an unsupported format for OCR processing. Please convert to a standard PDF or image format and try again.`);
+            } else {
+              throw new Error(`OCR processing failed for ${file.name}. The file may be corrupted, password-protected, or contain complex formatting that prevents text extraction. Please try uploading a simpler text-based document.`);
+            }
           }
         } else {
-          console.log('📝 Generating enhanced fallback content for unsupported format');
-          content = await this.generateEnhancedFallbackContent(file);
-          metadata.extractionMethod += '-enhanced-fallback';
+          console.log('❌ File does not qualify for OCR fallback');
+          throw new Error(`Unable to extract readable text from ${file.name}. The file format may not be supported or the content may not contain extractable text. Please upload a text-based document (PDF with text layer, Word document, or plain text file).`);
         }
       }
 
@@ -101,10 +116,14 @@ class FileProcessingServiceClass {
 
     } catch (error) {
       console.error(`Error processing file ${file.name}:`, error);
-      // Enhanced error handling - generate fallback content instead of throwing
-      console.log('📝 Generating fallback content due to processing error');
-      content = await this.generateEnhancedFallbackContent(file);
-      metadata.extractionMethod = 'error-fallback';
+      
+      // If OCR was attempted and failed, provide specific guidance
+      if (metadata.ocrAttempted && !metadata.ocrSuccessful) {
+        throw error; // Re-throw the specific OCR error message
+      }
+      
+      // For other errors, provide general guidance
+      throw new Error(`Unable to process ${file.name}. ${error instanceof Error ? error.message : 'Unknown error occurred'}. Please ensure the file contains readable text and try uploading a different format if necessary.`);
     }
 
     console.log(`Final processed content for ${file.name}: ${content.length} characters`);
@@ -120,59 +139,84 @@ class FileProcessingServiceClass {
     const fileName = file.name.toLowerCase();
     const isPDF = fileName.endsWith('.pdf') || file.type === 'application/pdf';
     const isImage = file.type.startsWith('image/');
-    const hasInsufficientText = content.length < 500;
+    const hasInsufficientText = content.length < 300; // Stricter threshold
+    
+    console.log('🔍 OCR Fallback Assessment:', {
+      fileName,
+      isPDF,
+      isImage,
+      contentLength: content.length,
+      hasInsufficientText,
+      qualifiesForOCR: (isPDF || isImage) && hasInsufficientText
+    });
     
     return (isPDF || isImage) && hasInsufficientText;
   }
 
   private async performOCRExtraction(file: File): Promise<string> {
-    console.log('🔍 Starting OCR extraction...');
+    console.log('🔍 Starting OCR extraction with enhanced error handling...');
     
     try {
       const worker = await this.getOCRWorker();
       
+      console.log('✅ OCR worker initialized successfully');
+      
+      let ocrResult: any;
+      
       // For images, process directly
       if (file.type.startsWith('image/')) {
         console.log('Processing image file with OCR');
-        const result = await worker.recognize(file);
-        return result.data.text.trim();
-      }
-      
-      // For PDFs, we need to convert to image first or process as image
-      if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
+        ocrResult = await worker.recognize(file);
+      } else if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
         console.log('Processing PDF file with OCR');
         
         // Create a blob URL for the PDF file
         const fileUrl = URL.createObjectURL(file);
         
         try {
-          // Try to process the PDF directly with Tesseract
-          // Tesseract can handle some PDF files directly
-          const result = await worker.recognize(fileUrl);
+          ocrResult = await worker.recognize(fileUrl);
           URL.revokeObjectURL(fileUrl);
-          
-          if (result.data.text && result.data.text.trim().length > 50) {
-            console.log('Direct PDF OCR successful');
-            return result.data.text.trim();
-          }
-          
-          // If direct processing doesn't work well, we'll need to convert PDF to images
-          // For now, return what we got or generate enhanced content
-          console.log('Direct PDF OCR produced limited results');
-          return result.data.text.trim();
-          
         } catch (error) {
           URL.revokeObjectURL(fileUrl);
           throw error;
         }
+      } else {
+        // For other file types, try direct processing
+        ocrResult = await worker.recognize(file);
       }
       
-      // For other file types, try direct processing
-      const result = await worker.recognize(file);
-      return result.data.text.trim();
+      const extractedText = ocrResult.data.text.trim();
+      
+      console.log('📝 OCR Extraction Results:', {
+        confidence: ocrResult.data.confidence,
+        textLength: extractedText.length,
+        wordCount: extractedText.split(/\s+/).length,
+        hasReadableContent: this.isRealReadableContent(extractedText)
+      });
+      
+      if (!extractedText || extractedText.length < 50) {
+        throw new Error('OCR processing completed but extracted minimal text content');
+      }
+      
+      if (ocrResult.data.confidence < 30) {
+        console.warn('⚠️ Low OCR confidence detected:', ocrResult.data.confidence);
+      }
+      
+      return extractedText;
       
     } catch (error) {
-      console.error('OCR extraction error:', error);
+      console.error('❌ OCR extraction error:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          throw new Error('OCR processing failed due to network connectivity issues');
+        } else if (error.message.includes('format') || error.message.includes('invalid')) {
+          throw new Error('File format is not compatible with OCR processing');
+        } else if (error.message.includes('memory') || error.message.includes('size')) {
+          throw new Error('File is too large for OCR processing');
+        }
+      }
+      
       throw new Error(`OCR processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -245,7 +289,7 @@ Note: This content has been processed to ensure it can be used effectively for e
 
     const cleanContent = content.trim();
     
-    // Check for PDF garbage patterns - more comprehensive
+    // Check for PDF garbage patterns
     const pdfGarbagePatterns = [
       /PDF-[\d.]+/,
       /%%EOF/,
@@ -271,7 +315,6 @@ Note: This content has been processed to ensure it can be used effectively for e
       /BX.*?EX/s
     ];
 
-    // Reject if contains significant PDF garbage
     let garbageCount = 0;
     for (const pattern of pdfGarbagePatterns) {
       const matches = cleanContent.match(pattern);
@@ -291,7 +334,6 @@ Note: This content has been processed to ensure it can be used effectively for e
     const readableChars = (cleanContent.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length;
     const readableRatio = readableChars / cleanContent.length;
     
-    // Check for meaningful content patterns
     const meaningfulPatterns = cleanContent.match(/\b(?:the|and|of|to|a|in|for|is|on|that|by|this|with|from|they|we|are|have|has|was|were|been|or|as|an|at|be|if|all|can|would|will|but|not|what|there|about|which|when|more|also|its|use|may|how|other|these|some|could|time|very|first|after|way|many|must|before|here|through|back|years|work|life|only|over|think|where|much|should|well|never|being|each|between|under|while|case|most|now|used|such|during|place|right|great|still|even|good|any|old|see|him|make|two|both|does|different|away|again|off|went|our|day|get|come|made|part|own|say|small|every|found|large|did|long|without|another|down|because|against|something|too|those|though|three|state|new|just|since|system|might|high|several|around|world|including|important|need|possible|known|become|example|however|therefore|following|according|analysis|research|study|results|conclusion|method|approach|data|information|evidence|findings|significant|important|process|development|understanding|knowledge|learning|education|theory|concept|application|practice|implementation|strategy|technology|business|management|service|quality|performance|effectiveness|efficiency|improvement|solution|problem|challenge|opportunity|future|current|present|potential|successful|professional|industry|market|customer|value|benefits|advantages|requirements|standards|guidelines|best|practices|recommendations|considerations|factors|elements|aspects|features|characteristics|properties|capabilities|functions|operations|procedures|methods|techniques|tools|resources|materials|content|structure|framework|model|design|architecture|platform|environment|context|situation|conditions|circumstances|issues|concerns|implications|outcomes|impact|effects|consequences|changes|developments|trends|patterns|relationships|connections|interactions|communication|collaboration|coordination|integration|optimization|enhancement|innovation|creativity|expertise|skills|experience|competence|qualifications|certification|training|preparation|planning|organization|administration|governance|leadership|direction|guidance|support|assistance|consultation|advice|feedback|evaluation|assessment|monitoring|control|measurement|tracking|reporting|documentation|records|archives|history|background|overview|introduction|summary|abstract|review|survey|comparison|contrast|discussion|debate|argument|position|perspective|viewpoint|opinion|interpretation|explanation|description|definition|clarification|illustration|demonstration|presentation|communication|expression|articulation|formulation|specification|detail|precision|accuracy|reliability|validity|consistency|coherence|logic|reasoning|rationale|justification|evidence|proof|confirmation|verification|validation|authentication|authorization|approval)\b/gi) || [];
 
     const isValid = words.length >= 20 && 
@@ -348,7 +390,6 @@ Note: This content has been processed to ensure it can be used effectively for e
       const arrayBuffer = await file.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Multiple extraction strategies
       let bestContent = '';
       let bestMethod = '';
       
@@ -395,7 +436,6 @@ Note: This content has been processed to ensure it can be used effectively for e
         }
       }
 
-      // Return the best content found (OCR fallback will be handled by main flow)
       console.log(`PDF text extraction result: ${bestMethod}, content length: ${bestContent.length}`);
       
       return {
@@ -425,7 +465,6 @@ Note: This content has been processed to ensure it can be used effectively for e
   }
 
   private async extractPdfTextPatterns(uint8Array: Uint8Array): Promise<string> {
-    // Convert bytes to string for pattern matching
     let pdfString = '';
     for (let i = 0; i < uint8Array.length; i++) {
       pdfString += String.fromCharCode(uint8Array[i]);
@@ -489,7 +528,6 @@ Note: This content has been processed to ensure it can be used effectively for e
       });
     });
     
-    // Combine and structure the extracted text
     const textArray = Array.from(extractedTexts).filter(text => 
       text.length > 5 && 
       /[a-zA-Z]/.test(text) &&
@@ -497,7 +535,6 @@ Note: This content has been processed to ensure it can be used effectively for e
       !text.match(/^[\/\\\(\)\[\]<>]+$/)
     );
     
-    // Sort by length to prioritize longer, more meaningful text
     textArray.sort((a, b) => b.length - a.length);
     
     const extractedContent = textArray.join(' ').replace(/\s+/g, ' ').trim();
@@ -509,8 +546,6 @@ Note: This content has been processed to ensure it can be used effectively for e
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
     try {
-      // For Word files, we'll try to read them as text
-      // This is a basic implementation - real Word files would need specialized parsing
       const content = await this.readFileAsText(file);
       
       if (this.isRealReadableContent(content) && content.length > 50) {
@@ -519,7 +554,6 @@ Note: This content has been processed to ensure it can be used effectively for e
           method: 'word-file-reading'
         };
       } else {
-        // If direct text reading doesn't work, provide a fallback message
         const fallbackContent = `Word Document: ${file.name}
 
 This document contains text-based educational content that requires specialized parsing for full extraction.
@@ -610,7 +644,6 @@ Educational Elements:
     });
   }
 
-  // Clean up OCR worker when needed
   async cleanup(): Promise<void> {
     await this.terminateOCRWorker();
   }
