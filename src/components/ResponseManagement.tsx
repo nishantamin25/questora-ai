@@ -3,15 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, User, CheckCircle, XCircle, MessageSquare, FileText, Clock, Download } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Users, TrendingUp, Download, FileText, Eye, EyeOff } from 'lucide-react';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { ResponseService } from '@/services/ResponseService';
 
 const ResponseManagement = () => {
   const [questionnaires, setQuestionnaires] = useState<any[]>([]);
-  const [selectedTest, setSelectedTest] = useState<any | null>(null);
-  const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
-  const [testResponses, setTestResponses] = useState<any[]>([]);
+  const [selectedQuestionnaire, setSelectedQuestionnaire] = useState<string | null>(null);
+  const [responses, setResponses] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [showDetailedStats, setShowDetailedStats] = useState(false);
 
   useEffect(() => {
     loadQuestionnaires();
@@ -22,30 +24,23 @@ const ResponseManagement = () => {
     setQuestionnaires(allQuestionnaires.filter(q => q.isSaved));
   };
 
-  const openTest = (questionnaire: any) => {
-    const responses = ResponseService.getResponsesByQuestionnaire(questionnaire.id);
-    setTestResponses(responses);
-    setSelectedTest(questionnaire);
-    setSelectedResponse(null);
+  const loadResponses = async (questionnaireId: string) => {
+    const questionnaireResponses = await ResponseService.getResponsesByQuestionnaire(questionnaireId);
+    const questionnaireStats = await ResponseService.getResponseStats(questionnaireId);
+    
+    setResponses(questionnaireResponses);
+    setStats(questionnaireStats);
+    setSelectedQuestionnaire(questionnaireId);
   };
 
-  const openPersonResponse = (response: any) => {
-    setSelectedResponse(response);
+  const toggleDetailedStats = () => {
+    setShowDetailedStats(!showDetailedStats);
   };
 
-  const goBackToTestList = () => {
-    setSelectedTest(null);
-    setSelectedResponse(null);
-    setTestResponses([]);
-  };
-
-  const goBackToPersonList = () => {
-    setSelectedResponse(null);
-  };
-
-  const getScorePercentage = (score: number, totalQuestions: number) => {
-    if (!totalQuestions) return 0;
-    return Math.round((score / totalQuestions) * 100);
+  const getTopOptions = (optionCounts: { [key: string]: number }, topN: number = 5) => {
+    return Object.entries(optionCounts)
+      .sort(([, countA], [, countB]) => countB - countA)
+      .slice(0, topN);
   };
 
   const exportToExcel = (data: any[], filename: string) => {
@@ -117,247 +112,218 @@ const ResponseManagement = () => {
     URL.revokeObjectURL(url);
   };
 
-  const prepareExportData = () => {
-    return testResponses.map(response => ({
-      Participant: response.username,
+  const prepareResponseExportData = () => {
+    return responses.map(response => ({
+      Player: response.username,
       Score: `${response.score}/${response.totalQuestions}`,
-      Percentage: `${getScorePercentage(response.score || 0, response.totalQuestions || 0)}%`,
-      Submitted: new Date(response.submittedAt).toLocaleDateString()
+      Submitted: new Date(response.submittedAt).toLocaleDateString(),
+      Answers: response.answers.map(answer => `${answer.questionText}: ${answer.selectedOption}`).join('; ')
     }));
   };
 
-  // Show individual person's response
-  if (selectedResponse) {
-    const percentage = getScorePercentage(selectedResponse.score || 0, selectedResponse.totalQuestions || 0);
-    
-    return (
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goBackToPersonList}
-                className="text-gray-400 hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Participants
-              </Button>
-            </div>
-          </div>
-          <CardTitle className="text-white flex items-center space-x-2">
-            <User className="h-5 w-5" />
-            <span>{selectedResponse.username}'s Response</span>
-          </CardTitle>
-          <div className="flex items-center space-x-4 text-sm text-gray-400">
-            <div className="flex items-center space-x-1">
-              <Clock className="h-4 w-4" />
-              <span>Submitted: {new Date(selectedResponse.submittedAt).toLocaleString()}</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <span>Score: {selectedResponse.score}/{selectedResponse.totalQuestions} ({percentage}%)</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-4">
-            {selectedResponse.answers.map((answer: any, index: number) => (
-              <div key={answer.questionId} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <h4 className="text-white font-medium">
-                    Question {index + 1}: {answer.questionText}
-                  </h4>
-                  <div className="flex items-center space-x-2">
-                    {answer.isCorrect ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-500" />
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-gray-400">Answer:</span>
-                    <Badge 
-                      variant={answer.isCorrect ? "default" : "destructive"}
-                      className={answer.isCorrect ? "bg-green-600" : "bg-red-600"}
-                    >
-                      {answer.selectedOption}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const getCurrentTestTitle = () => {
+    const currentTest = questionnaires.find(q => q.id === selectedQuestionnaire);
+    return currentTest ? currentTest.title : 'Responses';
+  };
 
-  // Show list of people who took the selected test
-  if (selectedTest) {
-    return (
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goBackToTestList}
-                className="text-gray-400 hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Tests
-              </Button>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => exportToExcel(prepareExportData(), `${selectedTest.title}_responses`)}
-                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export Excel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => exportToPDF(prepareExportData(), `${selectedTest.title}_responses`)}
-                className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Export PDF
-              </Button>
-            </div>
-          </div>
-          <CardTitle className="text-white flex items-center space-x-2">
-            <Users className="h-5 w-5" />
-            <span>{selectedTest.title} - Participants</span>
-          </CardTitle>
-          <div className="text-sm text-gray-400">
-            {testResponses.length} participant{testResponses.length !== 1 ? 's' : ''}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {testResponses.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No responses yet for this test</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-700">
-                  <TableHead className="text-gray-300">Participant</TableHead>
-                  <TableHead className="text-gray-300">Score</TableHead>
-                  <TableHead className="text-gray-300">Percentage</TableHead>
-                  <TableHead className="text-gray-300">Submitted</TableHead>
-                  <TableHead className="text-gray-300">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {testResponses.map((response) => {
-                  const percentage = getScorePercentage(response.score || 0, response.totalQuestions || 0);
-                  
-                  return (
-                    <TableRow key={response.id} className="border-gray-700">
-                      <TableCell className="text-white font-medium">
-                        <div className="flex items-center space-x-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>{response.username}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-white">
-                        {response.score}/{response.totalQuestions}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <div className="bg-gray-700 rounded-full h-2 w-16 overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${
-                                percentage >= 80 ? 'bg-green-500' :
-                                percentage >= 60 ? 'bg-yellow-500' :
-                                'bg-red-500'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                          <span className="text-white text-sm font-medium">
-                            {percentage}%
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-gray-400 text-sm">
-                        {new Date(response.submittedAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openPersonResponse(response)}
-                          className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          View Answers
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-  // Show list of tests (default view)
   return (
     <Card className="bg-gray-900 border-gray-800">
       <CardHeader>
         <CardTitle className="text-white flex items-center space-x-2">
-          <MessageSquare className="h-5 w-5" />
+          <TrendingUp className="h-5 w-5" />
           <span>Response Management</span>
         </CardTitle>
-        <div className="text-sm text-gray-400">
-          Select a test to view participant responses
-        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {questionnaires.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">No tests available</p>
-        ) : (
-          <div className="space-y-3">
+        {/* Test Selection */}
+        <div>
+          <h3 className="text-sm font-medium text-gray-300 mb-3">Select Test to View Responses</h3>
+          <div className="space-y-2">
             {questionnaires.map((questionnaire) => {
               const responseCount = ResponseService.getResponsesByQuestionnaire(questionnaire.id).length;
+              const isSelected = selectedQuestionnaire === questionnaire.id;
               
               return (
-                <div
+                <Button
                   key={questionnaire.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:bg-gray-750 transition-colors cursor-pointer"
-                  onClick={() => openTest(questionnaire)}
+                  variant="outline"
+                  className={`w-full justify-between text-left border-gray-700 bg-gray-800 text-white hover:bg-gray-700 ${
+                    isSelected ? 'bg-gray-700' : ''
+                  }`}
+                  onClick={() => loadResponses(questionnaire.id)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <h4 className="text-white font-medium">{questionnaire.title}</h4>
-                        <p className="text-gray-400 text-sm">
-                          {questionnaire.difficulty} • {questionnaire.questions?.length || 0} questions
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary" className="bg-gray-700">
-                        <Users className="h-3 w-3 mr-1" />
-                        {responseCount} response{responseCount !== 1 ? 's' : ''}
-                      </Badge>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="truncate">{questionnaire.title}</span>
+                    <Badge variant="secondary" className="ml-2">
+                      <Users className="h-3 w-3 mr-1" />
+                      {responseCount}
+                    </Badge>
                   </div>
-                </div>
+                </Button>
               );
             })}
+            
+            {questionnaires.length === 0 && (
+              <p className="text-gray-400 text-sm">No tests available</p>
+            )}
+          </div>
+        </div>
+
+        {/* Responses Table */}
+        {selectedQuestionnaire && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-medium flex items-center space-x-2">
+                <TrendingUp className="h-4 w-4 text-green-500" />
+                <span>Responses</span>
+              </h3>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportToExcel(prepareResponseExportData(), `${getCurrentTestTitle()}_responses`)}
+                  className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Excel
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportToPDF(prepareResponseExportData(), `${getCurrentTestTitle()}_responses`)}
+                  className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Export PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleDetailedStats}
+                  className="bg-gray-600 border-gray-600 text-white hover:bg-gray-700 hover:border-gray-700"
+                >
+                  {showDetailedStats ? (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Hide Stats
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Show Stats
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {responses.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No responses yet for this test</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-gray-700">
+                    <TableHead className="text-gray-300">Player</TableHead>
+                    <TableHead className="text-gray-300">Score</TableHead>
+                    <TableHead className="text-gray-300">Submitted</TableHead>
+                    <TableHead className="text-gray-300">Answers</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {responses.map((response) => (
+                    <TableRow key={response.id} className="border-gray-700">
+                      <TableCell className="text-white font-medium">{response.username}</TableCell>
+                      <TableCell className="text-white">{response.score}/{response.totalQuestions}</TableCell>
+                      <TableCell className="text-gray-400 text-sm">{new Date(response.submittedAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-gray-400 text-sm">
+                        {response.answers.map(answer => (
+                          <div key={answer.questionId}>
+                            {answer.questionText}: {answer.selectedOption}
+                          </div>
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
+
+        {/* Detailed Statistics */}
+        {selectedQuestionnaire && showDetailedStats && stats && (
+          <div className="space-y-4">
+            <h3 className="text-white font-medium flex items-center space-x-2">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              <span>Detailed Statistics</span>
+            </h3>
+
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium">Overall Stats</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div>
+                  <p className="text-gray-400">Total Responses: <span className="text-white">{stats.totalResponses}</span></p>
+                  <p className="text-gray-400">Average Score: <span className="text-white">{stats.averageScore.toFixed(2)}</span></p>
+                </div>
+                {stats.totalResponses > 0 && (
+                  <div>
+                    <h5 className="text-gray-300 font-medium mb-2">Score Distribution</h5>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={responses.map(r => ({ name: r.username, score: r.score }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
+                        <XAxis dataKey="name" stroke="#A0AEC0" />
+                        <YAxis stroke="#A0AEC0" />
+                        <Tooltip contentStyle={{ backgroundColor: '#2D3748', border: 'none', color: '#fff' }} />
+                        <Bar dataKey="score" fill="#82ca9d" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {stats.questionStats.map((questionStat, index) => (
+              <div key={questionStat.questionId} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                <h4 className="text-white font-medium">Question {index + 1}: {questionStat.questionText}</h4>
+                <p className="text-gray-400">Total Answers: <span className="text-white">{questionStat.totalAnswers}</span></p>
+                
+                {Object.keys(questionStat.optionCounts).length > 0 ? (
+                  <>
+                    <h5 className="text-gray-300 font-medium mb-2">Top Answered Options</h5>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={getTopOptions(questionStat.optionCounts).map(([option, count]) => ({ name: option, value: count }))}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          fill="#8884d8"
+                          label
+                        >
+                          {getTopOptions(questionStat.optionCounts).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#2D3748', border: 'none', color: '#fff' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <ul className="list-disc pl-5 text-gray-400">
+                      {getTopOptions(questionStat.optionCounts).map(([option, count]) => (
+                        <li key={option}>
+                          {option}: <span className="text-white">{count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-gray-400">No answers yet for this question</p>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

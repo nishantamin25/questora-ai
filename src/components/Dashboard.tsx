@@ -51,7 +51,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     loadQuestionnaires();
     loadCourses();
     loadCompletedCourses();
-    GuestAssignmentService.cleanupOldAssignments();
+    cleanupOldAssignments();
   }, []);
 
   useEffect(() => {
@@ -62,14 +62,14 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   }, [uploadedFiles]);
 
-  const loadQuestionnaires = () => {
+  const loadQuestionnaires = async () => {
     try {
       if (user.role === 'admin') {
-        const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
+        const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
         console.log('Admin questionnaires loaded:', allQuestionnaires);
         setQuestionnaires(Array.isArray(allQuestionnaires) ? allQuestionnaires : []);
       } else {
-        const activeQuestionnaires = QuestionnaireService.getActiveQuestionnaires();
+        const activeQuestionnaires = await QuestionnaireService.getActiveQuestionnaires();
         console.log('Guest questionnaires loaded:', activeQuestionnaires);
         setQuestionnaires(Array.isArray(activeQuestionnaires) ? activeQuestionnaires : []);
       }
@@ -567,7 +567,15 @@ Note: File processing failed, but file information is available.
     setDeleteDialog({ open: false, questionnaireId: '', testName: '' });
   };
 
-  const filterQuestionnairesForGuest = (questionnaires: any[]) => {
+  const cleanupOldAssignments = async () => {
+    try {
+      await GuestAssignmentService.cleanupOldAssignments();
+    } catch (error) {
+      console.error('Error cleaning up old assignments:', error);
+    }
+  };
+
+  const filterQuestionnairesForGuest = async (questionnaires: any[]) => {
     if (user.role === 'admin') {
       return questionnaires;
     }
@@ -582,11 +590,12 @@ Note: File processing failed, but file information is available.
     });
 
     const filteredQuestionnaires: any[] = [];
-    Object.entries(testGroups).forEach(([testName, testQuestionnaires]) => {
+    
+    for (const [testName, testQuestionnaires] of Object.entries(testGroups)) {
       if (testQuestionnaires.length > 1 && testQuestionnaires[0].totalSets > 1) {
         const totalSets = testQuestionnaires[0].totalSets;
         const testId = testQuestionnaires[0].id.split('-')[0];
-        const assignedSetNumber = GuestAssignmentService.getGuestSetNumber(user.username, testId, totalSets);
+        const assignedSetNumber = await GuestAssignmentService.getGuestSetNumber(user.username, testId, totalSets);
         const assignedQuestionnaire = testQuestionnaires.find(q => q.setNumber === assignedSetNumber);
         if (assignedQuestionnaire) {
           filteredQuestionnaires.push(assignedQuestionnaire);
@@ -594,26 +603,39 @@ Note: File processing failed, but file information is available.
       } else {
         filteredQuestionnaires.push(...testQuestionnaires);
       }
-    });
+    }
 
     return filteredQuestionnaires;
   };
 
-  const allQuestionnaires = user.role === 'admin' 
-    ? [...unsavedQuestionnaires, ...questionnaires]
-    : questionnaires;
+  const [filteredQuestionnaires, setFilteredQuestionnaires] = useState<any[]>([]);
 
-  const filteredQuestionnaires = filterQuestionnairesForGuest(allQuestionnaires);
-  const validQuestionnaires = filteredQuestionnaires.filter(q => q && typeof q === 'object');
+  useEffect(() => {
+    const filterQuestionnaires = async () => {
+      const allQuestionnaires = user.role === 'admin' 
+        ? [...unsavedQuestionnaires, ...questionnaires]
+        : questionnaires;
 
-  const accessibleQuestionnaires = user.role === 'admin' 
-    ? validQuestionnaires 
-    : validQuestionnaires.filter(q => {
-        if (q.course && q.course.id) {
-          return completedCourses.has(q.course.id);
-        }
-        return true;
-      });
+      const filtered = await filterQuestionnairesForGuest(allQuestionnaires);
+      const validQuestionnaires = filtered.filter(q => q && typeof q === 'object');
+      
+      const accessibleQuestionnaires = user.role === 'admin' 
+        ? validQuestionnaires 
+        : validQuestionnaires.filter(q => {
+            if (q.course && q.course.id) {
+              return completedCourses.has(q.course.id);
+            }
+            return true;
+          });
+
+      setFilteredQuestionnaires(accessibleQuestionnaires);
+    };
+
+    filterQuestionnaires();
+  }, [questionnaires, unsavedQuestionnaires, user.role, completedCourses]);
+
+  const validQuestionnaires = filteredQuestionnaires;
+  const accessibleQuestionnaires = filteredQuestionnaires;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">

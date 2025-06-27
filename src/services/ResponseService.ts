@@ -1,5 +1,7 @@
 
-interface QuestionnaireResponse {
+import { HybridResponseStorage } from './response/HybridResponseStorage';
+
+export interface QuestionnaireResponse {
   id: string;
   questionnaireId: string;
   questionnaireTitle: string;
@@ -17,7 +19,7 @@ interface QuestionnaireResponse {
   totalQuestions?: number;
 }
 
-interface SubmitResponseData {
+export interface SubmitResponseData {
   questionnaireId: string;
   responses: Record<string, string>;
   submittedAt: string;
@@ -25,116 +27,27 @@ interface SubmitResponseData {
 
 class ResponseServiceClass {
   async submitResponse(responseData: SubmitResponseData): Promise<void> {
-    // Convert the response data to our internal format
-    const response: QuestionnaireResponse = {
-      id: this.generateId(),
-      questionnaireId: responseData.questionnaireId,
-      questionnaireTitle: 'Questionnaire', // This could be enhanced to get actual title
-      userId: 'anonymous', // This could be enhanced with actual user data
-      username: 'Anonymous User',
-      answers: Object.entries(responseData.responses).map(([questionId, selectedOption]) => ({
-        questionId,
-        questionText: '', // This could be enhanced to get actual question text
-        selectedOption,
-        selectedOptionIndex: 0, // This could be enhanced to get actual index
-        isCorrect: undefined
-      })),
-      submittedAt: responseData.submittedAt
-    };
-
-    this.saveResponse(response);
+    return HybridResponseStorage.submitResponse(responseData);
   }
 
-  saveResponse(response: QuestionnaireResponse): void {
-    const existingResponses = this.getAllResponses();
-    existingResponses.unshift(response);
-    localStorage.setItem('questionnaireResponses', JSON.stringify(existingResponses));
+  async saveResponse(response: QuestionnaireResponse): Promise<void> {
+    return HybridResponseStorage.saveResponse(response);
   }
 
-  getAllResponses(): QuestionnaireResponse[] {
-    const stored = localStorage.getItem('questionnaireResponses');
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    return [];
+  async getAllResponses(): Promise<QuestionnaireResponse[]> {
+    return HybridResponseStorage.getAllResponses();
   }
 
-  getResponsesByQuestionnaire(questionnaireId: string): QuestionnaireResponse[] {
-    const allResponses = this.getAllResponses();
-    return allResponses.filter(response => response.questionnaireId === questionnaireId);
+  async getResponsesByQuestionnaire(questionnaireId: string): Promise<QuestionnaireResponse[]> {
+    return HybridResponseStorage.getResponsesByQuestionnaire(questionnaireId);
   }
 
   calculateScore(userAnswers: Array<{questionId: string; selectedOptionIndex: number}>, questionnaire: any): { score: number; totalQuestions: number; answers: Array<any> } {
-    let correctCount = 0;
-    const totalQuestions = questionnaire.questions.length;
-    
-    const answersWithCorrectness = userAnswers.map(userAnswer => {
-      const question = questionnaire.questions.find((q: any) => q.id === userAnswer.questionId);
-      const isCorrect = question?.correctAnswer !== undefined && 
-                       question.correctAnswer === userAnswer.selectedOptionIndex;
-      
-      if (isCorrect) {
-        correctCount++;
-      }
-      
-      return {
-        ...userAnswer,
-        questionText: question?.text || '',
-        selectedOption: question?.options?.[userAnswer.selectedOptionIndex] || '',
-        isCorrect
-      };
-    });
-
-    return {
-      score: correctCount,
-      totalQuestions,
-      answers: answersWithCorrectness
-    };
+    return HybridResponseStorage.calculateScore(userAnswers, questionnaire);
   }
 
-  getResponseStats(questionnaireId: string) {
-    const responses = this.getResponsesByQuestionnaire(questionnaireId);
-    const totalResponses = responses.length;
-    
-    if (totalResponses === 0) {
-      return { totalResponses: 0, questionStats: [], averageScore: 0 };
-    }
-
-    // Calculate average score
-    const responsesWithScores = responses.filter(r => r.score !== undefined);
-    const averageScore = responsesWithScores.length > 0 
-      ? responsesWithScores.reduce((sum, r) => sum + (r.score || 0), 0) / responsesWithScores.length
-      : 0;
-
-    // Get the first response to determine question structure
-    const firstResponse = responses[0];
-    const questionStats = firstResponse.answers.map((answer, questionIndex) => {
-      const questionResponses = responses.map(r => r.answers[questionIndex]);
-      const optionCounts: { [key: string]: number } = {};
-      
-      questionResponses.forEach(qr => {
-        if (qr && qr.selectedOption) {
-          optionCounts[qr.selectedOption] = (optionCounts[qr.selectedOption] || 0) + 1;
-        }
-      });
-
-      return {
-        questionId: answer.questionId,
-        questionText: answer.questionText,
-        totalAnswers: questionResponses.length,
-        optionCounts
-      };
-    });
-
-    return {
-      totalResponses,
-      questionStats,
-      averageScore
-    };
-  }
-
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  async getResponseStats(questionnaireId: string) {
+    return HybridResponseStorage.getResponseStats(questionnaireId);
   }
 }
 
