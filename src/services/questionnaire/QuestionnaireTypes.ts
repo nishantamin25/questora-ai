@@ -31,4 +31,5 @@ export interface Questionnaire {
   setNumber?: number;
   totalSets?: number;
   course?: any;
+  language?: string;
 }
