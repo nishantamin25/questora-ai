@@ -726,7 +726,6 @@ Note: File processing failed, but file information is available.
 
             <GenerateTestDialog
               open={showGenerateDialog}
-              prompt={prompt}
               uploadedFiles={uploadedFiles}
               processedFileContent={processedFileContent}
               onGenerate={handleGenerateQuestionnaire}
