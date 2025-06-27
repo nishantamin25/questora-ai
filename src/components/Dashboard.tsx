@@ -377,17 +377,16 @@ Note: File processing failed, but file information is available.
       return;
     }
 
-    if (!prompt.trim()) {
+    if (uploadedFiles.length === 0 && !processedFileContent.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a prompt",
+        description: "Please upload files before generating content",
         variant: "destructive"
       });
       return;
     }
 
     console.log('Generate button clicked with:', {
-      prompt: prompt.trim(),
       uploadedFilesCount: uploadedFiles.length,
       processedContentLength: processedFileContent.length,
       hasFileContent: !!processedFileContent
@@ -437,10 +436,10 @@ Note: File processing failed, but file information is available.
       if (includeCourse && (fileContentToUse.length > 50 || uploadedFiles.length > 0)) {
         console.log('Generating course...');
         generatedCourse = await CourseService.generateCourse(
-          prompt,
+          "Generate course content from uploaded files",
           uploadedFiles,
           fileContentToUse,
-          testName  // Pass test name to course generation
+          testName
         );
         CourseService.saveCourse(generatedCourse);
         loadCourses();
@@ -454,7 +453,7 @@ Note: File processing failed, but file information is available.
           console.log(`Generating questionnaire set ${setIndex} of ${numberOfSets}...`);
           
           const questionnaire = await QuestionnaireService.generateQuestionnaire(
-            prompt,
+            "Generate questions from uploaded files",
             { testName, difficulty, numberOfQuestions, timeframe, includeCourse: false, includeQuestionnaire: true },
             fileContentToUse,
             setIndex,
@@ -480,7 +479,6 @@ Note: File processing failed, but file information is available.
         setUnsavedQuestionnaires(prev => [...generatedQuestionnaires, ...prev]);
       }
       
-      setPrompt('');
       setUploadedFiles([]);
       setProcessedFileContent('');
       
@@ -739,31 +737,28 @@ Note: File processing failed, but file information is available.
                 </CardHeader>
                 <CardContent className="space-y-4 p-6">
                   <div>
-                    <Label htmlFor="prompt" className="text-slate-700 font-medium font-poppins">{LanguageService.translate('dashboard.describeContent')}</Label>
-                    <div className="relative mt-1">
-                      <Textarea
-                        id="prompt"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="e.g., Create content about customer satisfaction for an e-commerce website"
-                        className="min-h-[120px] bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 pr-12 rounded-lg focus:border-violet-500 focus:ring-violet-500 font-inter"
-                      />
-                      <div className="absolute bottom-3 right-3 flex items-center space-x-2">
-                        <label htmlFor="file-upload" className="cursor-pointer">
-                          <Paperclip className="h-5 w-5 text-slate-400 hover:text-violet-600 transition-colors" />
-                        </label>
+                    <Label htmlFor="file-upload" className="text-slate-700 font-medium font-poppins">Upload Files</Label>
+                    <div className="mt-1">
+                      <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-violet-400 transition-colors">
+                        <Upload className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                        <p className="text-slate-600 mb-2 font-inter">
+                          Click to upload files or drag and drop
+                        </p>
+                        <p className="text-sm text-slate-500 font-inter">
+                          Supports PDF, Word, text, images, videos, and audio files (max 50MB each)
+                        </p>
                         <input
                           id="file-upload"
                           type="file"
                           onChange={handleFileUpload}
                           multiple
-                          className="hidden"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
                         />
                       </div>
                     </div>
                     
                     {uploadedFiles.length > 0 && (
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-4 space-y-2">
                         {uploadedFiles.map((file, index) => (
                           <div key={index} className="flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
                             <div className="flex items-center space-x-2">
@@ -797,7 +792,7 @@ Note: File processing failed, but file information is available.
                   
                   <Button
                     onClick={handleGenerateClick}
-                    disabled={isGenerating || isProcessingFiles}
+                    disabled={isGenerating || isProcessingFiles || uploadedFiles.length === 0}
                     className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
                   >
                     {isGenerating ? (
@@ -900,7 +895,7 @@ Note: File processing failed, but file information is available.
                     </h3>
                     <p className="text-slate-600 font-inter">
                       {user.role === 'admin' 
-                        ? "Upload files and enter a prompt above to generate your first course and questionnaire"
+                        ? "Upload files above to generate your first course and questionnaire"
                         : LanguageService.translate('dashboard.noTestsDesc')
                       }
                     </p>
@@ -922,7 +917,7 @@ Note: File processing failed, but file information is available.
                   <>
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
                       <p className="font-semibold text-blue-700 font-poppins">Upload files</p>
-                      <p className="text-blue-600 font-inter">Click the paperclip icon to upload documents, images, or videos for content analysis</p>
+                      <p className="text-blue-600 font-inter">Upload documents, images, or videos for content analysis and generation</p>
                     </div>
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
                       <p className="font-semibold text-green-700 font-poppins">Generate courses</p>
