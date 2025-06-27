@@ -106,16 +106,6 @@ const GenerateTestDialog = ({
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Prompt Preview */}
-          <Card>
-            <CardContent className="p-4">
-              <Label className="text-sm font-medium text-slate-700">Prompt</Label>
-              <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-2 rounded border max-h-20 overflow-y-auto">
-                {prompt}
-              </p>
-            </CardContent>
-          </Card>
-
           {/* File Upload Status */}
           {uploadedFiles.length > 0 && (
             <Card>
