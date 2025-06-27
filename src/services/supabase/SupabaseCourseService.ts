@@ -11,9 +11,9 @@ export class SupabaseCourseService {
         .from('courses')
         .upsert({
           id: course.id,
-          title: course.title,
+          title: course.name, // Use course.name for title
           description: course.description,
-          content: JSON.stringify(course.sections),
+          content: JSON.stringify(course.materials), // Use course.materials for content
           created_by: (await supabase.auth.getUser()).data.user?.id
         });
 
@@ -43,12 +43,13 @@ export class SupabaseCourseService {
 
       const courses: Course[] = coursesData.map(c => ({
         id: c.id,
-        title: c.title,
+        name: c.title, // Map title to name
         description: c.description || '',
-        sections: c.content ? JSON.parse(c.content) : [],
+        materials: c.content ? JSON.parse(c.content) : [], // Map content to materials
+        estimatedTime: 60, // Default estimated time
         createdAt: c.created_at || new Date().toISOString(),
-        isActive: true,
-        language: 'en'
+        difficulty: 'medium' as const, // Default difficulty
+        isActive: true
       }));
 
       console.log('✅ Loaded courses from Supabase:', courses.length);
@@ -74,12 +75,13 @@ export class SupabaseCourseService {
 
       const course: Course = {
         id: courseData.id,
-        title: courseData.title,
+        name: courseData.title, // Map title to name
         description: courseData.description || '',
-        sections: courseData.content ? JSON.parse(courseData.content) : [],
+        materials: courseData.content ? JSON.parse(courseData.content) : [], // Map content to materials
+        estimatedTime: 60, // Default estimated time
         createdAt: courseData.created_at || new Date().toISOString(),
-        isActive: true,
-        language: 'en'
+        difficulty: 'medium' as const, // Default difficulty
+        isActive: true
       };
 
       console.log('✅ Course loaded from Supabase:', course.id);

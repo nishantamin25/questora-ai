@@ -19,33 +19,33 @@ export class QuestionnaireService {
     QuestionnaireGenerator.autoSaveQuestionnaire(questionnaire);
   }
 
-  // Manager methods
-  static saveQuestionnaire(questionnaire: Questionnaire): void {
-    QuestionnaireManager.saveQuestionnaire(questionnaire);
+  // Manager methods - now properly async
+  static async saveQuestionnaire(questionnaire: Questionnaire): Promise<void> {
+    return QuestionnaireManager.saveQuestionnaire(questionnaire);
   }
 
-  static getAllQuestionnaires(): Questionnaire[] {
+  static async getAllQuestionnaires(): Promise<Questionnaire[]> {
     return QuestionnaireManager.getAllQuestionnaires();
   }
 
-  static getActiveQuestionnaires(): Questionnaire[] {
+  static async getActiveQuestionnaires(): Promise<Questionnaire[]> {
     return QuestionnaireManager.getActiveQuestionnaires();
   }
 
-  static getQuestionnaireById(id: string): Questionnaire | null {
+  static async getQuestionnaireById(id: string): Promise<Questionnaire | null> {
     return QuestionnaireManager.getQuestionnaireById(id);
   }
 
-  static deleteQuestionnaire(id: string): void {
-    QuestionnaireManager.deleteQuestionnaire(id);
+  static async deleteQuestionnaire(id: string): Promise<void> {
+    return QuestionnaireManager.deleteQuestionnaire(id);
   }
 
-  static activateQuestionnaire(id: string): void {
-    QuestionnaireManager.activateQuestionnaire(id);
+  static async activateQuestionnaire(id: string): Promise<void> {
+    return QuestionnaireManager.activateQuestionnaire(id);
   }
 
-  static deactivateQuestionnaire(id: string): void {
-    QuestionnaireManager.deactivateQuestionnaire(id);
+  static async deactivateQuestionnaire(id: string): Promise<void> {
+    return QuestionnaireManager.deactivateQuestionnaire(id);
   }
 
   static getTempQuestionnaire(): Questionnaire | null {
@@ -54,5 +54,9 @@ export class QuestionnaireService {
 
   static clearTempQuestionnaire(): void {
     QuestionnaireManager.clearTempQuestionnaire();
+  }
+
+  static async syncToSupabase(): Promise<void> {
+    return QuestionnaireManager.syncToSupabase();
   }
 }
