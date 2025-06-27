@@ -224,6 +224,7 @@ export class PayloadValidator {
   }
 
   static mergePromptAndFileContent(userPrompt: string, fileContent: string = ''): string {
+    // FIXED: No minimum prompt length requirement
     if (!userPrompt || userPrompt.trim().length === 0) {
       return fileContent || 'No prompt provided';
     }
@@ -247,6 +248,7 @@ ${cleanFileContent}
 INSTRUCTIONS: Use the document content above to fulfill the user's request. Base all generated content strictly on the provided document while following the user's specific requirements.`;
   }
 
+  // FIXED: Validate only total word count (prompt + file), not individual components
   static validateWordCount(content: string, maxWords: number = 2000): { isValid: boolean; wordCount: number; error?: string; debugInfo?: any } {
     if (!content || typeof content !== 'string') {
       return {
@@ -273,7 +275,7 @@ INSTRUCTIONS: Use the document content above to fulfill the user's request. Base
       return {
         isValid: false,
         wordCount,
-        error: `Input exceeds ${maxWords}-word limit (current: ${wordCount} words). Please reduce content size by ${wordCount - maxWords} words.`,
+        error: `Total input exceeds ${maxWords}-word limit (current: ${wordCount} words). Please reduce content size by ${wordCount - maxWords} words.`,
         debugInfo: { ...debugInfo, overageWords: wordCount - maxWords }
       };
     }
@@ -328,12 +330,12 @@ INSTRUCTIONS: Use the document content above to fulfill the user's request. Base
     }
     
     if (error?.includes('token limit')) {
-      recommendations.push('Shorten your prompt or use a smaller file');
+      recommendations.push('Shorten your content or use a smaller file');
       recommendations.push('Consider summarizing your requirements');
     }
     
     if (debugInfo?.step === 'MESSAGE_VALIDATION') {
-      recommendations.push('Check that your prompt and file are properly formatted');
+      recommendations.push('Check that your content is properly formatted');
       recommendations.push('Ensure uploaded file contains readable text');
     }
     
