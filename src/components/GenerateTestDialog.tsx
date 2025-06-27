@@ -107,7 +107,7 @@ const GenerateTestDialog = ({
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* File Upload Section - Now Primary */}
+          {/* File Upload Section - Primary Focus */}
           <Card className="border-2 border-violet-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
