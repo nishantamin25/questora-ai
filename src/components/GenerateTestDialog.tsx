@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import { Upload, FileText, Image, Video, Music, File, CheckCircle, AlertCircle }
 
 interface GenerateTestDialogProps {
   open: boolean;
-  prompt: string;
   uploadedFiles: File[];
   processedFileContent?: string;
   onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets: number) => void;
