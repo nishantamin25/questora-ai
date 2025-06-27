@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { Upload, FileText, Image, Video, Music, File, CheckCircle, AlertCircle }
 
 interface GenerateTestDialogProps {
   open: boolean;
+  prompt: string;
   uploadedFiles: File[];
   processedFileContent?: string;
   onGenerate: (testName: string, difficulty: 'easy' | 'medium' | 'hard', numberOfQuestions: number, timeframe: number, includeCourse: boolean, includeQuestionnaire: boolean, numberOfSets: number) => void;
@@ -18,6 +20,7 @@ interface GenerateTestDialogProps {
 
 const GenerateTestDialog = ({ 
   open, 
+  prompt, 
   uploadedFiles, 
   processedFileContent = '',
   onGenerate, 
@@ -66,7 +69,6 @@ const GenerateTestDialog = ({
   };
 
   const canEnableCourse = uploadedFiles.length > 0 && processedFileContent.length > 0;
-  const hasRequiredFiles = uploadedFiles.length > 0;
 
   console.log('Course enablement check:', {
     totalFiles: uploadedFiles.length,
@@ -104,84 +106,45 @@ const GenerateTestDialog = ({
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* File Upload Section - Main Focus */}
-          <Card className="border-2 border-violet-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <Label className="text-lg font-semibold text-violet-700">Upload Files</Label>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Upload your files to generate content automatically
-                  </p>
-                </div>
-                <Upload className="h-6 w-6 text-violet-600" />
-              </div>
-              
-              {uploadedFiles.length === 0 ? (
-                <div className="border-2 border-dashed border-violet-300 rounded-lg p-8 text-center bg-violet-50">
-                  <Upload className="h-12 w-12 text-violet-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-violet-700 mb-2">
-                    Upload your files to get started
-                  </h3>
-                  <p className="text-sm text-violet-600 mb-3">
-                    Content will be generated automatically based on your uploaded files
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Supported formats: PDF, DOC, TXT, CSV, Images, and more
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-medium text-violet-700">
-                      {uploadedFiles.length} file{uploadedFiles.length > 1 ? 's' : ''} uploaded
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      {processedFileContent.length > 0 ? (
-                        <>
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                          <span className="text-sm text-green-600 font-medium">Ready for generation</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="h-5 w-5 text-amber-500" />
-                          <span className="text-sm text-amber-600">Processing...</span>
-                        </>
-                      )}
-                    </div>
+          {/* File Upload Status */}
+          {uploadedFiles.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium text-slate-700">Uploaded Files</Label>
+                  <div className="flex items-center space-x-1">
+                    {processedFileContent.length > 0 ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span className="text-xs text-green-600">Processed</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        <span className="text-xs text-amber-600">Processing...</span>
+                      </>
+                    )}
                   </div>
-                  
-                  <div className="space-y-3 max-h-40 overflow-y-auto">
-                    {uploadedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center space-x-3 text-sm bg-white p-3 rounded-lg border border-violet-200">
-                        <div className="flex-shrink-0 p-2 bg-violet-100 rounded-lg">
-                          {getFileIcon(file)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-800 truncate">{file.name}</p>
-                          <p className="text-xs text-slate-500">{Math.round(file.size / 1024)}KB</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {processedFileContent.length > 0 && (
-                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <p className="text-sm text-green-700 font-medium">
-                          Content processed successfully
-                        </p>
-                      </div>
-                      <p className="text-xs text-green-600 mt-1">
-                        {processedFileContent.length} characters extracted and ready for generation
-                      </p>
-                    </div>
-                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center space-x-2 text-sm text-slate-600 bg-slate-50 p-2 rounded border">
+                      {getFileIcon(file)}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-slate-500">{Math.round(file.size / 1024)}KB</span>
+                    </div>
+                  ))}
+                </div>
+                {processedFileContent.length > 0 && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-xs text-green-700">
+                      ✅ Content extracted successfully ({processedFileContent.length} characters)
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Test Configuration */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -271,7 +234,7 @@ const GenerateTestDialog = ({
                     Generate Questionnaire
                   </Label>
                   <p className="text-xs text-slate-500 mt-1">
-                    Create questions based on the uploaded content
+                    Create questions based on the content
                   </p>
                 </div>
                 <Switch
@@ -318,7 +281,7 @@ const GenerateTestDialog = ({
             </Button>
             <Button 
               onClick={handleGenerate}
-              disabled={!testName.trim() || !hasRequiredFiles || (!includeCourse && !includeQuestionnaire)}
+              disabled={!testName.trim() || (!includeCourse && !includeQuestionnaire)}
               className="bg-violet-600 hover:bg-violet-700"
             >
               Generate {contentType === 'both' ? 'Course & Test' : contentType === 'course' ? 'Course' : 'Test'}
