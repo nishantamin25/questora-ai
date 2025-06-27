@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +17,8 @@ const ResponseManagement = () => {
     loadQuestionnaires();
   }, []);
 
-  const loadQuestionnaires = () => {
-    const allQuestionnaires = QuestionnaireService.getAllQuestionnaires();
+  const loadQuestionnaires = async () => {
+    const allQuestionnaires = await QuestionnaireService.getAllQuestionnaires();
     setQuestionnaires(allQuestionnaires.filter(q => q.isSaved));
   };
 
