@@ -1,41 +1,54 @@
 
 import { Questionnaire } from './QuestionnaireTypes';
-import { QuestionnaireStorage } from './QuestionnaireStorage';
+import { HybridQuestionnaireStorage } from './HybridQuestionnaireStorage';
 
 export class QuestionnaireManager {
-  static saveQuestionnaire(questionnaire: Questionnaire): void {
-    QuestionnaireStorage.saveQuestionnaire(questionnaire);
+  static async saveQuestionnaire(questionnaire: Questionnaire): Promise<void> {
+    return HybridQuestionnaireStorage.saveQuestionnaire(questionnaire);
   }
 
-  static getAllQuestionnaires(): Questionnaire[] {
-    return QuestionnaireStorage.getAllQuestionnaires();
+  static async getAllQuestionnaires(): Promise<Questionnaire[]> {
+    return HybridQuestionnaireStorage.getAllQuestionnaires();
   }
 
-  static getActiveQuestionnaires(): Questionnaire[] {
-    return QuestionnaireStorage.getActiveQuestionnaires();
+  static async getActiveQuestionnaires(): Promise<Questionnaire[]> {
+    const allQuestionnaires = await this.getAllQuestionnaires();
+    return allQuestionnaires.filter(q => q.isActive);
   }
 
-  static getQuestionnaireById(id: string): Questionnaire | null {
-    return QuestionnaireStorage.getQuestionnaireById(id);
+  static async getQuestionnaireById(id: string): Promise<Questionnaire | null> {
+    return HybridQuestionnaireStorage.getQuestionnaireById(id);
   }
 
-  static deleteQuestionnaire(id: string): void {
-    QuestionnaireStorage.deleteQuestionnaire(id);
+  static async deleteQuestionnaire(id: string): Promise<void> {
+    return HybridQuestionnaireStorage.deleteQuestionnaire(id);
   }
 
-  static activateQuestionnaire(id: string): void {
-    QuestionnaireStorage.updateQuestionnaireActiveStatus(id, true);
+  static async activateQuestionnaire(id: string): Promise<void> {
+    const questionnaire = await this.getQuestionnaireById(id);
+    if (questionnaire) {
+      questionnaire.isActive = true;
+      await this.saveQuestionnaire(questionnaire);
+    }
   }
 
-  static deactivateQuestionnaire(id: string): void {
-    QuestionnaireStorage.updateQuestionnaireActiveStatus(id, false);
+  static async deactivateQuestionnaire(id: string): Promise<void> {
+    const questionnaire = await this.getQuestionnaireById(id);
+    if (questionnaire) {
+      questionnaire.isActive = false;
+      await this.saveQuestionnaire(questionnaire);
+    }
   }
 
   static getTempQuestionnaire(): Questionnaire | null {
-    return QuestionnaireStorage.getTempQuestionnaire();
+    return HybridQuestionnaireStorage.getTempQuestionnaire();
   }
 
   static clearTempQuestionnaire(): void {
-    QuestionnaireStorage.clearTempQuestionnaire();
+    HybridQuestionnaireStorage.clearTempQuestionnaire();
+  }
+
+  static async syncToSupabase(): Promise<void> {
+    return HybridQuestionnaireStorage.syncToSupabase();
   }
 }
