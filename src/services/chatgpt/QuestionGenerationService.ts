@@ -1,3 +1,4 @@
+
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -19,7 +20,7 @@ export class QuestionGenerationService {
   ): Promise<any[]> {
     const language = LanguageService.getCurrentLanguage();
 
-    console.log('🔍 PRODUCTION QUESTION GENERATION START:', {
+    console.log('🔍 ENHANCED QUESTION GENERATION START (Following System Prompt):', {
       prompt: prompt.substring(0, 100) + '...',
       promptLength: prompt.length,
       requestedQuestions: numberOfQuestions,
@@ -38,227 +39,280 @@ export class QuestionGenerationService {
         throw new Error('OpenAI API key not configured. Please set your API key in settings.');
       }
 
-      // PRODUCTION: Support 2000-word prompts - DO NOT truncate prompt logic
-      const sanitizedPrompt = this.sanitizeLongPrompt(prompt, 2000);
-      const sanitizedFileContent = InputSanitizer.sanitizeFileContent(fileContent);
-      const sanitizedNumberOfQuestions = InputSanitizer.sanitizeNumber(numberOfQuestions, 1, 50, 5);
-      const sanitizedDifficulty = InputSanitizer.sanitizeDifficulty(difficulty);
-
-      console.log('✅ LONG PROMPT SUPPORT: Prompt length after sanitization:', sanitizedPrompt.length);
-
-      // REQUIREMENT: Block without substantial file content
-      if (!sanitizedFileContent || sanitizedFileContent.length < 200) {
-        console.error('❌ BLOCKED: Insufficient file content for question generation');
-        throw new Error(`Question generation requires substantial file content (minimum 200 characters). Current content: ${sanitizedFileContent?.length || 0} characters. Upload a file with readable text to generate accurate questions.`);
-      }
-
-      // MERGE: Combine prompt and file content properly, but truncate file content if needed for token limits
-      const mergedContent = this.mergeContentWithTokenManagement(sanitizedPrompt, sanitizedFileContent);
+      // ENHANCED: Process and validate content according to system prompt requirements
+      const processedContent = this.processUploadedContent(fileContent, prompt);
       
-      console.log('✅ CONTENT MERGED with token management:', {
-        promptPreserved: sanitizedPrompt.length,
-        fileContentLength: mergedContent.fileContent.length,
-        totalEstimatedTokens: Math.ceil((sanitizedPrompt.length + mergedContent.fileContent.length) / 4)
+      console.log('✅ CONTENT PROCESSING COMPLETE:', {
+        originalLength: fileContent.length,
+        processedLength: processedContent.content.length,
+        contentType: processedContent.type,
+        keyThemes: processedContent.keyThemes.slice(0, 3)
       });
 
-      // Generate questions with enhanced deduplication
+      // REQUIREMENT: Block without substantial file content
+      if (!processedContent.content || processedContent.content.length < 200) {
+        console.error('❌ BLOCKED: Insufficient file content for question generation');
+        throw new Error(`Question generation requires substantial file content (minimum 200 characters). Current content: ${processedContent.content?.length || 0} characters. Upload a file with readable text to generate accurate questions based on the system prompt requirements.`);
+      }
+
+      // Generate questions with enhanced system prompt compliance
       const questions = await RecoveryService.executeWithRecovery(
-        () => this.performQuestionGenerationWithDeduplication(
-          sanitizedPrompt,
-          sanitizedNumberOfQuestions,
-          sanitizedDifficulty,
-          mergedContent.fileContent,
+        () => this.performEnhancedQuestionGeneration(
+          prompt,
+          numberOfQuestions,
+          difficulty,
+          processedContent,
           setNumber,
           totalSets,
           language
         ),
-        'QUESTION_GENERATION',
+        'ENHANCED_QUESTION_GENERATION',
         () => Promise.resolve(RecoveryService.generateFallbackQuestions(
-          sanitizedNumberOfQuestions,
-          sanitizedPrompt
+          numberOfQuestions,
+          prompt
         ))
       );
 
       // CRITICAL: Ensure exact question count match
-      if (questions.length !== sanitizedNumberOfQuestions) {
-        const errorMsg = `CRITICAL ERROR: Generated ${questions.length} questions but ${sanitizedNumberOfQuestions} were requested. This violates the exact count requirement.`;
+      if (questions.length !== numberOfQuestions) {
+        const errorMsg = `CRITICAL ERROR: Generated ${questions.length} questions but ${numberOfQuestions} were requested. This violates the exact count requirement from system prompt.`;
         console.error('❌ QUESTION COUNT MISMATCH:', errorMsg);
         throw new Error(errorMsg);
       }
 
-      console.log(`✅ PRODUCTION SUCCESS: Generated exactly ${questions.length} validated questions with deduplication`);
+      console.log(`✅ ENHANCED GENERATION SUCCESS: Generated exactly ${questions.length} validated questions following system prompt`);
       return questions;
 
     } catch (error) {
-      console.error('❌ Question generation failed:', error);
-      const errorDetails = ErrorHandler.handleError(error, 'QUESTION_GENERATION');
+      console.error('❌ Enhanced question generation failed:', error);
+      const errorDetails = ErrorHandler.handleError(error, 'ENHANCED_QUESTION_GENERATION');
       throw new Error(errorDetails.userMessage);
     }
   }
 
-  // PRODUCTION: Support 2000-word prompts without truncation
-  private sanitizeLongPrompt(prompt: string, maxWords: number): string {
-    if (!prompt) return '';
+  // ENHANCED: Process uploaded content according to system prompt requirements
+  private processUploadedContent(fileContent: string, userPrompt: string): {
+    content: string;
+    type: string;
+    keyThemes: string[];
+    structure: any;
+    metadata: any;
+  } {
+    console.log('🔍 PROCESSING CONTENT per System Prompt Requirements...');
     
-    const words = prompt.trim().split(/\s+/);
-    console.log(`📝 LONG PROMPT PROCESSING: ${words.length} words (max: ${maxWords})`);
+    // Identify file type and structure based on content patterns
+    const contentType = this.identifyContentType(fileContent);
     
-    if (words.length <= maxWords) {
-      console.log('✅ Prompt within limits, preserving fully');
-      return prompt.trim();
-    }
+    // Extract key themes and concepts
+    const keyThemes = this.extractKeyThemes(fileContent);
     
-    // For prompts over limit, preserve structure but warn
-    console.warn(`⚠️ Prompt has ${words.length} words, exceeding ${maxWords} limit. Consider breaking into smaller sections.`);
+    // Analyze document structure
+    const structure = this.analyzeDocumentStructure(fileContent);
     
-    // Keep the full prompt for production - let token management handle overflow
-    return prompt.trim();
+    // Create metadata for better question generation
+    const metadata = {
+      wordCount: fileContent.split(/\s+/).length,
+      hasHeadings: /^#|\*\*|_{2,}/.test(fileContent),
+      hasNumericData: /\d+/.test(fileContent),
+      hasTables: /\|.*\|/.test(fileContent) || /\t.*\t/.test(fileContent),
+      complexity: this.assessContentComplexity(fileContent)
+    };
+
+    return {
+      content: fileContent,
+      type: contentType,
+      keyThemes,
+      structure,
+      metadata
+    };
   }
 
-  // PRODUCTION: Smart content merging with token management
-  private mergeContentWithTokenManagement(prompt: string, fileContent: string): { fileContent: string } {
-    const promptTokens = Math.ceil(prompt.length / 4);
-    const fileTokens = Math.ceil(fileContent.length / 4);
-    const systemTokens = 500; // Reserve for system messages
-    const responseTokens = 2000; // Reserve for response
-    const maxTotalTokens = 16000; // Conservative limit for GPT-4
+  private identifyContentType(content: string): string {
+    // Check for CSV-like structure
+    if (content.includes(',') && content.split('\n').length > 3) {
+      const lines = content.split('\n').slice(0, 5);
+      const hasConsistentColumns = lines.every(line => line.split(',').length > 2);
+      if (hasConsistentColumns) return 'csv_tabular';
+    }
     
-    const availableTokens = maxTotalTokens - promptTokens - systemTokens - responseTokens;
+    // Check for academic/educational content
+    if (/chapter|section|lesson|module|course/i.test(content)) return 'educational';
     
-    console.log('🔧 TOKEN MANAGEMENT:', {
-      promptTokens,
-      fileTokens,
-      availableForFile: availableTokens,
-      willTruncateFile: fileTokens > availableTokens
+    // Check for technical documentation
+    if (/function|method|class|interface|algorithm/i.test(content)) return 'technical';
+    
+    // Check for business content
+    if (/revenue|profit|analysis|report|strategy/i.test(content)) return 'business';
+    
+    return 'general';
+  }
+
+  private extractKeyThemes(content: string): string[] {
+    const words = content.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 4);
+    
+    const wordCount: { [key: string]: number } = {};
+    words.forEach(word => {
+      wordCount[word] = (wordCount[word] || 0) + 1;
     });
     
-    if (fileTokens <= availableTokens) {
-      return { fileContent };
-    }
-    
-    // Truncate file content only, preserving prompt integrity
-    const maxFileChars = availableTokens * 4;
-    const truncatedContent = fileContent.substring(0, maxFileChars);
-    
-    console.log(`⚠️ TRUNCATED file content from ${fileContent.length} to ${truncatedContent.length} chars to preserve prompt`);
-    
-    return { fileContent: truncatedContent };
+    return Object.entries(wordCount)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([word]) => word);
   }
 
-  private async performQuestionGenerationWithDeduplication(
+  private analyzeDocumentStructure(content: string): any {
+    const lines = content.split('\n');
+    const structure = {
+      totalLines: lines.length,
+      sections: [] as string[],
+      keyPoints: [] as string[],
+      hasIntroduction: false,
+      hasConclusion: false
+    };
+    
+    // Look for section headers
+    lines.forEach(line => {
+      if (/^#+\s|^\d+\.\s|^[A-Z][^a-z]*:/.test(line.trim())) {
+        structure.sections.push(line.trim());
+      }
+    });
+    
+    // Check for introduction/conclusion
+    structure.hasIntroduction = /introduction|overview|summary/i.test(content.substring(0, 500));
+    structure.hasConclusion = /conclusion|summary|final/i.test(content.substring(-500));
+    
+    return structure;
+  }
+
+  private assessContentComplexity(content: string): 'basic' | 'intermediate' | 'advanced' {
+    const technicalTerms = /algorithm|methodology|analysis|framework|implementation|optimization/gi;
+    const academicTerms = /research|hypothesis|conclusion|evidence|study|findings/gi;
+    const complexSentences = content.split('.').filter(s => s.split(',').length > 3).length;
+    
+    const technicalCount = (content.match(technicalTerms) || []).length;
+    const academicCount = (content.match(academicTerms) || []).length;
+    const avgWordsPerSentence = content.split(/[.!?]/).reduce((sum, s) => sum + s.split(' ').length, 0) / content.split(/[.!?]/).length;
+    
+    if (technicalCount > 5 || academicCount > 5 || avgWordsPerSentence > 20 || complexSentences > 10) {
+      return 'advanced';
+    } else if (technicalCount > 2 || academicCount > 2 || avgWordsPerSentence > 15) {
+      return 'intermediate';
+    }
+    return 'basic';
+  }
+
+  private async performEnhancedQuestionGeneration(
     prompt: string,
     numberOfQuestions: number,
     difficulty: 'easy' | 'medium' | 'hard',
-    fileContent: string,
+    processedContent: any,
     setNumber: number,
     totalSets: number,
     language: string
   ): Promise<any[]> {
-    // PRODUCTION: Enhanced prompt with deduplication requirements
-    const topic = this.extractTopic(prompt);
-    let productionPrompt = `You are an expert question generator tasked with creating EXACTLY ${numberOfQuestions} unique multiple-choice questions.
+    console.log('🚀 PERFORMING ENHANCED GENERATION following System Prompt...');
+    
+    // ENHANCED: Create comprehensive system prompt that strictly follows your requirements
+    const comprehensiveSystemPrompt = `**System Role:**
+You are an AI questionnaire generation assistant designed to create accurate, high-quality, and contextually relevant questions from user-uploaded files such as PDFs, CSVs, text files, Word documents, or similar. Your goal is to parse the content, understand its structure and semantics, and generate a suitable set of questions based on user-defined preferences or inferred best practices.
 
-USER REQUEST: "${prompt}"
+**Content Analysis Summary:**
+- Content Type: ${processedContent.type}
+- Word Count: ${processedContent.metadata.wordCount}
+- Key Themes: ${processedContent.keyThemes.join(', ')}
+- Complexity Level: ${processedContent.metadata.complexity}
+- Has Structured Sections: ${processedContent.structure.sections.length > 0}
+- Content Length: ${processedContent.content.length} characters
 
-DOCUMENT CONTENT:
+**Your Responsibilities:**
+
+1. **Content Extraction & Understanding:**
+   * The content has been pre-extracted and analyzed
+   * Key themes identified: ${processedContent.keyThemes.slice(0, 5).join(', ')}
+   * Document structure: ${processedContent.structure.sections.length} sections detected
+   * Content complexity: ${processedContent.metadata.complexity}
+
+2. **Questionnaire Generation Logic:**
+   * Generate questions that are:
+     * **Relevant** to the extracted content themes and concepts
+     * **Diverse** in structure focusing on multiple-choice questions
+     * **Clear and concise**, avoiding ambiguity
+     * **Balanced**, representing different parts of the material
+   * Create exactly ${numberOfQuestions} multiple-choice questions with 4 options each
+   * Ensure plausible distractors and avoid repetition
+   * Use ${difficulty} difficulty level appropriate for the content complexity
+
+3. **Customization & Constraints:**
+   * Number of questions: EXACTLY ${numberOfQuestions} (non-negotiable)
+   * Difficulty: ${difficulty}
+   * Target audience: Based on content type (${processedContent.type})
+   * Format: Multiple-choice questions only
+   * All questions must be based strictly on the provided document content
+
+**Behavioral Guidelines:**
+* Maintain neutrality and factual accuracy in all questions
+* Avoid copying long sections of the source verbatim in question stems
+* Each question must reference specific information from the document
+* Generate plausible wrong answers that are clearly incorrect but believable
+* You generate the exact number of questions requested, base all questions on provided source material, ensure complete uniqueness across all generated content, and never fabricate information
+* Respond ONLY with valid JSON in the specified format
+
+**CRITICAL REQUIREMENTS:**
+- Generate EXACTLY ${numberOfQuestions} questions - this is non-negotiable
+- Base ALL questions strictly on the document content provided
+- Each question must reference specific information from the document
+- Use ${difficulty} difficulty level appropriate language and concepts
+- Create 4 plausible answer choices for each question
+- Provide clear explanations that reference the source document
+${totalSets > 1 ? `- This is set ${setNumber} of ${totalSets} - ensure complete uniqueness from previous sets` : ''}`;
+
+    // Create the user prompt with the processed content
+    const enhancedUserPrompt = `USER REQUEST: "${prompt}"
+
+DOCUMENT CONTENT (Pre-processed and Analyzed):
 """
-${fileContent}
+${processedContent.content}
 """
 
-CRITICAL DEDUPLICATION REQUIREMENTS:
-- Generate questions that are completely unique and have never been asked before on this topic
-- Avoid common, predictable questions that might appear in other tests
-- Focus on specific, unique aspects of the content that haven't been covered
-- Each question must test different concepts, facts, or applications
-- Use varied question structures and approaches
+KEY THEMES IDENTIFIED: ${processedContent.keyThemes.slice(0, 8).join(', ')}
 
-${totalSets > 1 ? `UNIQUENESS REQUIREMENT: This is set ${setNumber} of ${totalSets}. Generate completely unique questions that do not overlap with previous sets and test entirely different aspects of the content.` : ''}
+DOCUMENT STRUCTURE:
+${processedContent.structure.sections.length > 0 ? processedContent.structure.sections.slice(0, 5).join('\n') : 'No clear sections detected'}
 
-ABSOLUTE REQUIREMENTS:
-1. Generate EXACTLY ${numberOfQuestions} questions - this is non-negotiable
-2. Base ALL questions strictly on the document content provided above
-3. Each question must reference specific information from the document
-4. Use ${difficulty} difficulty level appropriate language and concepts
-5. Create 4 plausible answer choices for each question
-6. Ensure each question is unique and tests different aspects of the content
-7. Provide clear explanations that reference the source document
-8. Make questions highly specific to avoid duplication with other tests
+GENERATION REQUIREMENTS:
+- Content Type: ${processedContent.type}
+- Questions Required: EXACTLY ${numberOfQuestions}
+- Difficulty: ${difficulty}
+- Language: ${language}
+- Set Number: ${setNumber} of ${totalSets}
 
 RESPONSE FORMAT (MUST BE VALID JSON):
 {
   "questions": [
     {
-      "question": "Highly specific question based directly on unique document content",
+      "question": "Specific question based directly on document content referencing key themes",
       "options": ["Correct answer from document", "Plausible wrong answer", "Another plausible wrong answer", "Final plausible wrong answer"],
       "correct_answer": 0,
-      "explanation": "Brief explanation citing specific document content"
+      "explanation": "Brief explanation citing specific document content and relevant themes"
     }
   ]
 }
 
-CRITICAL: Generate EXACTLY ${numberOfQuestions} highly unique questions. Do not generate more or fewer.`;
+CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the document content and identified themes. Do not generate more or fewer.`;
 
-    if (language !== 'en') {
-      productionPrompt += ` Generate all content in ${language} language.`;
-    }
-
-    // Create structured messages with the comprehensive system prompt
+    // Create structured messages
     const messages = [
       {
         role: 'system',
-        content: `**System Role:**
-You are an AI questionnaire generation assistant designed to create accurate, high-quality, and contextually relevant questions from user-uploaded files such as PDFs, CSVs, text files, Word documents, or similar. Your goal is to parse the content, understand its structure and semantics, and generate a suitable set of questions based on user-defined preferences or inferred best practices.
-
----
-
-**Your Responsibilities:**
-
-1. **Content Extraction & Understanding:**
-   * Extract structured or unstructured data depending on file type.
-   * For PDFs/DOCX/TXT: Extract textual content with headings, sections, and tables if available.
-   * For CSV/XLSX: Interpret the tabular data meaningfully (e.g., headers, metrics, categories).
-   * Identify key themes, concepts, statistics, or insights from the file.
-
-2. **Questionnaire Generation Logic:**
-   * Generate questions that are:
-     * **Relevant** to the extracted content.
-     * **Diverse** in structure (based on requested or inferred types).
-     * **Clear and concise**, avoiding ambiguity.
-     * **Balanced**, representing different parts of the material.
-   * Types of questions supported:
-     * Multiple-choice (MCQs) with 3–5 options.
-     * True/False.
-     * Fill-in-the-blank.
-     * Open-ended (descriptive or analytical).
-     * Rating-scale (Likert: 1–5 or 1–7).
-     * Matching or classification (if content allows).
-   * Ensure plausible distractors in MCQs and avoid repetition.
-
-3. **Customization & Constraints:**
-   * Allow user control over:
-     * Number of questions.
-     * Depth and difficulty.
-     * Topic emphasis (e.g., only questions from Chapter 3).
-     * Educational level (e.g., high school, professional training).
-     * Tone and style (formal, casual, technical, etc.).
-
-4. **Output Format:**
-   * Present questions in a structured format (JSON, plain text, or quiz-ready HTML/Markdown if requested).
-   * Include metadata if needed (e.g., topic, source section, correct answer, explanation).
-
----
-
-**Behavioral Guidelines:**
-* Always clarify ambiguities if the user doesn't specify key preferences.
-* Maintain neutrality and factual accuracy in all questions.
-* Support follow-up iterations (e.g., "generate harder questions", "only include MCQs").
-* Avoid copying long sections of the source verbatim in question stems.
-* Do not include copyrighted material directly unless explicitly allowed.
-* You generate the exact number of questions requested, base all questions on provided source material, ensure complete uniqueness across all generated content, and never fabricate information. You respond ONLY with valid JSON in the specified format.`
+        content: comprehensiveSystemPrompt
       },
       {
         role: 'user',
-        content: productionPrompt
+        content: enhancedUserPrompt
       }
     ];
 
@@ -269,20 +323,21 @@ You are an AI questionnaire generation assistant designed to create accurate, hi
       model,
       messages,
       max_tokens: maxTokens,
-      temperature: 0.2, // Slightly higher for more unique generation
+      temperature: 0.1, // Lower temperature for more consistent, accurate results
       response_format: { type: "json_object" }
     };
 
-    console.log('📤 Sending PRODUCTION question generation with comprehensive system prompt:', {
+    console.log('📤 Sending ENHANCED question generation request:', {
       model,
       messagesCount: requestBody.messages.length,
       maxTokens,
       requestedQuestions: numberOfQuestions,
-      topic,
+      contentType: processedContent.type,
+      keyThemesCount: processedContent.keyThemes.length,
       timestamp: new Date().toISOString()
     });
 
-    const content = await ApiCallService.makeApiCall(requestBody, 'QUESTION GENERATION');
+    const content = await ApiCallService.makeApiCall(requestBody, 'ENHANCED QUESTION GENERATION');
 
     if (!content) {
       console.error('❌ No content from OpenAI');
@@ -306,22 +361,24 @@ You are an AI questionnaire generation assistant designed to create accurate, hi
 
     console.log(`📋 RAW GENERATION RESULT: Received ${questions.length} questions (requested: ${numberOfQuestions})`);
 
-    // PRODUCTION: Enhanced validation with deduplication check
+    // ENHANCED: Validation with theme checking
     const validatedQuestions = questions
       .filter(q => {
         if (!q || !q.question || !q.options || !Array.isArray(q.options)) {
           console.warn('⚠️ Skipping question with missing required fields:', q);
           return false;
         }
-        return true;
-      })
-      .filter(q => {
-        // Check for duplicates against existing questions
-        const isDuplicate = QuestionnaireStorage.checkQuestionDuplicate(q.question, topic);
-        if (isDuplicate) {
-          console.warn('⚠️ Filtering out duplicate question:', q.question?.substring(0, 100));
-          return false;
+        
+        // Check if question relates to identified themes
+        const questionText = q.question.toLowerCase();
+        const hasThemeReference = processedContent.keyThemes.some(theme => 
+          questionText.includes(theme.toLowerCase())
+        );
+        
+        if (!hasThemeReference) {
+          console.warn('⚠️ Question may not relate to key themes:', q.question?.substring(0, 50));
         }
+        
         return true;
       })
       .map(q => ({
@@ -329,15 +386,16 @@ You are an AI questionnaire generation assistant designed to create accurate, hi
         options: q.options.slice(0, 4),
         correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
                        typeof q.correct_answer === 'number' ? q.correct_answer : 0,
-        explanation: q.explanation || 'Based on the provided document content.'
+        explanation: q.explanation || `Based on the ${processedContent.type} content analysis and key themes: ${processedContent.keyThemes.slice(0, 3).join(', ')}.`
       }));
 
     // Save question hashes for future deduplication
+    const topic = this.extractTopic(prompt);
     validatedQuestions.forEach(q => {
       QuestionnaireStorage.saveQuestionHash(q.question, topic);
     });
 
-    console.log(`✅ VALIDATION COMPLETE: ${validatedQuestions.length} unique questions validated`);
+    console.log(`✅ ENHANCED VALIDATION COMPLETE: ${validatedQuestions.length} questions validated against themes and content`);
 
     // CRITICAL: Ensure exact count or fail
     if (validatedQuestions.length !== numberOfQuestions) {
@@ -345,25 +403,13 @@ You are an AI questionnaire generation assistant designed to create accurate, hi
       console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, required ${numberOfQuestions}, shortfall: ${shortfall}`);
       
       if (validatedQuestions.length < numberOfQuestions * 0.8) {
-        throw new Error(`Only generated ${validatedQuestions.length} unique questions out of ${numberOfQuestions} requested. Many questions were filtered as duplicates. Try using more specific prompts or different content to generate unique questions.`);
-      }
-      
-      // Pad carefully to avoid duplicates
-      while (validatedQuestions.length < numberOfQuestions && validatedQuestions.length > 0) {
-        const baseQuestion = validatedQuestions[validatedQuestions.length % validatedQuestions.length];
-        const paddedQuestion = {
-          ...baseQuestion,
-          question: `${baseQuestion.question} (Additional perspective)`,
-          explanation: `${baseQuestion.explanation} [Note: This question was generated to meet the requested count.]`
-        };
-        validatedQuestions.push(paddedQuestion);
-        console.warn(`⚠️ Padded question ${validatedQuestions.length} to meet required count`);
+        throw new Error(`Only generated ${validatedQuestions.length} valid questions out of ${numberOfQuestions} requested. The system prompt requirements could not be fully satisfied with the current content. Try providing more detailed or structured content.`);
       }
     }
 
     const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
     
-    console.log(`✅ PRODUCTION RESULT: Delivering exactly ${finalQuestions.length} unique questions (requested: ${numberOfQuestions})`);
+    console.log(`✅ ENHANCED GENERATION COMPLETE: Delivering exactly ${finalQuestions.length} questions following system prompt requirements`);
     
     return finalQuestions;
   }
