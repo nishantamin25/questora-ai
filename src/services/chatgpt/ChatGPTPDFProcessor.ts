@@ -1,6 +1,7 @@
 
 import { ApiKeyManager } from './ApiKeyManager';
 import { ApiCallService } from './ApiCallService';
+import { PDFTextExtractor } from './PDFTextExtractor';
 
 export class ChatGPTPDFProcessor {
   static async processPDFWithChatGPT(file: File): Promise<{
@@ -20,29 +21,35 @@ export class ChatGPTPDFProcessor {
     }
 
     try {
-      // Convert file to base64 for ChatGPT processing
-      const base64Content = await this.fileToBase64(file);
+      // STEP 1: Extract actual text from PDF
+      console.log('📄 Extracting text from PDF...');
+      const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
       
-      // Use ChatGPT to extract and analyze content
-      const systemPrompt = `You are a PDF content extraction and analysis specialist. Your task is to:
+      if (!extractedText || extractedText.length < 200) {
+        throw new Error(`Insufficient text extracted from PDF. Only ${extractedText?.length || 0} characters found. The PDF may be image-based or corrupted.`);
+      }
+      
+      console.log('✅ PDF text extraction successful:', {
+        length: extractedText.length,
+        preview: extractedText.substring(0, 200) + '...'
+      });
+      
+      // STEP 2: Use ChatGPT to clean and analyze the extracted text
+      const systemPrompt = `You are a PDF content processor. Your task is to:
 
-1. Extract ALL readable text content from the provided PDF file
-2. Clean and organize the extracted text for educational use
-3. Analyze the content for educational value and complexity
-4. Return structured data for course/question generation
+1. Clean and organize the provided text that was extracted from a PDF
+2. Remove any PDF artifacts, formatting issues, or corrupted characters
+3. Structure the content into readable, educational material
+4. Analyze the content for educational value and complexity
 
-CRITICAL REQUIREMENTS:
-- Extract ALL text content, even if partially corrupted
-- Clean up any formatting artifacts or corruption
-- Ensure content is suitable for educational purposes
-- Provide detailed analysis of the content
+The text may contain some extraction artifacts, so please clean it up while preserving all meaningful content.
 
 Return your response in this exact JSON format:
 {
-  "extractedContent": "Full cleaned text content from the PDF",
+  "cleanedContent": "The cleaned and organized text content",
   "analysis": {
     "type": "educational|business|technical|research|other",
-    "complexity": "basic|intermediate|advanced",
+    "complexity": "basic|intermediate|advanced", 
     "keyTopics": ["topic1", "topic2", "topic3"],
     "wordCount": number,
     "isEducational": true|false,
@@ -50,9 +57,11 @@ Return your response in this exact JSON format:
   }
 }`;
 
-      const userPrompt = `Please extract and analyze all content from this PDF file: ${file.name}
+      const userPrompt = `Please clean and analyze this text extracted from the PDF "${file.name}":
 
-The file contains educational material that needs to be processed for course and question generation. Extract ALL readable text and provide a comprehensive analysis.`;
+${extractedText}
+
+Clean up any extraction artifacts and organize this into readable educational content.`;
 
       const messages = [
         {
@@ -60,19 +69,8 @@ The file contains educational material that needs to be processed for course and
           content: systemPrompt
         },
         {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: userPrompt
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:application/pdf;base64,${base64Content}`
-              }
-            }
-          ]
+          role: 'user', 
+          content: userPrompt
         }
       ];
 
@@ -84,21 +82,22 @@ The file contains educational material that needs to be processed for course and
         response_format: { type: "json_object" }
       };
 
-      console.log('📤 Sending PDF to ChatGPT for processing...');
-      const response = await ApiCallService.makeApiCall(requestBody, 'CHATGPT_PDF_PROCESSING');
+      console.log('📤 Sending extracted text to ChatGPT for cleaning and analysis...');
+      const response = await ApiCallService.makeApiCall(requestBody, 'CHATGPT_PDF_CLEANING');
 
       if (!response) {
-        throw new Error('No response from ChatGPT PDF processing');
+        throw new Error('No response from ChatGPT PDF cleaning');
       }
 
       const parsedResponse = JSON.parse(response);
       
-      if (!parsedResponse.extractedContent || !parsedResponse.analysis) {
-        throw new Error('Invalid response format from ChatGPT PDF processing');
+      if (!parsedResponse.cleanedContent || !parsedResponse.analysis) {
+        throw new Error('Invalid response format from ChatGPT PDF cleaning');
       }
 
-      console.log('✅ CHATGPT PDF PROCESSING SUCCESS:', {
-        contentLength: parsedResponse.extractedContent.length,
+      console.log('✅ CHATGPT PDF CLEANING SUCCESS:', {
+        originalLength: extractedText.length,
+        cleanedLength: parsedResponse.cleanedContent.length,
         wordCount: parsedResponse.analysis.wordCount,
         type: parsedResponse.analysis.type,
         complexity: parsedResponse.analysis.complexity,
@@ -106,7 +105,7 @@ The file contains educational material that needs to be processed for course and
       });
 
       return {
-        content: parsedResponse.extractedContent,
+        content: parsedResponse.cleanedContent,
         analysis: parsedResponse.analysis
       };
 
@@ -116,58 +115,25 @@ The file contains educational material that needs to be processed for course and
     }
   }
 
-  private static async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix to get just base64 content
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = () => reject(new Error('Failed to convert file to base64'));
-      reader.readAsDataURL(file);
-    });
-  }
-
   static async extractTextWithFallback(file: File): Promise<string> {
     try {
       const result = await this.processPDFWithChatGPT(file);
       return result.content;
     } catch (error) {
-      console.error('ChatGPT PDF processing failed, using fallback:', error);
+      console.error('ChatGPT PDF processing failed:', error);
       
-      // Fallback: Generate educational content based on filename
-      return this.generateEducationalFallback(file.name);
+      // Try direct text extraction as last resort
+      try {
+        console.log('🔄 Attempting direct PDF text extraction as fallback...');
+        const directText = await PDFTextExtractor.extractTextFromPDF(file);
+        if (directText && directText.length > 200) {
+          return directText;
+        }
+      } catch (directError) {
+        console.error('Direct extraction also failed:', directError);
+      }
+      
+      throw new Error(`PDF processing completely failed. The file "${file.name}" may be image-based, corrupted, or password-protected. Please ensure the PDF contains selectable text.`);
     }
-  }
-
-  private static generateEducationalFallback(fileName: string): string {
-    const topic = fileName.replace(/\.[^/.]+$/, "").replace(/_/g, ' ');
-    
-    return `Educational Content: ${topic}
-
-This document contains comprehensive educational material covering essential concepts and practical applications in ${topic}.
-
-Content Overview:
-The material is structured to provide thorough understanding of key principles, methodologies, and real-world applications. Students will gain valuable insights into current practices and emerging trends in this field.
-
-Key Learning Areas:
-- Fundamental concepts and theoretical foundations
-- Practical applications and case studies
-- Industry best practices and methodologies
-- Current trends and future developments
-- Problem-solving approaches and analytical techniques
-
-Educational Structure:
-The content builds progressively from basic concepts to advanced applications, ensuring comprehensive understanding. Each section includes detailed explanations, examples, and practical insights to support effective learning.
-
-Learning Objectives:
-Students will develop comprehensive knowledge, practical skills, and critical thinking abilities in ${topic}. The material supports both academic study and professional development.
-
-Assessment Preparation:
-This content provides excellent foundation for generating meaningful questions that test understanding, application, and analytical skills related to ${topic}.
-
-The material has been optimized for educational use and assessment generation, ensuring high-quality learning outcomes and effective knowledge evaluation.`;
   }
 }

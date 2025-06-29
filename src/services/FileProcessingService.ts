@@ -1,4 +1,3 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { ChatGPTPDFProcessor } from './chatgpt/ChatGPTPDFProcessor';
 import { createWorker } from 'tesseract.js';
@@ -49,24 +48,24 @@ class FileProcessingServiceClass {
     let content = '';
 
     try {
-      // ENHANCED: Use ChatGPT for PDF processing instead of local extraction
+      // ENHANCED: Use proper PDF processing with real text extraction
       if (fileType === 'text' && this.isPDFFile(file)) {
-        console.log('🤖 USING CHATGPT FOR PDF PROCESSING...');
+        console.log('🤖 USING ENHANCED PDF PROCESSING WITH TEXT EXTRACTION...');
         try {
           const chatGPTResult = await ChatGPTPDFProcessor.processPDFWithChatGPT(file);
           content = chatGPTResult.content;
-          metadata.extractionMethod = 'chatgpt-pdf-processing';
+          metadata.extractionMethod = 'chatgpt-pdf-with-text-extraction';
           
-          console.log('✅ CHATGPT PDF PROCESSING SUCCESS:', {
+          console.log('✅ ENHANCED PDF PROCESSING SUCCESS:', {
             contentLength: content.length,
             wordCount: chatGPTResult.analysis.wordCount,
-            isEducational: chatGPTResult.analysis.isEducational
+            isEducational: chatGPTResult.analysis.isEducational,
+            type: chatGPTResult.analysis.type
           });
           
         } catch (chatGPTError) {
-          console.warn('⚠️ ChatGPT PDF processing failed, using fallback:', chatGPTError);
-          content = await ChatGPTPDFProcessor.extractTextWithFallback(file);
-          metadata.extractionMethod = 'chatgpt-pdf-fallback';
+          console.error('❌ Enhanced PDF processing failed:', chatGPTError);
+          throw new Error(`PDF processing failed: ${chatGPTError instanceof Error ? chatGPTError.message : 'Unknown error'}`);
         }
       } else {
         // Use existing processing for non-PDF files
@@ -90,11 +89,14 @@ class FileProcessingServiceClass {
         }
       }
 
-      // RELAXED: Basic validation - if we have any content, proceed
-      if (!content || content.length < 50) {
-        console.warn('⚠️ Insufficient content extracted, generating educational fallback');
-        content = this.generateEducationalFallbackContent(file);
-        metadata.extractionMethod += '-educational-fallback';
+      // STRICT: Require substantial content
+      if (!content || content.length < 300) {
+        console.error('❌ INSUFFICIENT CONTENT EXTRACTED:', {
+          fileName: file.name,
+          contentLength: content?.length || 0,
+          extractionMethod: metadata.extractionMethod
+        });
+        throw new Error(`Insufficient content extracted from "${file.name}". Only ${content?.length || 0} characters found. The file may be corrupted, image-based, or contain unreadable text. Please upload a file with clear, readable text content.`);
       }
 
       metadata.diagnostics!.initialContentLength = content.length;
@@ -104,16 +106,13 @@ class FileProcessingServiceClass {
       console.log('✅ FILE PROCESSING SUCCESSFUL:', {
         fileName: file.name,
         finalContentLength: content.length,
-        extractionMethod: metadata.extractionMethod
+        extractionMethod: metadata.extractionMethod,
+        wordCount: content.split(/\s+/).length
       });
 
     } catch (error) {
       console.error(`❌ ERROR PROCESSING FILE ${file.name}:`, error);
-      
-      // Generate fallback content instead of throwing error
-      console.log('🔄 Generating fallback educational content...');
-      content = this.generateEducationalFallbackContent(file);
-      metadata.extractionMethod = 'error-fallback-generation';
+      throw error; // Don't generate fallback content - fail fast
     }
 
     return {
@@ -201,69 +200,42 @@ The content has been structured specifically for educational use and assessment 
   private async processAdvancedPdfFile(file: File): Promise<{ content: string; method: string }> {
     // This is kept for backward compatibility but should not be reached for PDFs
     console.log('⚠️ Using legacy PDF processing - should use ChatGPT instead');
-    return {
-      content: this.generateEducationalFallbackContent(file),
-      method: 'legacy-pdf-fallback'
-    };
+    throw new Error('Legacy PDF processing not supported - use enhanced PDF processor');
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
     try {
       const content = await this.readFileAsText(file);
+      if (content.length < 100) {
+        throw new Error('Word file contains insufficient readable content');
+      }
       return {
-        content: content.length > 50 ? content : this.generateEducationalFallbackContent(file),
+        content,
         method: 'word-file-reading'
       };
     } catch (error) {
       console.error('Word file processing failed:', error);
-      return {
-        content: this.generateEducationalFallbackContent(file),
-        method: 'word-file-fallback'
-      };
+      throw new Error(`Word file processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   private async processVideoFile(file: File): Promise<string> {
-    return `Video Educational Content: ${file.name}
-
-This video contains comprehensive educational material designed for thorough learning and assessment.
-
-Content Overview:
-The video presents structured educational content covering essential concepts, practical demonstrations, and expert insights. Students can expect detailed explanations, visual examples, and professional guidance throughout the presentation.
-
-Key Learning Areas:
-- Fundamental principles and core concepts
-- Practical applications and real-world examples  
-- Professional methodologies and best practices
-- Problem-solving techniques and approaches
-- Critical analysis and evaluation methods
-
-Educational Structure:
-The content is organized to build understanding progressively, starting with foundational concepts and advancing to more complex applications. Visual demonstrations enhance comprehension and provide practical context for theoretical knowledge.`;
+    throw new Error('Video file processing not supported. Please upload text-based files (PDF, TXT, DOC) with readable content.');
   }
 
   private async processImageFile(file: File): Promise<string> {
-    return `Image Educational Content: ${file.name}
-
-This image contains valuable educational information presented in visual format for enhanced learning and comprehension.
-
-Visual Content Analysis:
-The image provides educational material through visual representation, including textual information, diagrams, charts, and illustrated concepts. This visual format supports different learning styles and enhances understanding through graphical presentation.
-
-Educational Elements:
-- Textual information and written content
-- Diagrams and visual explanations
-- Charts, graphs, and data visualizations
-- Illustrated examples and demonstrations
-- Process flows and procedural guides`;
+    throw new Error('Image file processing not supported. Please upload text-based files (PDF, TXT, DOC) with readable content.');
   }
 
   private async processGenericFile(file: File): Promise<string> {
     try {
       const content = await this.readFileAsText(file);
-      return content.length > 50 ? content : this.generateEducationalFallbackContent(file);
+      if (content.length < 100) {
+        throw new Error('File contains insufficient readable content');
+      }
+      return content;
     } catch (error) {
-      return this.generateEducationalFallbackContent(file);
+      throw new Error(`Generic file processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
