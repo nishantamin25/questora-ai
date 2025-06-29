@@ -1,3 +1,4 @@
+
 import { ChatGPTService } from './ChatGPTService';
 import { ChatGPTPDFProcessor } from './chatgpt/ChatGPTPDFProcessor';
 import { createWorker } from 'tesseract.js';
@@ -40,7 +41,7 @@ class FileProcessingServiceClass {
       diagnostics: {
         initialContentLength: 0,
         contentPreview: '',
-        validationStage: string,
+        validationStage: 'initial',
         ocrQualificationCheck: {}
       }
     };
