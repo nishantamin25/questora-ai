@@ -383,6 +383,7 @@ Note: File processing failed, but file information is available.
       hasFileContent: !!processedFileContent
     });
 
+    // Force the dialog to open
     setShowGenerateDialog(true);
   };
 
@@ -641,6 +642,15 @@ Note: File processing failed, but file information is available.
         userRole={user.role}
       />
 
+      {/* Place GenerateTestDialog at the top level to ensure it renders */}
+      <GenerateTestDialog
+        open={showGenerateDialog}
+        uploadedFiles={uploadedFiles}
+        processedFileContent={processedFileContent}
+        onGenerate={handleGenerateQuestionnaire}
+        onCancel={() => setShowGenerateDialog(false)}
+      />
+
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-4 py-3 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -713,15 +723,7 @@ Note: File processing failed, but file information is available.
               </div>
             )}
 
-            <GenerateTestDialog
-              open={showGenerateDialog}
-              uploadedFiles={uploadedFiles}
-              processedFileContent={processedFileContent}
-              onGenerate={handleGenerateQuestionnaire}
-              onCancel={() => setShowGenerateDialog(false)}
-            />
-
-            {user.role === 'admin' && !showGenerateDialog && (
+            {user.role === 'admin' && (
               <Card className="mb-6 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
                 <CardHeader className="bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200 rounded-t-xl">
                   <CardTitle className="text-slate-900 font-poppins">{LanguageService.translate('dashboard.generateContent')}</CardTitle>
