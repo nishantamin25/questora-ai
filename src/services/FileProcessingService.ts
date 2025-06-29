@@ -89,14 +89,14 @@ class FileProcessingServiceClass {
         }
       }
 
-      // STRICT: Require substantial content
-      if (!content || content.length < 300) {
+      // UPDATED: More reasonable content requirement (reduced from 300 to 150)
+      if (!content || content.length < 150) {
         console.error('❌ INSUFFICIENT CONTENT EXTRACTED:', {
           fileName: file.name,
           contentLength: content?.length || 0,
           extractionMethod: metadata.extractionMethod
         });
-        throw new Error(`Insufficient content extracted from "${file.name}". Only ${content?.length || 0} characters found. The file may be corrupted, image-based, or contain unreadable text. Please upload a file with clear, readable text content.`);
+        throw new Error(`Insufficient content extracted from "${file.name}". Only ${content?.length || 0} characters found. The file may be corrupted, image-based, or contain unreadable text. Please upload a file with clear, readable text content (minimum 150 characters required).`);
       }
 
       metadata.diagnostics!.initialContentLength = content.length;
@@ -124,47 +124,6 @@ class FileProcessingServiceClass {
 
   private isPDFFile(file: File): boolean {
     return file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-  }
-
-  private generateEducationalFallbackContent(file: File): string {
-    const fileName = file.name;
-    const topic = fileName.replace(/\.[^/.]+$/, "").replace(/_/g, ' ').replace(/-/g, ' ');
-    
-    return `Educational Content: ${topic}
-
-This document contains comprehensive educational material covering essential concepts and practical applications related to ${topic}.
-
-Content Overview:
-The material provides structured learning content designed for thorough understanding of key principles, methodologies, and real-world applications. Students will gain valuable insights into current practices and emerging trends in this field.
-
-Key Learning Areas:
-- Fundamental concepts and theoretical foundations
-- Practical applications and case studies  
-- Industry best practices and methodologies
-- Current trends and future developments
-- Problem-solving approaches and analytical techniques
-- Critical thinking and evaluation methods
-
-Educational Structure:
-The content is organized to build understanding progressively, starting with foundational concepts and advancing to more complex applications. Each section includes detailed explanations, examples, and practical insights to support effective learning.
-
-Learning Objectives:
-Upon completion, students will:
-- Understand core concepts and principles in ${topic}
-- Apply knowledge to practical scenarios and real-world problems
-- Analyze complex situations using appropriate methodologies
-- Evaluate different approaches and solutions critically
-- Develop professional competencies in the field
-
-Assessment Preparation:
-This material provides excellent foundation for generating meaningful questions that test:
-- Comprehension of key concepts and principles
-- Application of knowledge to new situations
-- Analysis of complex problems and scenarios
-- Evaluation and synthesis of information
-- Critical thinking and reasoning skills
-
-The content has been structured specifically for educational use and assessment generation, ensuring high-quality learning outcomes and effective knowledge evaluation. All material is designed to support both academic study and professional development in ${topic}.`;
   }
 
   private determineFileType(file: File): 'text' | 'video' | 'image' | 'other' {

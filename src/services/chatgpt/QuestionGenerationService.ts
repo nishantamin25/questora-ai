@@ -56,10 +56,10 @@ export class QuestionGenerationService {
         isEducationallyViable: this.assessEducationalViability(processedContent.content)
       });
 
-      // UPDATED: More reasonable content requirement (reduced from 200 to 100)
-      if (!processedContent.content || processedContent.content.length < 100 || !this.assessEducationalViability(processedContent.content)) {
+      // UPDATED: Even more reasonable content requirement (reduced from 100 to 50)
+      if (!processedContent.content || processedContent.content.length < 50 || !this.assessEducationalViability(processedContent.content)) {
         console.error('❌ BLOCKED: Insufficient educational content for question generation');
-        throw new Error(`Question generation requires readable educational content (minimum 100 characters with educational value). Current content: ${processedContent.content?.length || 0} characters. The content appears to be corrupted, binary data, or lacks educational substance. Please upload a file with clear educational text.`);
+        throw new Error(`Question generation requires readable educational content (minimum 50 characters with educational value). Current content: ${processedContent.content?.length || 0} characters. The content appears to be corrupted, binary data, or lacks educational substance. Please upload a file with clear educational text.`);
       }
 
       // Generate questions with enhanced system prompt compliance
@@ -99,7 +99,7 @@ export class QuestionGenerationService {
 
   // UPDATED: More lenient content quality validation
   private validateContentQuality(fileContent: string): { isValid: boolean; reason: string } {
-    if (!fileContent || fileContent.length < 30) {
+    if (!fileContent || fileContent.length < 20) {
       return { isValid: false, reason: 'Content is empty or too short' };
     }
 
@@ -124,16 +124,16 @@ export class QuestionGenerationService {
 
     const corruptionRatio = corruptedCharCount / fileContent.length;
     
-    // UPDATED: More lenient - if more than 50% of content appears corrupted (was 20%)
-    if (corruptionRatio > 0.5) {
+    // UPDATED: Even more lenient - if more than 70% of content appears corrupted (was 50%)
+    if (corruptionRatio > 0.7) {
       return { 
         isValid: false, 
         reason: `Content appears heavily corrupted (${(corruptionRatio * 100).toFixed(1)}% corruption detected). This looks like binary data or PDF artifacts rather than readable text.` 
       };
     }
 
-    // UPDATED: More lenient pattern matching (increased threshold from 50 to 100)
-    if (totalMatches > 100) {
+    // UPDATED: More lenient pattern matching (increased threshold from 100 to 200)
+    if (totalMatches > 200) {
       return { 
         isValid: false, 
         reason: `Content contains too many technical/binary patterns (${totalMatches} patterns found). This appears to be raw file data rather than educational text.` 
@@ -143,9 +143,9 @@ export class QuestionGenerationService {
     return { isValid: true, reason: 'Content quality is acceptable' };
   }
 
-  // UPDATED: More lenient educational viability assessment
+  // UPDATED: Even more lenient educational viability assessment
   private assessEducationalViability(content: string): boolean {
-    if (!content || content.length < 50) {
+    if (!content || content.length < 30) {
       return false;
     }
 
@@ -156,27 +156,21 @@ export class QuestionGenerationService {
 
     const readableWordRatio = readableWords.length / content.split(/\s+/).length;
     
-    // UPDATED: More lenient - at least 30% of words should be readable (was 40%)
-    if (readableWordRatio < 0.3) {
+    // UPDATED: Even more lenient - at least 20% of words should be readable (was 30%)
+    if (readableWordRatio < 0.2) {
       console.log(`Low readable word ratio: ${(readableWordRatio * 100).toFixed(1)}%`);
       return false;
     }
 
     // Check for sentence-like structures
     const sentences = content.split(/[.!?]+/).filter(s => 
-      s.trim().length > 5 && /[A-Za-z]/.test(s)
+      s.trim().length > 3 && /[A-Za-z]/.test(s)
     );
 
-    // UPDATED: More lenient - at least 1 sentence (was 3)
-    if (sentences.length < 1) {
-      console.log('Insufficient sentence structures for educational content');
-      return false;
-    }
-
-    return true;
+    // UPDATED: Accept any content that has readable words, even without proper sentences
+    return readableWords.length >= 3; // At least 3 readable words
   }
 
-  // ENHANCED: Process uploaded content according to system prompt requirements
   private processUploadedContent(fileContent: string, userPrompt: string): {
     content: string;
     type: string;
@@ -216,7 +210,6 @@ export class QuestionGenerationService {
     };
   }
 
-  // NEW: Clean corrupted content
   private cleanCorruptedContent(content: string): string {
     // Remove obvious PDF artifacts and binary patterns
     let cleaned = content
@@ -237,7 +230,6 @@ export class QuestionGenerationService {
     return cleaned;
   }
 
-  // ... keep existing code (identifyContentType, extractKeyThemes, etc.) the same
   private identifyContentType(content: string): string {
     // Check for CSV-like structure
     if (content.includes(',') && content.split('\n').length > 3) {
@@ -281,7 +273,6 @@ export class QuestionGenerationService {
       .map(([word]) => word);
   }
 
-  // NEW: Stop word filtering
   private isStopWord(word: string): boolean {
     const stopWords = new Set([
       'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 
