@@ -377,16 +377,7 @@ Note: File processing failed, but file information is available.
       return;
     }
 
-    if (uploadedFiles.length === 0 && !processedFileContent.trim()) {
-      toast({
-        title: "Error",
-        description: "Please upload files before generating content",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    console.log('Generate button clicked with:', {
+    console.log('Generate button clicked, opening dialog with:', {
       uploadedFilesCount: uploadedFiles.length,
       processedContentLength: processedFileContent.length,
       hasFileContent: !!processedFileContent
@@ -792,7 +783,7 @@ Note: File processing failed, but file information is available.
                   
                   <Button
                     onClick={handleGenerateClick}
-                    disabled={isGenerating || isProcessingFiles || uploadedFiles.length === 0}
+                    disabled={isGenerating || isProcessingFiles}
                     className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
                   >
                     {isGenerating ? (
