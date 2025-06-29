@@ -1,4 +1,3 @@
-
 import { CourseMaterial } from './CourseTypes';
 import { ChatGPTService } from '../ChatGPTService';
 
@@ -92,7 +91,8 @@ export class CourseSectionCreator {
             id: this.generateId(),
             title: part.title || `Section ${i + 1}: ${contentAnalysis.keyTopics[i] || 'Key Concepts'}`,
             content: await this.enhanceContentForLearning(part.content, contentAnalysis),
-            type: 'lesson'
+            type: 'text',
+            order: i + 1
           });
         }
       }
@@ -116,7 +116,8 @@ export class CourseSectionCreator {
       id: this.generateId(),
       title: 'Introduction and Overview',
       content: await this.createIntroductionContent(prompt, fileContent, contentAnalysis),
-      type: 'lesson'
+      type: 'text',
+      order: 1
     });
     
     // Create topic-based sections
@@ -130,7 +131,8 @@ export class CourseSectionCreator {
           id: this.generateId(),
           title: `${topic.charAt(0).toUpperCase() + topic.slice(1)} - Deep Dive`,
           content: await this.enhanceContentForLearning(topicContent, contentAnalysis),
-          type: 'lesson'
+          type: 'text',
+          order: i + 2
         });
       }
     }
@@ -141,7 +143,8 @@ export class CourseSectionCreator {
         id: this.generateId(),
         title: 'Practical Applications and Examples',
         content: await this.createApplicationContent(fileContent, contentAnalysis),
-        type: 'lesson'
+        type: 'text',
+        order: sections.length + 1
       });
     }
     
@@ -150,7 +153,8 @@ export class CourseSectionCreator {
       id: this.generateId(),
       title: 'Key Takeaways and Summary',
       content: await this.createSummaryContent(fileContent, contentAnalysis),
-      type: 'lesson'
+      type: 'text',
+      order: sections.length + 1
     });
     
     return sections;
@@ -183,7 +187,8 @@ export class CourseSectionCreator {
           id: this.generateId(),
           title: `Learning Module ${i + 1}`,
           content: await this.enhanceContentForLearning(sectionContent, contentAnalysis),
-          type: 'lesson'
+          type: 'text',
+          order: i + 1
         });
       }
     }
