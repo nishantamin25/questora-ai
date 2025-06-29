@@ -1,4 +1,3 @@
-
 import { ChatGPTService } from './ChatGPTService';
 import { createWorker } from 'tesseract.js';
 
@@ -69,98 +68,54 @@ class FileProcessingServiceClass {
           metadata.extractionMethod = 'generic-text-extraction';
       }
 
-      // STEP 2: Record initial extraction results
-      metadata.diagnostics!.initialContentLength = content.length;
-      metadata.diagnostics!.contentPreview = content.substring(0, 200) + '...';
-      metadata.diagnostics!.validationStage = 'initial-extraction';
-
-      console.log('📊 DIAGNOSTICS - Initial Extraction:', {
-        fileName: file.name,
-        contentLength: content.length,
-        contentPreview: content.substring(0, 150) + '...',
-        extractionMethod: metadata.extractionMethod
-      });
-
-      // STEP 3: Check if OCR fallback is needed (FIXED LOGIC)
-      const shouldUseOCR = this.shouldUseOCRFallback(file, content);
-      metadata.diagnostics!.ocrQualificationCheck = shouldUseOCR;
+      // STEP 2: CRITICAL - Validate content is actually readable text
+      console.log('🔍 STEP 2: Content readability validation...');
+      const isReadable = this.validateContentReadability(content);
       
-      console.log('🔍 OCR QUALIFICATION CHECK:', shouldUseOCR);
-
-      if (!this.isMinimallyReadable(content) && shouldUseOCR.qualifiesForOCR) {
-        console.log('🔄 TRIGGERING OCR FALLBACK - Content insufficient, attempting OCR...');
-        metadata.ocrAttempted = true;
-        metadata.diagnostics!.validationStage = 'ocr-fallback';
+      if (!isReadable.isValid) {
+        console.error('❌ CONTENT VALIDATION FAILED:', isReadable.reason);
+        console.error('Content sample:', content.substring(0, 200));
         
-        try {
-          const ocrContent = await this.performOCRExtraction(file);
+        // Try OCR if content is corrupted
+        if (this.shouldUseOCRFallback(file, content).qualifiesForOCR) {
+          console.log('🔄 Attempting OCR due to corrupted content...');
+          metadata.ocrAttempted = true;
           
-          console.log('📊 OCR EXTRACTION RESULT:', {
-            ocrContentLength: ocrContent.length,
-            ocrPreview: ocrContent.substring(0, 150) + '...'
-          });
-          
-          if (ocrContent && ocrContent.length > 50) {
-            console.log('✅ OCR SUCCESSFUL - Using OCR content');
-            content = ocrContent;
-            metadata.extractionMethod += '-ocr-success';
-            metadata.ocrSuccessful = true;
-          } else {
-            console.log('❌ OCR PRODUCED INSUFFICIENT CONTENT');
-            metadata.ocrSuccessful = false;
-            metadata.ocrError = 'OCR completed but produced insufficient content';
+          try {
+            const ocrContent = await this.performOCRExtraction(file);
+            const ocrReadable = this.validateContentReadability(ocrContent);
+            
+            if (ocrReadable.isValid) {
+              console.log('✅ OCR produced readable content');
+              content = ocrContent;
+              metadata.ocrSuccessful = true;
+              metadata.extractionMethod += '-ocr-success';
+            } else {
+              throw new Error(`OCR also failed readability check: ${ocrReadable.reason}`);
+            }
+          } catch (ocrError) {
+            metadata.ocrError = ocrError instanceof Error ? ocrError.message : 'OCR failed';
+            throw new Error(`File contains corrupted or unreadable content. OCR attempt failed: ${metadata.ocrError}`);
           }
-        } catch (ocrError) {
-          console.error('❌ OCR PROCESSING FAILED:', ocrError);
-          metadata.ocrSuccessful = false;
-          metadata.ocrError = ocrError instanceof Error ? ocrError.message : 'OCR processing failed';
+        } else {
+          throw new Error(`File content is corrupted or unreadable: ${isReadable.reason}. This appears to be binary data or corrupted text that cannot be processed for educational content.`);
         }
       }
 
-      // STEP 4: Final content validation (RELAXED)
+      // STEP 3: Final validation
+      metadata.diagnostics!.initialContentLength = content.length;
+      metadata.diagnostics!.contentPreview = content.substring(0, 200) + '...';
       metadata.diagnostics!.validationStage = 'final-validation';
-      
-      console.log('📊 FINAL VALIDATION CHECK:', {
-        contentLength: content.length,
-        isMinimallyReadable: this.isMinimallyReadable(content),
-        hasBasicContent: this.hasBasicContent(content)
-      });
 
-      // RELAXED VALIDATION: Accept content if it has any reasonable amount
-      if (!this.hasBasicContent(content)) {
-        // If we still don't have basic content, provide detailed diagnostic error
-        const diagnosticInfo = {
-          fileName: file.name,
-          fileSize: file.size,
-          initialContentLength: metadata.diagnostics!.initialContentLength,
-          finalContentLength: content.length,
-          ocrAttempted: metadata.ocrAttempted,
-          ocrSuccessful: metadata.ocrSuccessful,
-          ocrError: metadata.ocrError,
-          contentPreview: content.substring(0, 300),
-          extractionMethod: metadata.extractionMethod
-        };
-
-        console.error('❌ FINAL DIAGNOSTIC ERROR:', diagnosticInfo);
-        
-        throw new Error(`File processing failed with detailed diagnostics:
-- File: ${file.name} (${file.size} bytes)
-- Initial extraction: ${metadata.diagnostics!.initialContentLength} characters
-- Final content: ${content.length} characters
-- OCR attempted: ${metadata.ocrAttempted ? 'Yes' : 'No'}
-- OCR successful: ${metadata.ocrSuccessful ? 'Yes' : 'No'}
-- OCR error: ${metadata.ocrError || 'None'}
-- Extraction method: ${metadata.extractionMethod}
-- Content preview: "${content.substring(0, 200)}"
-
-This file appears to contain no readable text content that can be processed for course generation.`);
+      if (!this.hasEducationalValue(content)) {
+        throw new Error(`The extracted content does not appear to contain meaningful educational material. Content length: ${content.length} characters. Please ensure your file contains readable text suitable for course generation.`);
       }
 
       console.log('✅ FILE PROCESSING SUCCESSFUL:', {
         fileName: file.name,
         finalContentLength: content.length,
         extractionMethod: metadata.extractionMethod,
-        ocrUsed: metadata.ocrSuccessful
+        isReadable: true
       });
 
       // Try ChatGPT enhancement for substantial content
@@ -190,7 +145,98 @@ This file appears to contain no readable text content that can be processed for 
     };
   }
 
-  // FIXED: OCR qualification logic
+  // NEW: Strict content readability validation
+  private validateContentReadability(content: string): { isValid: boolean; reason: string } {
+    if (!content || content.length < 50) {
+      return { isValid: false, reason: 'Content too short or empty' };
+    }
+
+    // Check for binary/corrupted data patterns
+    const binaryPatterns = [
+      /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/g, // Control characters and high ASCII
+      /obj\s*<<.*?>>/g, // PDF object patterns
+      /endobj|endstream/g, // PDF structure
+      /^\*[0-9]+&/g, // Binary markers
+      /[^\x20-\x7E\s]/g // Non-printable characters except whitespace
+    ];
+
+    let corruptedCharCount = 0;
+    for (const pattern of binaryPatterns) {
+      const matches = content.match(pattern);
+      if (matches) {
+        corruptedCharCount += matches.join('').length;
+      }
+    }
+
+    const corruptionRatio = corruptedCharCount / content.length;
+    
+    if (corruptionRatio > 0.3) {
+      return { 
+        isValid: false, 
+        reason: `High corruption ratio: ${(corruptionRatio * 100).toFixed(1)}% corrupted characters. This appears to be binary or encoded data.` 
+      };
+    }
+
+    // Check for readable words
+    const words = content.split(/\s+/).filter(word => 
+      /^[a-zA-Z]{2,}$/.test(word) && word.length > 1
+    );
+    
+    const wordRatio = words.length / content.split(/\s+/).length;
+    
+    if (wordRatio < 0.3) {
+      return { 
+        isValid: false, 
+        reason: `Low readable word ratio: ${(wordRatio * 100).toFixed(1)}%. Content appears to be corrupted or non-textual.` 
+      };
+    }
+
+    // Check for reasonable sentence structure
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    if (sentences.length < 3) {
+      return { 
+        isValid: false, 
+        reason: 'Content lacks proper sentence structure for educational material.' 
+      };
+    }
+
+    return { isValid: true, reason: 'Content is readable' };
+  }
+
+  // ENHANCED: Educational value assessment
+  private hasEducationalValue(content: string): boolean {
+    if (!content || content.length < 100) {
+      return false;
+    }
+
+    // Check for educational indicators
+    const educationalKeywords = [
+      'learn', 'study', 'understand', 'concept', 'principle', 'method', 'process',
+      'analysis', 'example', 'definition', 'theory', 'practice', 'skill',
+      'knowledge', 'information', 'data', 'research', 'conclusion'
+    ];
+
+    const lowercaseContent = content.toLowerCase();
+    const keywordCount = educationalKeywords.filter(keyword => 
+      lowercaseContent.includes(keyword)
+    ).length;
+
+    // Must have at least some educational keywords
+    if (keywordCount < 2) {
+      console.log('Content lacks educational keywords');
+      return false;
+    }
+
+    // Check for coherent paragraphs
+    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 50);
+    if (paragraphs.length < 2) {
+      console.log('Content lacks proper paragraph structure');
+      return false;
+    }
+
+    return true;
+  }
+
   private shouldUseOCRFallback(file: File, content: string): any {
     const fileName = file.name.toLowerCase();
     const isPDF = fileName.endsWith('.pdf') || file.type === 'application/pdf';
@@ -258,29 +304,6 @@ This file appears to contain no readable text content that can be processed for 
     }
   }
 
-  // RELAXED: Basic content check
-  private hasBasicContent(content: string): boolean {
-    if (!content || content.length < 50) {
-      return false;
-    }
-    
-    const words = content.split(/\s+/).filter(word => /^[a-zA-Z]{2,}$/.test(word));
-    return words.length >= 5; // Very minimal requirement
-  }
-
-  // RELAXED: Minimal readability check  
-  private isMinimallyReadable(content: string): boolean {
-    if (!content || content.length < 100) {
-      return false;
-    }
-    
-    const readableChars = (content.match(/[a-zA-Z0-9\s.,!?;:()\-'"]/g) || []).length;
-    const readableRatio = readableChars / content.length;
-    const words = content.split(/\s+/).filter(word => /^[a-zA-Z]{2,}$/.test(word));
-    
-    return readableRatio > 0.6 && words.length >= 10;
-  }
-
   private async getOCRWorker(): Promise<any> {
     if (!this.ocrWorker) {
       console.log('🔄 Initializing OCR worker...');
@@ -325,6 +348,7 @@ This file appears to contain no readable text content that can be processed for 
     }
   }
 
+  // IMPROVED: Better PDF text extraction with corruption detection
   private async processAdvancedPdfFile(file: File): Promise<{ content: string; method: string }> {
     console.log('🔍 Processing PDF with advanced text extraction...');
     
@@ -335,162 +359,146 @@ This file appears to contain no readable text content that can be processed for 
       let bestContent = '';
       let bestMethod = '';
       
-      // Strategy 1: UTF-8 text extraction
+      // Strategy 1: Clean UTF-8 extraction
       try {
-        console.log('Trying UTF-8 extraction...');
-        const utf8Content = await this.extractPdfTextUTF8(uint8Array);
-        if (utf8Content && utf8Content.length > 100) {
+        console.log('Trying clean UTF-8 extraction...');
+        const utf8Content = await this.extractCleanPdfText(uint8Array);
+        if (utf8Content && this.validateContentReadability(utf8Content).isValid) {
           bestContent = utf8Content;
-          bestMethod = 'utf8-text-extraction';
-          console.log('✅ UTF-8 extraction produced content:', utf8Content.length, 'characters');
+          bestMethod = 'clean-utf8-extraction';
+          console.log('✅ Clean UTF-8 extraction successful:', utf8Content.length, 'characters');
         }
       } catch (error) {
-        console.log('UTF-8 extraction failed:', error);
+        console.log('Clean UTF-8 extraction failed:', error);
       }
 
-      // Strategy 2: Latin-1 text extraction
+      // Strategy 2: Pattern-based extraction with validation
       if (bestContent.length < 500) {
         try {
-          console.log('Trying Latin-1 extraction...');
-          const latin1Content = await this.extractPdfTextLatin1(uint8Array);
-          if (latin1Content && latin1Content.length > bestContent.length) {
-            bestContent = latin1Content;
-            bestMethod = 'latin1-text-extraction';
-            console.log('✅ Latin-1 extraction produced content:', latin1Content.length, 'characters');
-          }
-        } catch (error) {
-          console.log('Latin-1 extraction failed:', error);
-        }
-      }
-
-      // Strategy 3: Pattern-based extraction
-      if (bestContent.length < 500) {
-        try {
-          console.log('Trying pattern-based extraction...');
-          const patternContent = await this.extractPdfTextPatterns(uint8Array);
-          if (patternContent && patternContent.length > bestContent.length) {
+          console.log('Trying validated pattern extraction...');
+          const patternContent = await this.extractValidatedPdfText(uint8Array);
+          if (patternContent && this.validateContentReadability(patternContent).isValid) {
             bestContent = patternContent;
-            bestMethod = 'pattern-based-extraction';
-            console.log('✅ Pattern extraction produced content:', patternContent.length, 'characters');
+            bestMethod = 'validated-pattern-extraction';
+            console.log('✅ Pattern extraction successful:', patternContent.length, 'characters');
           }
         } catch (error) {
           console.log('Pattern extraction failed:', error);
         }
       }
 
-      console.log(`PDF text extraction result: ${bestMethod}, content length: ${bestContent.length}`);
+      console.log(`PDF extraction result: ${bestMethod}, content length: ${bestContent.length}`);
       
       return {
         content: bestContent || '',
-        method: bestMethod || 'text-extraction-no-content'
+        method: bestMethod || 'pdf-extraction-failed'
       };
       
     } catch (error) {
       console.error('PDF processing failed:', error);
       return {
         content: '',
-        method: 'text-extraction-failed'
+        method: 'pdf-extraction-error'
       };
     }
   }
 
-  private async extractPdfTextUTF8(uint8Array: Uint8Array): Promise<string> {
+  // NEW: Clean PDF text extraction
+  private async extractCleanPdfText(uint8Array: Uint8Array): Promise<string> {
     const decoder = new TextDecoder('utf-8', { fatal: false });
     const pdfText = decoder.decode(uint8Array);
-    return this.extractTextFromPdfString(pdfText);
-  }
-
-  private async extractPdfTextLatin1(uint8Array: Uint8Array): Promise<string> {
-    const decoder = new TextDecoder('latin1', { fatal: false });
-    const pdfText = decoder.decode(uint8Array);
-    return this.extractTextFromPdfString(pdfText);
-  }
-
-  private async extractPdfTextPatterns(uint8Array: Uint8Array): Promise<string> {
-    let pdfString = '';
-    for (let i = 0; i < uint8Array.length; i++) {
-      pdfString += String.fromCharCode(uint8Array[i]);
-    }
-    return this.extractTextFromPdfString(pdfString);
-  }
-
-  private extractTextFromPdfString(pdfText: string): string {
-    const extractedTexts = new Set<string>();
     
-    // Strategy 1: Extract text from parentheses (PDF text objects)
-    const textInParentheses = pdfText.match(/\(([^)]{10,})\)/g) || [];
-    textInParentheses.forEach(match => {
+    // Look for clean text patterns only
+    const cleanTexts = new Set<string>();
+    
+    // Extract text from simple parentheses (most reliable)
+    const simpleTextMatches = pdfText.match(/\(([A-Za-z\s.,!?;:]{20,})\)/g) || [];
+    
+    simpleTextMatches.forEach(match => {
       const text = match.slice(1, -1)
         .replace(/\\n/g, ' ')
         .replace(/\\r/g, ' ')
         .replace(/\\t/g, ' ')
-        .replace(/\\\(/g, '(')
-        .replace(/\\\)/g, ')')
-        .replace(/\\\\/g, '\\')
         .replace(/\s+/g, ' ')
         .trim();
       
-      if (text.length > 5 && /[a-zA-Z]{3,}/.test(text) && !/^[\d\s\.\-\(\)]+$/.test(text)) {
-        extractedTexts.add(text);
+      // Only accept clearly readable text
+      if (text.length > 15 && /^[A-Za-z\s.,!?;:'\-()]+$/.test(text)) {
+        const wordCount = text.split(/\s+/).filter(w => /^[A-Za-z]{2,}$/.test(w)).length;
+        if (wordCount >= 3) {
+          cleanTexts.add(text);
+        }
       }
     });
     
-    // Strategy 2: Extract text from array format
-    const arrayTexts = pdfText.match(/\[([^\]]{20,})\]/g) || [];
-    arrayTexts.forEach(match => {
-      const content = match.slice(1, -1);
-      const textParts = content.match(/\(([^)]{5,})\)/g) || [];
-      textParts.forEach(part => {
-        const text = part.slice(1, -1).replace(/\s+/g, ' ').trim();
-        if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
-          extractedTexts.add(text);
+    return Array.from(cleanTexts).join(' ').trim();
+  }
+
+  // NEW: Validated PDF text extraction
+  private async extractValidatedPdfText(uint8Array: Uint8Array): Promise<string> {
+    let pdfString = '';
+    // Only process reasonable portion to avoid memory issues
+    const processingLength = Math.min(uint8Array.length, 1000000); // 1MB max
+    
+    for (let i = 0; i < processingLength; i++) {
+      const char = uint8Array[i];
+      // Only include printable ASCII characters
+      if ((char >= 32 && char <= 126) || char === 10 || char === 13) {
+        pdfString += String.fromCharCode(char);
+      }
+    }
+    
+    return this.extractTextFromValidatedPdfString(pdfString);
+  }
+
+  private extractTextFromValidatedPdfString(pdfText: string): string {
+    const extractedTexts = new Set<string>();
+    
+    // Only look for clearly readable text patterns
+    const readableTextPatterns = [
+      /\(([A-Za-z][A-Za-z\s.,!?;:'\-()]{15,})\)/g,
+      /BT\s+[^ET]*\(([A-Za-z][A-Za-z\s.,!?;:'\-()]{15,})\)[^ET]*ET/g
+    ];
+    
+    readableTextPatterns.forEach(pattern => {
+      const matches = pdfText.match(pattern) || [];
+      matches.forEach(match => {
+        const textMatch = match.match(/\(([^)]+)\)/);
+        if (textMatch) {
+          const text = textMatch[1]
+            .replace(/\\n/g, ' ')
+            .replace(/\\r/g, ' ')
+            .replace(/\\t/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Strict validation for clean text
+          if (text.length > 15 && 
+              /^[A-Za-z]/.test(text) && 
+              /^[A-Za-z\s.,!?;:'\-()]+$/.test(text)) {
+            
+            const words = text.split(/\s+/).filter(w => /^[A-Za-z]{2,}$/.test(w));
+            if (words.length >= 4) { // At least 4 real words
+              extractedTexts.add(text);
+            }
+          }
         }
       });
     });
     
-    // Strategy 3: Extract from Tj and TJ operators
-    const tjTexts = pdfText.match(/\(([^)]{8,})\)\s*Tj/g) || [];
-    tjTexts.forEach(match => {
-      const text = match.replace(/\)\s*Tj$/, '').slice(1).replace(/\s+/g, ' ').trim();
-      if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
-        extractedTexts.add(text);
-      }
-    });
+    const validTexts = Array.from(extractedTexts)
+      .filter(text => text.length > 20)
+      .sort((a, b) => b.length - a.length);
     
-    // Strategy 4: Look for readable sequences between text markers
-    const btEtBlocks = pdfText.match(/BT(.*?)ET/gs) || [];
-    btEtBlocks.forEach(block => {
-      const cleanBlock = block.replace(/^BT|ET$/g, '').trim();
-      const textMatches = cleanBlock.match(/\(([^)]{8,})\)/g) || [];
-      textMatches.forEach(match => {
-        const text = match.slice(1, -1).replace(/\s+/g, ' ').trim();
-        if (text.length > 5 && /[a-zA-Z]{3,}/.test(text)) {
-          extractedTexts.add(text);
-        }
-      });
-    });
-    
-    const textArray = Array.from(extractedTexts).filter(text => 
-      text.length > 5 && 
-      /[a-zA-Z]/.test(text) &&
-      !text.match(/^\d+[\.\s]*$/) &&
-      !text.match(/^[\/\\\(\)\[\]<>]+$/)
-    );
-    
-    textArray.sort((a, b) => b.length - a.length);
-    
-    const extractedContent = textArray.join(' ').replace(/\s+/g, ' ').trim();
-    
-    console.log(`PDF text extraction: ${extractedTexts.size} fragments found, ${extractedContent.length} characters total`);
-    
-    return extractedContent;
+    return validTexts.join(' ').trim();
   }
 
   private async processWordFile(file: File): Promise<{ content: string; method: string }> {
     try {
       const content = await this.readFileAsText(file);
       
-      if (this.isMinimallyReadable(content) && content.length > 50) {
+      const readabilityCheck = this.validateContentReadability(content);
+      if (readabilityCheck.isValid && content.length > 50) {
         return {
           content,
           method: 'word-file-reading'
@@ -547,13 +555,14 @@ Educational Elements:
     try {
       const content = await this.readFileAsText(file);
       
-      if (this.isMinimallyReadable(content)) {
+      const readabilityCheck = this.validateContentReadability(content);
+      if (readabilityCheck.isValid) {
         return content;
       } else {
-        throw new Error('Content not readable');
+        throw new Error(`Content readability check failed: ${readabilityCheck.reason}`);
       }
     } catch (error) {
-      throw new Error(`Unable to extract meaningful content from ${file.name}`);
+      throw new Error(`Unable to extract meaningful content from ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

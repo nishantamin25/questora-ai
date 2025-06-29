@@ -1,4 +1,3 @@
-
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -39,6 +38,13 @@ export class QuestionGenerationService {
         throw new Error('OpenAI API key not configured. Please set your API key in settings.');
       }
 
+      // CRITICAL: Validate content quality before processing
+      const contentValidation = this.validateContentQuality(fileContent);
+      if (!contentValidation.isValid) {
+        console.error('❌ CONTENT QUALITY VALIDATION FAILED:', contentValidation.reason);
+        throw new Error(`Content quality validation failed: ${contentValidation.reason}. The uploaded file appears to contain corrupted or unreadable data. Please upload a file with clear, readable text content.`);
+      }
+
       // ENHANCED: Process and validate content according to system prompt requirements
       const processedContent = this.processUploadedContent(fileContent, prompt);
       
@@ -46,13 +52,14 @@ export class QuestionGenerationService {
         originalLength: fileContent.length,
         processedLength: processedContent.content.length,
         contentType: processedContent.type,
-        keyThemes: processedContent.keyThemes.slice(0, 3)
+        keyThemes: processedContent.keyThemes.slice(0, 3),
+        isEducationallyViable: this.assessEducationalViability(processedContent.content)
       });
 
-      // REQUIREMENT: Block without substantial file content
-      if (!processedContent.content || processedContent.content.length < 200) {
-        console.error('❌ BLOCKED: Insufficient file content for question generation');
-        throw new Error(`Question generation requires substantial file content (minimum 200 characters). Current content: ${processedContent.content?.length || 0} characters. Upload a file with readable text to generate accurate questions based on the system prompt requirements.`);
+      // REQUIREMENT: Block without substantial readable content
+      if (!processedContent.content || processedContent.content.length < 200 || !this.assessEducationalViability(processedContent.content)) {
+        console.error('❌ BLOCKED: Insufficient educational content for question generation');
+        throw new Error(`Question generation requires substantial, readable educational content (minimum 200 characters with educational value). Current content: ${processedContent.content?.length || 0} characters. The content appears to be corrupted, binary data, or lacks educational substance. Please upload a file with clear educational text.`);
       }
 
       // Generate questions with enhanced system prompt compliance
@@ -90,6 +97,85 @@ export class QuestionGenerationService {
     }
   }
 
+  // NEW: Content quality validation to catch corrupted data
+  private validateContentQuality(fileContent: string): { isValid: boolean; reason: string } {
+    if (!fileContent || fileContent.length < 50) {
+      return { isValid: false, reason: 'Content is empty or too short' };
+    }
+
+    // Check for binary/corrupted data patterns that got through file processing
+    const corruptionIndicators = [
+      /obj\s*<<.*?>>/g, // PDF object patterns
+      /endobj|endstream/g, // PDF structure markers
+      /^\*[0-9]+&/gm, // Binary markers
+      /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, // Control characters
+      /[^\x20-\x7E\s\u00A0-\uFFFF]/g // Non-printable characters (excluding extended Unicode)
+    ];
+
+    let corruptedCharCount = 0;
+    let totalMatches = 0;
+
+    for (const pattern of corruptionIndicators) {
+      const matches = fileContent.match(pattern);
+      if (matches) {
+        totalMatches += matches.length;
+        corruptedCharCount += matches.join('').length;
+      }
+    }
+
+    const corruptionRatio = corruptedCharCount / fileContent.length;
+    
+    // If more than 20% of content appears corrupted
+    if (corruptionRatio > 0.2) {
+      return { 
+        isValid: false, 
+        reason: `Content appears corrupted (${(corruptionRatio * 100).toFixed(1)}% corruption detected). This looks like binary data or PDF artifacts rather than readable text.` 
+      };
+    }
+
+    // Check if content has too many technical/binary patterns
+    if (totalMatches > 50) {
+      return { 
+        isValid: false, 
+        reason: `Content contains too many technical/binary patterns (${totalMatches} patterns found). This appears to be raw file data rather than educational text.` 
+      };
+    }
+
+    return { isValid: true, reason: 'Content quality is acceptable' };
+  }
+
+  // NEW: Educational viability assessment
+  private assessEducationalViability(content: string): boolean {
+    if (!content || content.length < 100) {
+      return false;
+    }
+
+    // Count readable words (at least 2 characters, only letters)
+    const readableWords = content.split(/\s+/).filter(word => 
+      /^[A-Za-z]{2,}$/.test(word)
+    );
+
+    const readableWordRatio = readableWords.length / content.split(/\s+/).length;
+    
+    // At least 40% of words should be readable
+    if (readableWordRatio < 0.4) {
+      console.log(`Low readable word ratio: ${(readableWordRatio * 100).toFixed(1)}%`);
+      return false;
+    }
+
+    // Check for sentence-like structures
+    const sentences = content.split(/[.!?]+/).filter(s => 
+      s.trim().length > 10 && /[A-Za-z]/.test(s)
+    );
+
+    if (sentences.length < 3) {
+      console.log('Insufficient sentence structures for educational content');
+      return false;
+    }
+
+    return true;
+  }
+
   // ENHANCED: Process uploaded content according to system prompt requirements
   private processUploadedContent(fileContent: string, userPrompt: string): {
     content: string;
@@ -100,26 +186,29 @@ export class QuestionGenerationService {
   } {
     console.log('🔍 PROCESSING CONTENT per System Prompt Requirements...');
     
+    // Clean the content first - remove obvious corruption artifacts
+    const cleanedContent = this.cleanCorruptedContent(fileContent);
+    
     // Identify file type and structure based on content patterns
-    const contentType = this.identifyContentType(fileContent);
+    const contentType = this.identifyContentType(cleanedContent);
     
     // Extract key themes and concepts
-    const keyThemes = this.extractKeyThemes(fileContent);
+    const keyThemes = this.extractKeyThemes(cleanedContent);
     
     // Analyze document structure
-    const structure = this.analyzeDocumentStructure(fileContent);
+    const structure = this.analyzeDocumentStructure(cleanedContent);
     
     // Create metadata for better question generation
     const metadata = {
-      wordCount: fileContent.split(/\s+/).length,
-      hasHeadings: /^#|\*\*|_{2,}/.test(fileContent),
-      hasNumericData: /\d+/.test(fileContent),
-      hasTables: /\|.*\|/.test(fileContent) || /\t.*\t/.test(fileContent),
-      complexity: this.assessContentComplexity(fileContent)
+      wordCount: cleanedContent.split(/\s+/).length,
+      hasHeadings: /^#|\*\*|_{2,}/.test(cleanedContent),
+      hasNumericData: /\d+/.test(cleanedContent),
+      hasTables: /\|.*\|/.test(cleanedContent) || /\t.*\t/.test(cleanedContent),
+      complexity: this.assessContentComplexity(cleanedContent)
     };
 
     return {
-      content: fileContent,
+      content: cleanedContent,
       type: contentType,
       keyThemes,
       structure,
@@ -127,6 +216,28 @@ export class QuestionGenerationService {
     };
   }
 
+  // NEW: Clean corrupted content
+  private cleanCorruptedContent(content: string): string {
+    // Remove obvious PDF artifacts and binary patterns
+    let cleaned = content
+      .replace(/obj\s*<<.*?>>/g, ' ') // PDF objects
+      .replace(/endobj|endstream/g, ' ') // PDF markers
+      .replace(/^\*[0-9]+&.*$/gm, ' ') // Binary lines
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ') // Control characters
+      .replace(/\/[A-Z][A-Za-z0-9]*\s+/g, ' ') // PDF commands like /Font /Type
+      .replace(/<<[^>]*>>/g, ' ') // PDF dictionaries
+      .replace(/\s+/g, ' ') // Multiple spaces
+      .trim();
+
+    // If cleaned content is too short, return original (might be legitimate technical content)
+    if (cleaned.length < content.length * 0.1) {
+      return content;
+    }
+
+    return cleaned;
+  }
+
+  // ... keep existing code (identifyContentType, extractKeyThemes, etc.) the same
   private identifyContentType(content: string): string {
     // Check for CSV-like structure
     if (content.includes(',') && content.split('\n').length > 3) {
@@ -148,10 +259,15 @@ export class QuestionGenerationService {
   }
 
   private extractKeyThemes(content: string): string[] {
+    // Focus on extracting readable words only
     const words = content.toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
-      .filter(word => word.length > 4);
+      .filter(word => 
+        word.length > 4 && 
+        /^[a-z]+$/.test(word) && // Only alphabetic words
+        !this.isStopWord(word)
+      );
     
     const wordCount: { [key: string]: number } = {};
     words.forEach(word => {
@@ -159,9 +275,27 @@ export class QuestionGenerationService {
     });
     
     return Object.entries(wordCount)
+      .filter(([, count]) => count >= 2) // Must appear at least twice
       .sort(([,a], [,b]) => b - a)
       .slice(0, 10)
       .map(([word]) => word);
+  }
+
+  // NEW: Stop word filtering
+  private isStopWord(word: string): boolean {
+    const stopWords = new Set([
+      'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 
+      'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 
+      'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 
+      'did', 'come', 'make', 'than', 'time', 'very', 'what', 'with', 'have', 
+      'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'will', 
+      'said', 'each', 'which', 'their', 'would', 'there', 'think', 'where', 
+      'being', 'every', 'great', 'might', 'shall', 'still', 'those', 'under', 
+      'while', 'could', 'should', 'through', 'during', 'before', 'after', 
+      'above', 'below', 'between', 'among', 'within'
+    ]);
+    
+    return stopWords.has(word);
   }
 
   private analyzeDocumentStructure(content: string): any {
@@ -174,30 +308,43 @@ export class QuestionGenerationService {
       hasConclusion: false
     };
     
-    // Look for section headers
+    // Look for section headers - only clean, readable ones
     lines.forEach(line => {
-      if (/^#+\s|^\d+\.\s|^[A-Z][^a-z]*:/.test(line.trim())) {
-        structure.sections.push(line.trim());
+      const trimmed = line.trim();
+      if (trimmed.length > 5 && trimmed.length < 100) {
+        if (/^#+\s[A-Za-z]/.test(trimmed) || // Markdown headers
+            /^\d+\.\s[A-Za-z]/.test(trimmed) || // Numbered sections
+            /^[A-Z][A-Za-z\s]{5,50}:$/.test(trimmed)) { // Title case headers with colon
+          structure.sections.push(trimmed);
+        }
       }
     });
     
-    // Check for introduction/conclusion
-    structure.hasIntroduction = /introduction|overview|summary/i.test(content.substring(0, 500));
-    structure.hasConclusion = /conclusion|summary|final/i.test(content.substring(-500));
+    // Check for introduction/conclusion in clean text only
+    const cleanStart = content.substring(0, 500).toLowerCase();
+    const cleanEnd = content.substring(content.length - 500).toLowerCase();
+    
+    structure.hasIntroduction = /\b(introduction|overview|summary)\b/.test(cleanStart);
+    structure.hasConclusion = /\b(conclusion|summary|final)\b/.test(cleanEnd);
     
     return structure;
   }
 
   private assessContentComplexity(content: string): 'basic' | 'intermediate' | 'advanced' {
-    const technicalTerms = /algorithm|methodology|analysis|framework|implementation|optimization/gi;
-    const academicTerms = /research|hypothesis|conclusion|evidence|study|findings/gi;
-    const complexSentences = content.split('.').filter(s => s.split(',').length > 3).length;
+    // Only assess complexity on readable content
+    const readableContent = content.replace(/[^\w\s.,!?;:]/g, ' ').replace(/\s+/g, ' ');
     
-    const technicalCount = (content.match(technicalTerms) || []).length;
-    const academicCount = (content.match(academicTerms) || []).length;
-    const avgWordsPerSentence = content.split(/[.!?]/).reduce((sum, s) => sum + s.split(' ').length, 0) / content.split(/[.!?]/).length;
+    const technicalTerms = /\b(algorithm|methodology|analysis|framework|implementation|optimization)\b/gi;
+    const academicTerms = /\b(research|hypothesis|conclusion|evidence|study|findings)\b/gi;
     
-    if (technicalCount > 5 || academicCount > 5 || avgWordsPerSentence > 20 || complexSentences > 10) {
+    const technicalCount = (readableContent.match(technicalTerms) || []).length;
+    const academicCount = (readableContent.match(academicTerms) || []).length;
+    
+    const sentences = readableContent.split(/[.!?]/).filter(s => s.trim().length > 10);
+    const avgWordsPerSentence = sentences.length > 0 ? 
+      sentences.reduce((sum, s) => sum + s.split(' ').length, 0) / sentences.length : 0;
+    
+    if (technicalCount > 5 || academicCount > 5 || avgWordsPerSentence > 20) {
       return 'advanced';
     } else if (technicalCount > 2 || academicCount > 2 || avgWordsPerSentence > 15) {
       return 'intermediate';
@@ -216,93 +363,69 @@ export class QuestionGenerationService {
   ): Promise<any[]> {
     console.log('🚀 PERFORMING ENHANCED GENERATION following System Prompt...');
     
-    // ENHANCED: Create comprehensive system prompt that strictly follows your requirements
+    // ENHANCED: Create comprehensive system prompt with content validation
     const comprehensiveSystemPrompt = `**System Role:**
-You are an AI questionnaire generation assistant designed to create accurate, high-quality, and contextually relevant questions from user-uploaded files such as PDFs, CSVs, text files, Word documents, or similar. Your goal is to parse the content, understand its structure and semantics, and generate a suitable set of questions based on user-defined preferences or inferred best practices.
+You are an AI questionnaire generation assistant designed to create accurate, high-quality, and contextually relevant questions from user-uploaded educational content. You MUST generate questions based STRICTLY on the provided document content.
 
-**Content Analysis Summary:**
+**CRITICAL CONTENT VALIDATION:**
+The content has been pre-validated and cleaned to ensure educational quality:
 - Content Type: ${processedContent.type}
 - Word Count: ${processedContent.metadata.wordCount}
-- Key Themes: ${processedContent.keyThemes.join(', ')}
+- Key Educational Themes: ${processedContent.keyThemes.join(', ')}
 - Complexity Level: ${processedContent.metadata.complexity}
-- Has Structured Sections: ${processedContent.structure.sections.length > 0}
-- Content Length: ${processedContent.content.length} characters
+- Document Structure: ${processedContent.structure.sections.length} clear sections identified
 
-**Your Responsibilities:**
+**STRICT REQUIREMENTS:**
+1. Generate EXACTLY ${numberOfQuestions} multiple-choice questions - this is non-negotiable
+2. Base ALL questions strictly on the provided document content - do NOT add external knowledge
+3. Each question must reference specific information from the document
+4. Use ${difficulty} difficulty level appropriate for the content complexity
+5. Create 4 plausible answer choices for each question
+6. Ensure the correct answer is clearly identifiable from the document content
+7. All questions must be unique and cover different aspects of the content
 
-1. **Content Extraction & Understanding:**
-   * The content has been pre-extracted and analyzed
-   * Key themes identified: ${processedContent.keyThemes.slice(0, 5).join(', ')}
-   * Document structure: ${processedContent.structure.sections.length} sections detected
-   * Content complexity: ${processedContent.metadata.complexity}
+**Question Quality Standards:**
+- Questions must be clear, specific, and unambiguous
+- Incorrect options must be plausible but clearly wrong based on the document
+- Avoid questions that require external knowledge not in the document
+- Focus on key concepts, important details, and relationships presented in the content
+- Ensure questions test comprehension, not just memorization
 
-2. **Questionnaire Generation Logic:**
-   * Generate questions that are:
-     * **Relevant** to the extracted content themes and concepts
-     * **Diverse** in structure focusing on multiple-choice questions
-     * **Clear and concise**, avoiding ambiguity
-     * **Balanced**, representing different parts of the material
-   * Create exactly ${numberOfQuestions} multiple-choice questions with 4 options each
-   * Ensure plausible distractors and avoid repetition
-   * Use ${difficulty} difficulty level appropriate for the content complexity
-
-3. **Customization & Constraints:**
-   * Number of questions: EXACTLY ${numberOfQuestions} (non-negotiable)
-   * Difficulty: ${difficulty}
-   * Target audience: Based on content type (${processedContent.type})
-   * Format: Multiple-choice questions only
-   * All questions must be based strictly on the provided document content
-
-**Behavioral Guidelines:**
-* Maintain neutrality and factual accuracy in all questions
-* Avoid copying long sections of the source verbatim in question stems
-* Each question must reference specific information from the document
-* Generate plausible wrong answers that are clearly incorrect but believable
-* You generate the exact number of questions requested, base all questions on provided source material, ensure complete uniqueness across all generated content, and never fabricate information
-* Respond ONLY with valid JSON in the specified format
-
-**CRITICAL REQUIREMENTS:**
-- Generate EXACTLY ${numberOfQuestions} questions - this is non-negotiable
-- Base ALL questions strictly on the document content provided
-- Each question must reference specific information from the document
-- Use ${difficulty} difficulty level appropriate language and concepts
-- Create 4 plausible answer choices for each question
-- Provide clear explanations that reference the source document
-${totalSets > 1 ? `- This is set ${setNumber} of ${totalSets} - ensure complete uniqueness from previous sets` : ''}`;
-
-    // Create the user prompt with the processed content
-    const enhancedUserPrompt = `USER REQUEST: "${prompt}"
-
-DOCUMENT CONTENT (Pre-processed and Analyzed):
-"""
-${processedContent.content}
-"""
-
-KEY THEMES IDENTIFIED: ${processedContent.keyThemes.slice(0, 8).join(', ')}
-
-DOCUMENT STRUCTURE:
-${processedContent.structure.sections.length > 0 ? processedContent.structure.sections.slice(0, 5).join('\n') : 'No clear sections detected'}
-
-GENERATION REQUIREMENTS:
-- Content Type: ${processedContent.type}
-- Questions Required: EXACTLY ${numberOfQuestions}
-- Difficulty: ${difficulty}
-- Language: ${language}
-- Set Number: ${setNumber} of ${totalSets}
-
-RESPONSE FORMAT (MUST BE VALID JSON):
+**Response Format (MUST BE VALID JSON):**
 {
   "questions": [
     {
-      "question": "Specific question based directly on document content referencing key themes",
-      "options": ["Correct answer from document", "Plausible wrong answer", "Another plausible wrong answer", "Final plausible wrong answer"],
+      "question": "Clear question based directly on document content",
+      "options": ["Correct answer from document", "Plausible wrong answer", "Another wrong answer", "Final wrong answer"],
       "correct_answer": 0,
-      "explanation": "Brief explanation citing specific document content and relevant themes"
+      "explanation": "Brief explanation citing specific document content"
     }
   ]
 }
 
-CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the document content and identified themes. Do not generate more or fewer.`;
+**CRITICAL:** You must generate exactly ${numberOfQuestions} questions. No more, no fewer.`;
+
+    // Create the user prompt with the cleaned and validated content
+    const enhancedUserPrompt = `USER REQUEST: "${prompt}"
+
+VALIDATED DOCUMENT CONTENT:
+"""
+${processedContent.content}
+"""
+
+KEY EDUCATIONAL THEMES: ${processedContent.keyThemes.slice(0, 8).join(', ')}
+
+DOCUMENT STRUCTURE:
+${processedContent.structure.sections.length > 0 ? processedContent.structure.sections.slice(0, 5).join('\n') : 'Content organized in paragraphs without clear section headers'}
+
+GENERATION REQUIREMENTS:
+- Questions Required: EXACTLY ${numberOfQuestions}
+- Difficulty: ${difficulty}
+- Language: ${language}
+- Content Type: ${processedContent.type}
+- Set Number: ${setNumber} of ${totalSets}
+
+Generate exactly ${numberOfQuestions} questions based strictly on the provided document content.`;
 
     // Create structured messages
     const messages = [
@@ -334,6 +457,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
       requestedQuestions: numberOfQuestions,
       contentType: processedContent.type,
       keyThemesCount: processedContent.keyThemes.length,
+      contentWordCount: processedContent.metadata.wordCount,
       timestamp: new Date().toISOString()
     });
 
@@ -361,7 +485,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
 
     console.log(`📋 RAW GENERATION RESULT: Received ${questions.length} questions (requested: ${numberOfQuestions})`);
 
-    // ENHANCED: Validation with theme checking
+    // ENHANCED: Validation with content relevance checking
     const validatedQuestions = questions
       .filter(q => {
         if (!q || !q.question || !q.options || !Array.isArray(q.options)) {
@@ -369,14 +493,22 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
           return false;
         }
         
-        // Check if question relates to identified themes
+        // Check if question relates to processed content themes
         const questionText = q.question.toLowerCase();
         const hasThemeReference = processedContent.keyThemes.some(theme => 
           questionText.includes(theme.toLowerCase())
         );
         
-        if (!hasThemeReference) {
-          console.warn('⚠️ Question may not relate to key themes:', q.question?.substring(0, 50));
+        // Also check if question contains words from the content
+        const contentWords = processedContent.content.toLowerCase().split(/\s+/);
+        const questionWords = questionText.split(/\s+/);
+        const wordOverlap = questionWords.filter(word => 
+          word.length > 3 && contentWords.includes(word)
+        ).length;
+        
+        if (!hasThemeReference && wordOverlap < 2) {
+          console.warn('⚠️ Question may not be based on document content:', q.question?.substring(0, 50));
+          return false;
         }
         
         return true;
@@ -386,7 +518,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
         options: q.options.slice(0, 4),
         correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
                        typeof q.correct_answer === 'number' ? q.correct_answer : 0,
-        explanation: q.explanation || `Based on the ${processedContent.type} content analysis and key themes: ${processedContent.keyThemes.slice(0, 3).join(', ')}.`
+        explanation: q.explanation || `Based on the document content analysis focusing on: ${processedContent.keyThemes.slice(0, 3).join(', ')}.`
       }));
 
     // Save question hashes for future deduplication
@@ -395,7 +527,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
       QuestionnaireStorage.saveQuestionHash(q.question, topic);
     });
 
-    console.log(`✅ ENHANCED VALIDATION COMPLETE: ${validatedQuestions.length} questions validated against themes and content`);
+    console.log(`✅ ENHANCED VALIDATION COMPLETE: ${validatedQuestions.length} questions validated against document content`);
 
     // CRITICAL: Ensure exact count or fail
     if (validatedQuestions.length !== numberOfQuestions) {
@@ -403,13 +535,13 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
       console.error(`❌ QUESTION COUNT MISMATCH: Generated ${validatedQuestions.length}, required ${numberOfQuestions}, shortfall: ${shortfall}`);
       
       if (validatedQuestions.length < numberOfQuestions * 0.8) {
-        throw new Error(`Only generated ${validatedQuestions.length} valid questions out of ${numberOfQuestions} requested. The system prompt requirements could not be fully satisfied with the current content. Try providing more detailed or structured content.`);
+        throw new Error(`Only generated ${validatedQuestions.length} valid questions out of ${numberOfQuestions} requested. The questions may not be sufficiently based on the document content or the content may not support ${numberOfQuestions} distinct questions. Try reducing the number of questions or providing more comprehensive content.`);
       }
     }
 
     const finalQuestions = validatedQuestions.slice(0, numberOfQuestions);
     
-    console.log(`✅ ENHANCED GENERATION COMPLETE: Delivering exactly ${finalQuestions.length} questions following system prompt requirements`);
+    console.log(`✅ ENHANCED GENERATION COMPLETE: Delivering exactly ${finalQuestions.length} questions based on document content`);
     
     return finalQuestions;
   }
@@ -418,8 +550,7 @@ CRITICAL: Generate EXACTLY ${numberOfQuestions} questions based strictly on the 
     // Extract topic for deduplication grouping
     const words = prompt.toLowerCase().split(/\s+/);
     const topicWords = words.filter(word => 
-      word.length > 3 && 
-      !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'come', 'make', 'than', 'time', 'very', 'what', 'with', 'have', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'will', 'said', 'each', 'which', 'their', 'would', 'there', 'think', 'where', 'being', 'every', 'great', 'might', 'shall', 'still', 'those', 'under', 'while'].includes(word)
+      word.length > 3 && !this.isStopWord(word)
     );
     
     return topicWords.slice(0, 3).join('-') || 'general';
