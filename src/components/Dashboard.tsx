@@ -383,7 +383,6 @@ Note: File processing failed, but file information is available.
       hasFileContent: !!processedFileContent
     });
 
-    // Force the dialog to open
     setShowGenerateDialog(true);
   };
 
@@ -642,7 +641,6 @@ Note: File processing failed, but file information is available.
         userRole={user.role}
       />
 
-      {/* Place GenerateTestDialog at the top level to ensure it renders */}
       <GenerateTestDialog
         open={showGenerateDialog}
         uploadedFiles={uploadedFiles}
@@ -732,7 +730,7 @@ Note: File processing failed, but file information is available.
                   <div>
                     <Label htmlFor="file-upload" className="text-slate-700 font-medium font-poppins">Upload Files</Label>
                     <div className="mt-1">
-                      <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-violet-400 transition-colors">
+                      <div className="relative border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-violet-400 transition-colors">
                         <Upload className="h-12 w-12 text-slate-400 mx-auto mb-4" />
                         <p className="text-slate-600 mb-2 font-inter">
                           Click to upload files or drag and drop
@@ -745,7 +743,7 @@ Note: File processing failed, but file information is available.
                           type="file"
                           onChange={handleFileUpload}
                           multiple
-                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         />
                       </div>
                     </div>
@@ -783,28 +781,30 @@ Note: File processing failed, but file information is available.
                     )}
                   </div>
                   
-                  <Button
-                    onClick={handleGenerateClick}
-                    disabled={isGenerating || isProcessingFiles}
-                    className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
-                  >
-                    {isGenerating ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>{LanguageService.translate('common.generating')}</span>
-                      </div>
-                    ) : isProcessingFiles ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Processing Files...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Zap className="h-4 w-4" />
-                        <span>{LanguageService.translate('common.generate')}</span>
-                      </div>
-                    )}
-                  </Button>
+                  <div className="relative z-10">
+                    <Button
+                      onClick={handleGenerateClick}
+                      disabled={isGenerating || isProcessingFiles}
+                      className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 rounded-lg font-poppins font-medium py-3"
+                    >
+                      {isGenerating ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>{LanguageService.translate('common.generating')}</span>
+                        </div>
+                      ) : isProcessingFiles ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Processing Files...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <Zap className="h-4 w-4" />
+                          <span>{LanguageService.translate('common.generate')}</span>
+                        </div>
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
