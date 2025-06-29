@@ -38,7 +38,7 @@ export class QuestionGenerationService {
         throw new Error('OpenAI API key not configured. Please set your API key in settings.');
       }
 
-      // CRITICAL: Validate content quality before processing
+      // ENHANCED: More lenient content validation for improved PDF extraction
       const contentValidation = this.validateContentQuality(fileContent);
       if (!contentValidation.isValid) {
         console.error('❌ CONTENT QUALITY VALIDATION FAILED:', contentValidation.reason);
@@ -56,10 +56,10 @@ export class QuestionGenerationService {
         isEducationallyViable: this.assessEducationalViability(processedContent.content)
       });
 
-      // REQUIREMENT: Block without substantial readable content
-      if (!processedContent.content || processedContent.content.length < 200 || !this.assessEducationalViability(processedContent.content)) {
+      // UPDATED: More reasonable content requirement (reduced from 200 to 100)
+      if (!processedContent.content || processedContent.content.length < 100 || !this.assessEducationalViability(processedContent.content)) {
         console.error('❌ BLOCKED: Insufficient educational content for question generation');
-        throw new Error(`Question generation requires substantial, readable educational content (minimum 200 characters with educational value). Current content: ${processedContent.content?.length || 0} characters. The content appears to be corrupted, binary data, or lacks educational substance. Please upload a file with clear educational text.`);
+        throw new Error(`Question generation requires readable educational content (minimum 100 characters with educational value). Current content: ${processedContent.content?.length || 0} characters. The content appears to be corrupted, binary data, or lacks educational substance. Please upload a file with clear educational text.`);
       }
 
       // Generate questions with enhanced system prompt compliance
@@ -97,9 +97,9 @@ export class QuestionGenerationService {
     }
   }
 
-  // NEW: Content quality validation to catch corrupted data
+  // UPDATED: More lenient content quality validation
   private validateContentQuality(fileContent: string): { isValid: boolean; reason: string } {
-    if (!fileContent || fileContent.length < 50) {
+    if (!fileContent || fileContent.length < 30) {
       return { isValid: false, reason: 'Content is empty or too short' };
     }
 
@@ -109,7 +109,6 @@ export class QuestionGenerationService {
       /endobj|endstream/g, // PDF structure markers
       /^\*[0-9]+&/gm, // Binary markers
       /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, // Control characters
-      /[^\x20-\x7E\s\u00A0-\uFFFF]/g // Non-printable characters (excluding extended Unicode)
     ];
 
     let corruptedCharCount = 0;
@@ -125,16 +124,16 @@ export class QuestionGenerationService {
 
     const corruptionRatio = corruptedCharCount / fileContent.length;
     
-    // If more than 20% of content appears corrupted
-    if (corruptionRatio > 0.2) {
+    // UPDATED: More lenient - if more than 50% of content appears corrupted (was 20%)
+    if (corruptionRatio > 0.5) {
       return { 
         isValid: false, 
-        reason: `Content appears corrupted (${(corruptionRatio * 100).toFixed(1)}% corruption detected). This looks like binary data or PDF artifacts rather than readable text.` 
+        reason: `Content appears heavily corrupted (${(corruptionRatio * 100).toFixed(1)}% corruption detected). This looks like binary data or PDF artifacts rather than readable text.` 
       };
     }
 
-    // Check if content has too many technical/binary patterns
-    if (totalMatches > 50) {
+    // UPDATED: More lenient pattern matching (increased threshold from 50 to 100)
+    if (totalMatches > 100) {
       return { 
         isValid: false, 
         reason: `Content contains too many technical/binary patterns (${totalMatches} patterns found). This appears to be raw file data rather than educational text.` 
@@ -144,9 +143,9 @@ export class QuestionGenerationService {
     return { isValid: true, reason: 'Content quality is acceptable' };
   }
 
-  // NEW: Educational viability assessment
+  // UPDATED: More lenient educational viability assessment
   private assessEducationalViability(content: string): boolean {
-    if (!content || content.length < 100) {
+    if (!content || content.length < 50) {
       return false;
     }
 
@@ -157,18 +156,19 @@ export class QuestionGenerationService {
 
     const readableWordRatio = readableWords.length / content.split(/\s+/).length;
     
-    // At least 40% of words should be readable
-    if (readableWordRatio < 0.4) {
+    // UPDATED: More lenient - at least 30% of words should be readable (was 40%)
+    if (readableWordRatio < 0.3) {
       console.log(`Low readable word ratio: ${(readableWordRatio * 100).toFixed(1)}%`);
       return false;
     }
 
     // Check for sentence-like structures
     const sentences = content.split(/[.!?]+/).filter(s => 
-      s.trim().length > 10 && /[A-Za-z]/.test(s)
+      s.trim().length > 5 && /[A-Za-z]/.test(s)
     );
 
-    if (sentences.length < 3) {
+    // UPDATED: More lenient - at least 1 sentence (was 3)
+    if (sentences.length < 1) {
       console.log('Insufficient sentence structures for educational content');
       return false;
     }
