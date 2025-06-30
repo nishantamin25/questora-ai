@@ -25,9 +25,9 @@ export class ChatGPTPDFProcessor {
       console.log('📄 Extracting text from PDF...');
       const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
       
-      if (!extractedText || extractedText.length < 200) {
-        throw new Error(`Insufficient text extracted from PDF. Only ${extractedText?.length || 0} characters found. The PDF may be image-based or corrupted.`);
-      }
+      // if (!extractedText || extractedText.length < 200) {
+      //   throw new Error(`Insufficient text extracted from PDF. Only ${extractedText?.length || 0} characters found. The PDF may be image-based or corrupted.`);
+      // }
       
       console.log('✅ PDF text extraction successful:', {
         length: extractedText.length,
@@ -57,11 +57,10 @@ Return your response in this exact JSON format:
   }
 }`;
 
-      const userPrompt = `Please clean and analyze this text extracted from the PDF "${file.name}":
-
-${extractedText}
-
-Clean up any extraction artifacts and organize this into readable educational content.`;
+      const userPrompt = `The following is a base64-encoded PDF
+      Please clean and analyze this text extracted from the PDF file":
+      Clean up any extraction artifacts and organize this into readable educational content.
+      `;
 
       const messages = [
         {
@@ -71,6 +70,16 @@ Clean up any extraction artifacts and organize this into readable educational co
         {
           role: 'user', 
           content: userPrompt
+        },
+        {
+          role: 'user',
+          content: [
+                {
+                    type: "input_file",
+                    filename: file.name,
+                    file_data: `data:application/pdf;base64,${extractedText}`,
+                }
+            ],
         }
       ];
 

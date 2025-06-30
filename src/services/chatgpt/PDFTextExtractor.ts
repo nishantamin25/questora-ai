@@ -6,6 +6,7 @@ export class PDFTextExtractor {
     try {
       // Convert file to base64 for structured format
       const base64Data = await this.fileToBase64(file);
+      return base64Data
       
       // Try simple text extraction first
       const text = await this.readAsText(file);
