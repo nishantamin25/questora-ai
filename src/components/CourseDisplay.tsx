@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -480,7 +481,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                   h4: ({ children }) => <h4 className="text-base font-medium text-slate-700 mb-2 mt-3">{children}</h4>,
                   p: ({ children }) => <p className="mb-3 text-slate-700 leading-relaxed">{children}</p>,
                   ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-slate-700">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-slate-700">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-slate-700">{children}</ol>,
                   li: ({ children }) => <li className="mb-1">{children}</li>,
                   blockquote: ({ children }) => (
                     <blockquote className="border-l-4 border-blue-200 pl-4 italic text-slate-600 mb-3 bg-blue-50 py-2">
