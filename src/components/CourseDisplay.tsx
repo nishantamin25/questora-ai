@@ -9,6 +9,7 @@ import { PDFGenerationService } from '@/services/PDFGenerationService';
 import { CourseService } from '@/services/CourseService';
 import { Course } from '@/services/course/CourseTypes';
 import { toast } from '@/hooks/use-toast';
+import ReactMarkdown from 'react-markdown';
 
 interface CourseDisplayProps {
   course: Course;
@@ -241,7 +242,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                     value={material.content}
                     onChange={(e) => handleMaterialChange(index, 'content', e.target.value)}
                     className="min-h-[200px]"
-                    placeholder="Section content"
+                    placeholder="Section content (supports markdown)"
                   />
                 </div>
               ))}
@@ -453,42 +454,72 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
             )}
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 min-h-[200px] max-h-[600px] overflow-y-auto">
             {currentMaterial.type === 'image' && (
-              <div className="text-center">
+              <div className="text-center mb-4">
                 <Image className="h-16 w-16 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-600">Image: {currentMaterial.title}</p>
-                <div className="text-sm text-slate-700 mt-4 text-left">
-                  <div className="prose prose-sm max-w-none">
-                    {currentMaterial.content.split('\n').map((paragraph, index) => (
-                      <p key={index} className="mb-2">{paragraph}</p>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-slate-600 mb-4">Image: {currentMaterial.title}</p>
               </div>
             )}
             
             {currentMaterial.type === 'video' && (
-              <div className="text-center">
+              <div className="text-center mb-4">
                 <Video className="h-16 w-16 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-600">Video: {currentMaterial.title}</p>
-                <div className="text-sm text-slate-700 mt-4 text-left">
-                  <div className="prose prose-sm max-w-none">
-                    {currentMaterial.content.split('\n').map((paragraph, index) => (
-                      <p key={index} className="mb-2">{paragraph}</p>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-slate-600 mb-4">Video: {currentMaterial.title}</p>
               </div>
             )}
             
-            {currentMaterial.type === 'text' && (
-              <div className="prose prose-sm max-w-none">
-                {currentMaterial.content.split('\n').map((paragraph, index) => (
-                  paragraph.trim() && <p key={index} className="text-slate-700 leading-relaxed mb-3">{paragraph}</p>
-                ))}
-              </div>
-            )}
+            {/* Render content as markdown */}
+            <div className="prose prose-slate max-w-none">
+              <ReactMarkdown
+                className="text-slate-700 leading-relaxed"
+                components={{
+                  h1: ({ children }) => <h1 className="text-2xl font-bold text-slate-900 mb-4 mt-6">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-xl font-semibold text-slate-800 mb-3 mt-5">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-lg font-medium text-slate-800 mb-2 mt-4">{children}</h3>,
+                  h4: ({ children }) => <h4 className="text-base font-medium text-slate-700 mb-2 mt-3">{children}</h4>,
+                  p: ({ children }) => <p className="mb-3 text-slate-700 leading-relaxed">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-slate-700">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-slate-700">{children}</ul>,
+                  li: ({ children }) => <li className="mb-1">{children}</li>,
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-blue-200 pl-4 italic text-slate-600 mb-3 bg-blue-50 py-2">
+                      {children}
+                    </blockquote>
+                  ),
+                  code: ({ children }) => (
+                    <code className="bg-slate-200 text-slate-800 px-1 py-0.5 rounded text-sm font-mono">
+                      {children}
+                    </code>
+                  ),
+                  pre: ({ children }) => (
+                    <pre className="bg-slate-800 text-slate-100 p-4 rounded-lg overflow-x-auto mb-3">
+                      {children}
+                    </pre>
+                  ),
+                  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+                  em: ({ children }) => <em className="italic text-slate-700">{children}</em>,
+                  a: ({ href, children }) => (
+                    <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">
+                      {children}
+                    </a>
+                  ),
+                  hr: () => <hr className="border-slate-300 my-6" />,
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto mb-3">
+                      <table className="min-w-full border border-slate-300">{children}</table>
+                    </div>
+                  ),
+                  thead: ({ children }) => <thead className="bg-slate-100">{children}</thead>,
+                  tbody: ({ children }) => <tbody>{children}</tbody>,
+                  tr: ({ children }) => <tr className="border-b border-slate-200">{children}</tr>,
+                  th: ({ children }) => <th className="border border-slate-300 px-3 py-2 text-left font-medium text-slate-900">{children}</th>,
+                  td: ({ children }) => <td className="border border-slate-300 px-3 py-2 text-slate-700">{children}</td>,
+                }}
+              >
+                {currentMaterial.content}
+              </ReactMarkdown>
+            </div>
           </div>
 
           <div className="flex justify-between items-center pt-4">
