@@ -68,7 +68,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
       showMaterial,
       courseCompleted
     };
-    localStorage.getItem(`course_progress_${course.id}`, JSON.stringify(progress));
+    localStorage.setItem(`course_progress_${course.id}`, JSON.stringify(progress));
   };
 
   useEffect(() => {
