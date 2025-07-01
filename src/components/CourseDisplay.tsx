@@ -1,10 +1,10 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { GraduationCap, Play, CheckCircle, Clock, FileText, Image, Video, Download, Edit, Save, X } from 'lucide-react';
+import { GraduationCap, CheckCircle, Clock, FileText, Download, Edit, Save, X } from 'lucide-react';
 import { PDFGenerationService } from '@/services/PDFGenerationService';
 import { CourseService } from '@/services/CourseService';
 import { Course } from '@/services/course/CourseTypes';
@@ -20,12 +20,34 @@ interface CourseDisplayProps {
 
 const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'guest' }: CourseDisplayProps) => {
   const [isEnrolled, setIsEnrolled] = useState(false);
-  const [currentMaterialIndex, setCurrentMaterialIndex] = useState(0);
-  const [completedMaterials, setCompletedMaterials] = useState<Set<number>>(new Set());
-  const [showMaterial, setShowMaterial] = useState(false);
   const [courseCompleted, setCourseCompleted] = useState(false);
+  const [showMaterial, setShowMaterial] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedCourse, setEditedCourse] = useState(course);
+  const [combinedContent, setCombinedContent] = useState('');
+
+  // Combine all materials into one content string
+  const getCombinedContent = (materials: any[]) => {
+    return materials.map(material => `# ${material.title}\n\n${material.content}`).join('\n\n---\n\n');
+  };
+
+  // Split combined content back into materials
+  const splitCombinedContent = (content: string) => {
+    const sections = content.split(/\n\n---\n\n/);
+    return sections.map((section, index) => {
+      const lines = section.split('\n');
+      const titleLine = lines.find(line => line.startsWith('# '));
+      const title = titleLine ? titleLine.replace('# ', '') : `Section ${index + 1}`;
+      const contentLines = lines.filter(line => !line.startsWith('# '));
+      return {
+        id: Math.random().toString(36).substr(2, 15),
+        title,
+        content: contentLines.join('\n').trim(),
+        type: 'text',
+        order: index + 1
+      };
+    });
+  };
 
   // Load course progress from localStorage
   useEffect(() => {
@@ -33,24 +55,21 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     if (savedProgress) {
       const progress = JSON.parse(savedProgress);
       setIsEnrolled(progress.isEnrolled || false);
-      setCurrentMaterialIndex(progress.currentMaterialIndex || 0);
-      setCompletedMaterials(new Set(progress.completedMaterials || []));
       setShowMaterial(progress.showMaterial || false);
       setCourseCompleted(progress.courseCompleted || false);
     }
   }, [course.id]);
 
-  // Update edited course when course prop changes
+  // Update edited course and combined content when course prop changes
   useEffect(() => {
     setEditedCourse(course);
+    setCombinedContent(getCombinedContent(course.materials));
   }, [course]);
 
   // Save course progress to localStorage
   const saveProgress = () => {
     const progress = {
       isEnrolled,
-      currentMaterialIndex,
-      completedMaterials: Array.from(completedMaterials),
       showMaterial,
       courseCompleted
     };
@@ -59,14 +78,14 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
 
   useEffect(() => {
     saveProgress();
-  }, [isEnrolled, currentMaterialIndex, completedMaterials, showMaterial, courseCompleted]);
+  }, [isEnrolled, showMaterial, courseCompleted]);
 
   const handleEnroll = () => {
     setIsEnrolled(true);
     setShowMaterial(true);
     toast({
       title: "Enrolled Successfully",
-      description: `You have enrolled in "${course.name}". Complete all materials to unlock the test.`,
+      description: `You have enrolled in "${course.name}". Complete the course to unlock the test.`,
     });
   };
 
@@ -76,19 +95,23 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
 
   const handleSave = () => {
     try {
-      // Update the existing course instead of creating a new one
-      CourseService.saveCourse({
+      // Convert combined content back to materials
+      const newMaterials = splitCombinedContent(combinedContent);
+      
+      const updatedCourse = {
         ...editedCourse,
-        id: course.id, // Ensure we keep the same ID
+        materials: newMaterials,
+        id: course.id,
         createdAt: course.createdAt || new Date().toISOString(),
         difficulty: course.difficulty || 'medium',
         isActive: course.isActive !== undefined ? course.isActive : true
-      });
+      };
       
+      CourseService.saveCourse(updatedCourse);
       setIsEditing(false);
       
       if (onCourseUpdate) {
-        onCourseUpdate(editedCourse);
+        onCourseUpdate(updatedCourse);
       }
       
       toast({
@@ -108,42 +131,16 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditedCourse(course);
+    setCombinedContent(getCombinedContent(course.materials));
   };
 
-  const handleMaterialChange = (index: number, field: string, value: string) => {
-    const updatedMaterials = [...editedCourse.materials];
-    updatedMaterials[index] = { ...updatedMaterials[index], [field]: value };
-    setEditedCourse({ ...editedCourse, materials: updatedMaterials });
-  };
-
-  const handleMaterialComplete = () => {
-    const newCompleted = new Set(completedMaterials);
-    newCompleted.add(currentMaterialIndex);
-    setCompletedMaterials(newCompleted);
-
-    if (newCompleted.size === course.materials.length) {
-      // Course completed
-      setCourseCompleted(true);
-      toast({
-        title: "Course Completed!",
-        description: "Congratulations! You can now access the test.",
-      });
-      onCourseComplete(course.id);
-    } else if (currentMaterialIndex < course.materials.length - 1) {
-      setCurrentMaterialIndex(currentMaterialIndex + 1);
-    }
-  };
-
-  const handleNextMaterial = () => {
-    if (currentMaterialIndex < course.materials.length - 1) {
-      setCurrentMaterialIndex(currentMaterialIndex + 1);
-    }
-  };
-
-  const handlePreviousMaterial = () => {
-    if (currentMaterialIndex > 0) {
-      setCurrentMaterialIndex(currentMaterialIndex - 1);
-    }
+  const handleMarkComplete = () => {
+    setCourseCompleted(true);
+    toast({
+      title: "Course Completed!",
+      description: "Congratulations! You can now access the test.",
+    });
+    onCourseComplete(course.id);
   };
 
   const handleDownloadPDF = () => {
@@ -154,7 +151,6 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
         description: "Course material has been downloaded as PDF",
       });
     } else {
-      // Generate PDF on demand if not available
       const pdfUrl = PDFGenerationService.generateCoursePDF(course);
       PDFGenerationService.downloadPDF(pdfUrl, course.name);
       toast({
@@ -164,21 +160,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     }
   };
 
-  const progress = (completedMaterials.size / course.materials.length) * 100;
-  const currentMaterial = course.materials[currentMaterialIndex];
-
-  const getMaterialIcon = (type: string) => {
-    switch (type) {
-      case 'image':
-        return <Image className="h-4 w-4" />;
-      case 'video':
-        return <Video className="h-4 w-4" />;
-      default:
-        return <FileText className="h-4 w-4" />;
-    }
-  };
-
-  // Edit mode - Show all materials for full document editing
+  // Edit mode - Show unified content editor
   if (isEditing) {
     return (
       <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl mb-6">
@@ -225,27 +207,17 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
               />
             </div>
             
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-slate-900">Course Materials</h3>
-              {editedCourse.materials.map((material, index) => (
-                <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center space-x-2">
-                    {getMaterialIcon(material.type)}
-                    <Input
-                      value={material.title}
-                      onChange={(e) => handleMaterialChange(index, 'title', e.target.value)}
-                      className="font-medium"
-                      placeholder="Section title"
-                    />
-                  </div>
-                  <Textarea
-                    value={material.content}
-                    onChange={(e) => handleMaterialChange(index, 'content', e.target.value)}
-                    className="min-h-[200px]"
-                    placeholder="Section content (supports markdown)"
-                  />
-                </div>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Course Content</label>
+              <p className="text-sm text-slate-600 mb-3">
+                Edit the entire course content below. Use markdown formatting for better presentation.
+              </p>
+              <Textarea
+                value={combinedContent}
+                onChange={(e) => setCombinedContent(e.target.value)}
+                className="min-h-[500px] font-mono text-sm"
+                placeholder="Enter your course content here using markdown formatting..."
+              />
             </div>
           </div>
         </CardContent>
@@ -286,19 +258,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
               </div>
               <div className="flex items-center space-x-1">
                 <FileText className="h-4 w-4" />
-                <span>{course.materials.length} materials</span>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-medium text-blue-800 mb-2">Course Materials</h4>
-              <div className="space-y-2">
-                {course.materials.map((material, index) => (
-                  <div key={index} className="flex items-center space-x-2 text-sm text-blue-700">
-                    {getMaterialIcon(material.type)}
-                    <span>{material.title}</span>
-                  </div>
-                ))}
+                <span>Comprehensive course material</span>
               </div>
             </div>
 
@@ -358,7 +318,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                 size="sm"
                 className="flex items-center space-x-1"
               >
-                <Play className="h-4 w-4" />
+                <GraduationCap className="h-4 w-4" />
                 <span>Preview</span>
               </Button>
             </div>
@@ -375,19 +335,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
               </div>
               <div className="flex items-center space-x-1">
                 <FileText className="h-4 w-4" />
-                <span>{course.materials.length} materials</span>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-medium text-blue-800 mb-2">Course Materials</h4>
-              <div className="space-y-2">
-                {course.materials.map((material, index) => (
-                  <div key={index} className="flex items-center space-x-2 text-sm text-blue-700">
-                    {getMaterialIcon(material.type)}
-                    <span>{material.title}</span>
-                  </div>
-                ))}
+                <span>Comprehensive course material</span>
               </div>
             </div>
           </div>
@@ -431,45 +379,18 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                 <span>Edit</span>
               </Button>
             )}
-            <div className="text-sm text-slate-600">
-              {currentMaterialIndex + 1} of {course.materials.length}
-            </div>
+            {courseCompleted && (
+              <div className="text-sm text-green-600 flex items-center">
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Complete
+              </div>
+            )}
           </div>
         </CardTitle>
-        <div className="mt-2">
-          <Progress value={progress} className="h-2" />
-          <p className="text-xs text-slate-600 mt-1">
-            {Math.round(progress)}% completed
-            {courseCompleted && <span className="text-green-600 ml-2">✓ Course Complete</span>}
-          </p>
-        </div>
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
-          <div className="flex items-center space-x-2 mb-4">
-            {getMaterialIcon(currentMaterial.type)}
-            <h3 className="font-medium text-slate-900">{currentMaterial.title}</h3>
-            {completedMaterials.has(currentMaterialIndex) && (
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            )}
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 min-h-[200px] max-h-[600px] overflow-y-auto">
-            {currentMaterial.type === 'image' && (
-              <div className="text-center mb-4">
-                <Image className="h-16 w-16 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-600 mb-4">Image: {currentMaterial.title}</p>
-              </div>
-            )}
-            
-            {currentMaterial.type === 'video' && (
-              <div className="text-center mb-4">
-                <Video className="h-16 w-16 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-600 mb-4">Video: {currentMaterial.title}</p>
-              </div>
-            )}
-            
-            {/* Render content as markdown */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 min-h-[400px] max-h-[800px] overflow-y-auto">
             <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed">
               <ReactMarkdown
                 components={{
@@ -516,50 +437,29 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                   td: ({ children }) => <td className="border border-slate-300 px-3 py-2 text-slate-700">{children}</td>,
                 }}
               >
-                {currentMaterial.content}
+                {combinedContent}
               </ReactMarkdown>
             </div>
           </div>
 
-          <div className="flex justify-between items-center pt-4">
-            <Button
-              onClick={handlePreviousMaterial}
-              disabled={currentMaterialIndex === 0}
-              variant="outline"
-              className="border-slate-300 text-slate-700"
-            >
-              Previous
-            </Button>
-
-            <div className="flex space-x-2">
-              {!completedMaterials.has(currentMaterialIndex) && (
-                <Button
-                  onClick={handleMaterialComplete}
-                  variant="outline"
-                  className="border-green-300 text-green-700 hover:bg-green-50"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark Complete
-                </Button>
-              )}
-              
-              {currentMaterialIndex < course.materials.length - 1 ? (
-                <Button
-                  onClick={handleNextMaterial}
-                  className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700"
-                >
-                  Next Material
-                </Button>
-              ) : completedMaterials.size === course.materials.length ? (
-                <Button
-                  disabled
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Course Complete
-                </Button>
-              ) : null}
-            </div>
+          <div className="flex justify-center items-center pt-4">
+            {!courseCompleted ? (
+              <Button
+                onClick={handleMarkComplete}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Mark Course Complete
+              </Button>
+            ) : (
+              <Button
+                disabled
+                className="bg-gradient-to-r from-green-600 to-emerald-600 text-white"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Course Complete
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
