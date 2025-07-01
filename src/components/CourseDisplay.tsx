@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,17 +24,28 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const [showMaterial, setShowMaterial] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedCourse, setEditedCourse] = useState(course);
-  const [combinedContent, setCombinedContent] = useState('');
+  const [unifiedContent, setUnifiedContent] = useState('');
 
-  // Get the unified content string from course materials
+  // Get the unified content string from course materials - combine everything into one block
   const getUnifiedContent = (materials: CourseMaterial[]) => {
     if (!materials || materials.length === 0) return '';
     
-    // Simply join all content without any separators or headers - treat as one block
-    return materials.map(material => material.content.trim()).join('\n\n').trim();
+    // Join all content as one continuous block with proper spacing
+    return materials
+      .filter(material => material.content && material.content.trim())
+      .map(material => {
+        const content = material.content.trim();
+        // If the material has a meaningful title (not just "Course Content"), include it as a header
+        if (material.title && material.title !== 'Course Content' && material.title !== 'unified-content') {
+          return `# ${material.title}\n\n${content}`;
+        }
+        return content;
+      })
+      .join('\n\n')
+      .trim();
   };
 
-  // Create a single material from unified content
+  // Create a single unified material from content
   const createUnifiedMaterial = (content: string): CourseMaterial[] => {
     return [{
       id: 'unified-content',
@@ -55,10 +67,12 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     }
   }, [course.id]);
 
-  // Update edited course and combined content when course prop changes
+  // Update edited course and unified content when course prop changes
   useEffect(() => {
     setEditedCourse(course);
-    setCombinedContent(getUnifiedContent(course.materials));
+    const content = getUnifiedContent(course.materials);
+    setUnifiedContent(content);
+    console.log('🔄 Updated unified content:', content.substring(0, 100) + '...');
   }, [course]);
 
   // Save course progress to localStorage
@@ -90,8 +104,8 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
 
   const handleSave = () => {
     try {
-      // Create a unified material from the combined content
-      const newMaterials = createUnifiedMaterial(combinedContent);
+      // Create a unified material from the unified content
+      const newMaterials = createUnifiedMaterial(unifiedContent);
       
       const updatedCourse: Course = {
         ...editedCourse,
@@ -126,7 +140,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditedCourse(course);
-    setCombinedContent(getUnifiedContent(course.materials));
+    setUnifiedContent(getUnifiedContent(course.materials));
   };
 
   const handleMarkComplete = () => {
@@ -208,8 +222,8 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                 Edit the entire course content as one unified block. Use markdown formatting for better presentation.
               </p>
               <Textarea
-                value={combinedContent}
-                onChange={(e) => setCombinedContent(e.target.value)}
+                value={unifiedContent}
+                onChange={(e) => setUnifiedContent(e.target.value)}
                 className="min-h-[500px] font-mono text-sm"
                 placeholder="Enter your course content here using markdown formatting..."
               />
@@ -220,6 +234,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     );
   }
 
+  // Guest enrollment view
   if (!isEnrolled && userRole === 'guest') {
     return (
       <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl mb-6">
@@ -276,7 +291,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     );
   }
 
-  // Admin view or course overview
+  // Admin overview (before showing material)
   if (userRole === 'admin' && !showMaterial) {
     return (
       <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl mb-6">
@@ -343,6 +358,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
     return null;
   }
 
+  // Main course content display - UNIFIED BLOCK
   return (
     <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl mb-6">
       <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-slate-200 rounded-t-xl">
@@ -385,15 +401,16 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
+          {/* SINGLE UNIFIED CONTENT BLOCK */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 min-h-[400px] max-h-[800px] overflow-y-auto">
             <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed">
               <ReactMarkdown
                 components={{
-                  h1: ({ children }) => <h1 className="text-2xl font-bold text-slate-900 mb-4 mt-6">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-xl font-semibold text-slate-800 mb-3 mt-5">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-lg font-medium text-slate-800 mb-2 mt-4">{children}</h3>,
-                  h4: ({ children }) => <h4 className="text-base font-medium text-slate-700 mb-2 mt-3">{children}</h4>,
-                  p: ({ children }) => <p className="mb-3 text-slate-700 leading-relaxed">{children}</p>,
+                  h1: ({ children }) => <h1 className="text-2xl font-bold text-slate-900 mb-4 mt-6 first:mt-0">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-xl font-semibold text-slate-800 mb-3 mt-5 first:mt-0">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-lg font-medium text-slate-800 mb-2 mt-4 first:mt-0">{children}</h3>,
+                  h4: ({ children }) => <h4 className="text-base font-medium text-slate-700 mb-2 mt-3 first:mt-0">{children}</h4>,
+                  p: ({ children }) => <p className="mb-3 text-slate-700 leading-relaxed first:mt-0">{children}</p>,
                   ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-slate-700">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-slate-700">{children}</ol>,
                   li: ({ children }) => <li className="mb-1">{children}</li>,
@@ -432,7 +449,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
                   td: ({ children }) => <td className="border border-slate-300 px-3 py-2 text-slate-700">{children}</td>,
                 }}
               >
-                {combinedContent}
+                {unifiedContent || 'No course content available.'}
               </ReactMarkdown>
             </div>
           </div>
