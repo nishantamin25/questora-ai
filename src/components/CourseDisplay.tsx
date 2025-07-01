@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,22 +25,18 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const [editedCourse, setEditedCourse] = useState(course);
   const [combinedContent, setCombinedContent] = useState('');
 
-  // Combine all materials into one content string - including titles as markdown headers
-  const getCombinedContent = (materials: CourseMaterial[]) => {
+  // Get the unified content string from course materials
+  const getUnifiedContent = (materials: CourseMaterial[]) => {
     if (!materials || materials.length === 0) return '';
     
-    // Combine titles and content into one unified markdown block
-    return materials.map(material => {
-      // Add the title as a markdown header if it exists and isn't already in the content
-      const title = material.title && material.title !== 'Course Content' ? `# ${material.title}\n\n` : '';
-      return `${title}${material.content}`;
-    }).join('\n\n---\n\n');
+    // Simply join all content without any separators or headers - treat as one block
+    return materials.map(material => material.content.trim()).join('\n\n').trim();
   };
 
-  // Create a single material from combined content
-  const createSingleMaterial = (content: string): CourseMaterial[] => {
+  // Create a single material from unified content
+  const createUnifiedMaterial = (content: string): CourseMaterial[] => {
     return [{
-      id: Math.random().toString(36).substr(2, 15),
+      id: 'unified-content',
       title: 'Course Content',
       content: content.trim(),
       type: 'text' as const,
@@ -63,7 +58,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   // Update edited course and combined content when course prop changes
   useEffect(() => {
     setEditedCourse(course);
-    setCombinedContent(getCombinedContent(course.materials));
+    setCombinedContent(getUnifiedContent(course.materials));
   }, [course]);
 
   // Save course progress to localStorage
@@ -73,7 +68,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
       showMaterial,
       courseCompleted
     };
-    localStorage.setItem(`course_progress_${course.id}`, JSON.stringify(progress));
+    localStorage.getItem(`course_progress_${course.id}`, JSON.stringify(progress));
   };
 
   useEffect(() => {
@@ -95,8 +90,8 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
 
   const handleSave = () => {
     try {
-      // Create a single material from the combined content
-      const newMaterials = createSingleMaterial(combinedContent);
+      // Create a unified material from the combined content
+      const newMaterials = createUnifiedMaterial(combinedContent);
       
       const updatedCourse: Course = {
         ...editedCourse,
@@ -131,7 +126,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditedCourse(course);
-    setCombinedContent(getCombinedContent(course.materials));
+    setCombinedContent(getUnifiedContent(course.materials));
   };
 
   const handleMarkComplete = () => {
