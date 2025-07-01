@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { GraduationCap, CheckCircle, Clock, FileText, Download, Edit, Save, X } from 'lucide-react';
 import { PDFGenerationService } from '@/services/PDFGenerationService';
 import { CourseService } from '@/services/CourseService';
-import { Course } from '@/services/course/CourseTypes';
+import { Course, CourseMaterial } from '@/services/course/CourseTypes';
 import { toast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
 
@@ -27,12 +27,12 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const [combinedContent, setCombinedContent] = useState('');
 
   // Combine all materials into one content string
-  const getCombinedContent = (materials: any[]) => {
+  const getCombinedContent = (materials: CourseMaterial[]) => {
     return materials.map(material => `# ${material.title}\n\n${material.content}`).join('\n\n---\n\n');
   };
 
   // Split combined content back into materials
-  const splitCombinedContent = (content: string) => {
+  const splitCombinedContent = (content: string): CourseMaterial[] => {
     const sections = content.split(/\n\n---\n\n/);
     return sections.map((section, index) => {
       const lines = section.split('\n');
@@ -43,7 +43,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
         id: Math.random().toString(36).substr(2, 15),
         title,
         content: contentLines.join('\n').trim(),
-        type: 'text',
+        type: 'text' as const,
         order: index + 1
       };
     });
@@ -98,7 +98,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
       // Convert combined content back to materials
       const newMaterials = splitCombinedContent(combinedContent);
       
-      const updatedCourse = {
+      const updatedCourse: Course = {
         ...editedCourse,
         materials: newMaterials,
         id: course.id,
