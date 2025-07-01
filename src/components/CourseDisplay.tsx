@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -471,9 +470,8 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
             )}
             
             {/* Render content as markdown */}
-            <div className="prose prose-slate max-w-none">
+            <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed">
               <ReactMarkdown
-                className="text-slate-700 leading-relaxed"
                 components={{
                   h1: ({ children }) => <h1 className="text-2xl font-bold text-slate-900 mb-4 mt-6">{children}</h1>,
                   h2: ({ children }) => <h2 className="text-xl font-semibold text-slate-800 mb-3 mt-5">{children}</h2>,
