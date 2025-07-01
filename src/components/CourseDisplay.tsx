@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,27 +25,23 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const [editedCourse, setEditedCourse] = useState(course);
   const [combinedContent, setCombinedContent] = useState('');
 
-  // Combine all materials into one content string
+  // Combine all materials into one content string - simplified approach
   const getCombinedContent = (materials: CourseMaterial[]) => {
-    return materials.map(material => `# ${material.title}\n\n${material.content}`).join('\n\n---\n\n');
+    if (!materials || materials.length === 0) return '';
+    
+    // Simply join all content with double newlines for clean separation
+    return materials.map(material => material.content).join('\n\n');
   };
 
-  // Split combined content back into materials
-  const splitCombinedContent = (content: string): CourseMaterial[] => {
-    const sections = content.split(/\n\n---\n\n/);
-    return sections.map((section, index) => {
-      const lines = section.split('\n');
-      const titleLine = lines.find(line => line.startsWith('# '));
-      const title = titleLine ? titleLine.replace('# ', '') : `Section ${index + 1}`;
-      const contentLines = lines.filter(line => !line.startsWith('# '));
-      return {
-        id: Math.random().toString(36).substr(2, 15),
-        title,
-        content: contentLines.join('\n').trim(),
-        type: 'text' as const,
-        order: index + 1
-      };
-    });
+  // Create a single material from combined content
+  const createSingleMaterial = (content: string): CourseMaterial[] => {
+    return [{
+      id: Math.random().toString(36).substr(2, 15),
+      title: 'Course Content',
+      content: content.trim(),
+      type: 'text' as const,
+      order: 1
+    }];
   };
 
   // Load course progress from localStorage
@@ -95,8 +90,8 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
 
   const handleSave = () => {
     try {
-      // Convert combined content back to materials
-      const newMaterials = splitCombinedContent(combinedContent);
+      // Create a single material from the combined content
+      const newMaterials = createSingleMaterial(combinedContent);
       
       const updatedCourse: Course = {
         ...editedCourse,
@@ -210,7 +205,7 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Course Content</label>
               <p className="text-sm text-slate-600 mb-3">
-                Edit the entire course content below. Use markdown formatting for better presentation.
+                Edit the entire course content as one unified block. Use markdown formatting for better presentation.
               </p>
               <Textarea
                 value={combinedContent}
