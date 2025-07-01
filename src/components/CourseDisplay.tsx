@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,12 +26,16 @@ const CourseDisplay = ({ course, onCourseComplete, onCourseUpdate, userRole = 'g
   const [editedCourse, setEditedCourse] = useState(course);
   const [combinedContent, setCombinedContent] = useState('');
 
-  // Combine all materials into one content string - simplified approach
+  // Combine all materials into one content string - including titles as markdown headers
   const getCombinedContent = (materials: CourseMaterial[]) => {
     if (!materials || materials.length === 0) return '';
     
-    // Simply join all content with double newlines for clean separation
-    return materials.map(material => material.content).join('\n\n');
+    // Combine titles and content into one unified markdown block
+    return materials.map(material => {
+      // Add the title as a markdown header if it exists and isn't already in the content
+      const title = material.title && material.title !== 'Course Content' ? `# ${material.title}\n\n` : '';
+      return `${title}${material.content}`;
+    }).join('\n\n---\n\n');
   };
 
   // Create a single material from combined content
