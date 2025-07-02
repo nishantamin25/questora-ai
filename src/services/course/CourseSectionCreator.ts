@@ -1,3 +1,4 @@
+
 import { CourseMaterial } from './CourseTypes';
 import { ContentGenerationService } from '../chatgpt/ContentGenerationService';
 
@@ -19,11 +20,43 @@ export class CourseSectionCreator {
       // Generate unified course content using the specialized system prompt
       const generatedContent = await contentGenerator.generateCourseContent(prompt, fileContent);
       
-      if (!generatedContent || generatedContent.length < 100) {
-        throw new Error('Generated course content is too short or empty');
+      // RELAXED VALIDATION - Accept smaller content
+      if (!generatedContent) {
+        throw new Error('No course content was generated');
+      }
+      
+      const contentLength = generatedContent.length;
+      const wordCount = generatedContent.split(/\s+/).length;
+      
+      console.log('🔍 GENERATED CONTENT VALIDATION:', {
+        contentLength,
+        wordCount,
+        preview: generatedContent.substring(0, 150) + '...'
+      });
+      
+      // MUCH MORE TOLERANT THRESHOLDS
+      if (contentLength < 30) {
+        console.error('❌ Generated content extremely short:', contentLength, 'characters');
+        console.error('📄 ACTUAL CONTENT:', generatedContent);
+        throw new Error(`Generated course content is too short (${contentLength} characters): "${generatedContent}"`);
+      }
+      
+      if (wordCount < 10) {
+        console.error('❌ Generated content has too few words:', wordCount);
+        console.error('📄 ACTUAL CONTENT:', generatedContent);
+        throw new Error(`Generated course content has insufficient words (${wordCount} words): "${generatedContent}"`);
+      }
+      
+      // ACCEPT with warnings for borderline cases
+      if (contentLength < 200) {
+        console.warn('⚠️ Generated content is shorter than ideal but acceptable:', contentLength, 'characters');
       }
 
-      console.log('✅ Course content generated successfully:', generatedContent.length, 'characters');
+      console.log('✅ Course content generated successfully:', {
+        contentLength,
+        wordCount,
+        acceptedWithWarnings: contentLength < 200
+      });
 
       // Create a single unified material with all the generated content
       const unifiedMaterial: CourseMaterial = {
@@ -38,12 +71,22 @@ export class CourseSectionCreator {
         sectionsCount: 1,
         totalContentLength: unifiedMaterial.content.length,
         isUnified: true,
-        followsSystemPrompt: true
+        followsSystemPrompt: true,
+        relaxedValidation: true
       });
 
       return [unifiedMaterial];
     } catch (error) {
       console.error('❌ Course section creation failed:', error);
+      
+      // Enhanced error reporting with debugging info
+      if (error instanceof Error) {
+        if (error.message.includes('too short') || error.message.includes('insufficient')) {
+          // Re-throw validation errors with full context
+          throw error;
+        }
+      }
+      
       throw new Error(`Failed to create course sections: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

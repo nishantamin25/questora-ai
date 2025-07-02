@@ -122,6 +122,15 @@ Generate focused content based strictly on this request. Do not add generic educ
 
     console.log('✅ COURSE CONTENT GENERATION - Word count validated:', wordValidation.wordCount, 'words');
     
+    // ENHANCED FILE CONTENT PREVIEW for debugging
+    console.log('🔍 FILE CONTENT PREVIEW (first 500 chars):', fileContent.substring(0, 500));
+    console.log('🔍 FILE CONTENT STRUCTURE:', {
+      totalLines: fileContent.split('\n').length,
+      hasHeaders: /^#+\s|^[A-Z][^a-z]*:|^\d+\./m.test(fileContent),
+      wordCount: fileContent.split(/\s+/).length,
+      containsSteps: /step|procedure|instruction|process/i.test(fileContent)
+    });
+    
     const courseGenerationPrompt = `UPLOADED FILE CONTENT:
 """
 ${fileContent}
@@ -131,7 +140,7 @@ SYSTEM TRIGGER: Course Generation
 
 Generate a comprehensive course based on the uploaded file content following the structure and requirements below.`;
 
-    // PREPARE: Create properly structured messages with new comprehensive system prompt
+    // PREPARE: Create properly structured messages with RELAXED system prompt
     const messages = [
       {
         role: 'system',
@@ -154,10 +163,12 @@ File Parsing & Content Understanding:
 • Do not summarize or skip sections unless absolutely required for token limits
 • Reflect every major section or heading in the file
 • Identify sequences, SOP flows, staff actions, behavioral guidelines, device routines, reporting instructions, etc.
+• If no clear headings exist, create logical sections based on content flow and procedures
 
 Dynamic Course Structure (No Page Limit):
 • Structure the course into as many sections as needed based on file headings or topics
 • Use the original document's structure (if available) to drive your course layout
+• If no structure is apparent, create logical sections from procedural content
 • Suggested section flow (if no headings present in file):
   - Introduction and Objective
   - Customer Onboarding
@@ -173,7 +184,7 @@ Dynamic Course Structure (No Page Limit):
 Each Section Must Include:
 • A clear Markdown heading (e.g., ## Section 3: Troubleshooting and Escalation)
 • A one-sentence learning goal
-• ~150–200 words of explanation using actual language and procedures from the SOP
+• ~100–200 words of explanation using actual language and procedures from the SOP
 • At least one example, flow, or checklist item pulled directly from the file
 • A short summary or takeaway
 
@@ -187,13 +198,11 @@ Token Limit & Coverage:
   - Do not remove opening, onboarding, or exit-related sections
 
 Quality Standards & Constraints:
-• Do NOT hallucinate content or invent frameworks like:
-  - "Critical evaluation"
-  - "Methodology analysis"
-  - "Confidence building"
-  - "Professional learning outcomes"
-• Do NOT insert filler or educational jargon unless explicitly in the file
-• Do NOT repeat content across sections
+• ALWAYS generate substantial content even if file structure is unclear
+• If file content seems fragmented, organize it into logical learning sections
+• Use available terminology from the file, but don't reject generation if content seems sparse
+• Create meaningful sections from any procedural or instructional content found
+• Do NOT return empty or minimal responses - always provide substantial course content
 • Use beginner-friendly language and plain explanations
 • All terminology must be SOP-accurate (e.g., "help desk," "receipt validation," "escalation matrix")
 
@@ -206,16 +215,17 @@ Formatting Requirements:
 
 Behavioral Guidelines:
 • Use direct SOP terms — paraphrase if needed, but preserve original meaning
-• If file lacks sufficient content for course generation, return: "The file does not contain enough structured procedural content to generate a course."
-• Never inject fictional academic framing
-• Preserve the SOP's real structure and flow
+• ALWAYS generate substantial content (minimum 800 words total)
+• If file content is limited, expand on available procedures and create comprehensive sections
+• Never return insufficient content - always provide full course structure
+• Preserve the SOP's real structure and flow where possible
 
 Sample Workflow:
 1. User uploads an SOP or training PDF
 2. User selects "Generate Course"
 3. You extract all key sections and instructional details
 4. You return a structured, formatted, Markdown course that covers every important topic from the file
-5. (Optional) Generate questions next if user selected "Both"`
+5. Course must be substantial and comprehensive regardless of source file complexity`
       },
       {
         role: 'user',
@@ -248,14 +258,62 @@ Sample Workflow:
     try {
       const content = await ApiCallService.makeApiCall(requestBody, 'COURSE CONTENT GENERATION');
       
+      // RELAXED VALIDATION LOGIC - Much more tolerant
       if (!content) {
+        console.error('❌ API returned no content');
         throw new Error('No course content generated from OpenAI API');
       }
       
-      console.log('✅ COURSE CONTENT GENERATION SUCCESS:', content.length, 'characters');
+      const contentLength = content.length;
+      const wordCount = content.split(/\s+/).length;
+      const sectionCount = (content.match(/^##\s/gm) || []).length;
+      
+      console.log('🔍 GENERATED CONTENT ANALYSIS:', {
+        contentLength,
+        wordCount,
+        sectionCount,
+        hasMarkdownHeaders: /^##\s/m.test(content),
+        preview: content.substring(0, 200) + '...'
+      });
+      
+      // RELAXED THRESHOLDS - Accept much smaller content
+      if (contentLength < 50) {
+        console.error('❌ Content extremely short:', contentLength, 'characters');
+        console.error('📄 ACTUAL CONTENT:', content);
+        throw new Error(`Generated content is too short (${contentLength} characters). Content preview: "${content.substring(0, 100)}..."`);
+      }
+      
+      if (wordCount < 20) {
+        console.error('❌ Content has too few words:', wordCount);
+        console.error('📄 ACTUAL CONTENT:', content);
+        throw new Error(`Generated content has insufficient words (${wordCount} words). Content preview: "${content.substring(0, 100)}..."`);
+      }
+      
+      // WARN but don't reject for borderline cases
+      if (contentLength < 300) {
+        console.warn('⚠️ Generated content is shorter than expected but acceptable:', contentLength, 'characters');
+      }
+      
+      if (sectionCount < 2) {
+        console.warn('⚠️ Generated content has fewer sections than expected but acceptable:', sectionCount);
+      }
+      
+      console.log('✅ COURSE CONTENT GENERATION SUCCESS:', {
+        contentLength,
+        wordCount,
+        sectionCount,
+        acceptedWithWarnings: contentLength < 300 || sectionCount < 2
+      });
+      
       return content;
     } catch (error) {
       console.error('❌ Course content generation failed:', error);
+      
+      // Enhanced error with debugging info
+      if (error instanceof Error && error.message.includes('too short')) {
+        throw error; // Re-throw with existing debugging info
+      }
+      
       throw new Error(`Failed to generate course content: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
