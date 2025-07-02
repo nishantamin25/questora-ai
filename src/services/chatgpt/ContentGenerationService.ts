@@ -1,4 +1,5 @@
 
+
 import { PayloadValidator } from './PayloadValidator';
 import { ApiCallService } from './ApiCallService';
 
@@ -122,68 +123,90 @@ Generate focused content based strictly on this request. Do not add generic educ
 
     console.log('✅ COURSE CONTENT GENERATION - Word count validated:', wordValidation.wordCount, 'words');
     
-    const courseGenerationPrompt = `USER REQUEST: "${prompt}"
-
-DOCUMENT CONTENT:
+    const courseGenerationPrompt = `UPLOADED FILE CONTENT:
 """
 ${fileContent}
 """
 
-COURSE GENERATION INSTRUCTIONS:
-Generate a structured 3-page course based SOLELY on the uploaded file content following these strict rules:
+SYSTEM TRIGGER: Course Generation
 
-1. FILE PARSING & CONTENT UNDERSTANDING:
-- Extract and use only readable text from the provided document
-- Parse content by structure (headings, paragraphs, examples, definitions)
-- Identify core topics, key concepts, and examples from the actual file content
+Generate a beginner-friendly 3-page course following this exact structure:
 
-2. COURSE STRUCTURE (3 pages unless specified otherwise):
-- Page 1: Introduction to the topic, including key definitions, context, and objectives from the file
-- Page 2: Practical applications, use cases, or benefits found in the document
-- Page 3: Challenges, limitations, ethics, or future outlook mentioned in the file
+## Page 1: Introduction to [Topic from File]
+**Learning Goal:** [One sentence describing what readers will understand]
 
-3. EACH PAGE MUST INCLUDE:
-- A clear heading (e.g., "Page 1: Introduction to [Topic from File]")
-- A short learning goal based on file content
-- 150-200 words of concise, clear explanation using file information
-- One real example or reference directly from the file content
-- A 1-2 sentence summary or takeaway
+[150-200 words of explanation using simple, beginner-level language based on file content]
 
-4. CONTENT QUALITY RULES:
-- Do NOT fabricate content — only use what's present in the uploaded file
-- Avoid hallucinated structures like "learning outcomes," "academic strategies," or "assessment prep" unless found in the file
-- Keep tone beginner-friendly and jargon-free
-- Use plain English and relatable examples when applicable
-- Do not duplicate content across pages
+**Example:** [One real example or insight pulled directly from the file content]
 
-5. FORMATTING:
-- Use Markdown format
-- Use proper section titles
-- Use bulleted points where relevant
-- Use bold or italic for emphasis sparingly
-- No AI disclaimers or auto-signatures
+**Summary:** [One-line takeaway]
 
-Generate the 3-page course now based strictly on the file content:`;
+## Page 2: [Practical Applications/Use Cases/Benefits from File]  
+**Learning Goal:** [One sentence describing practical understanding]
 
-    // PREPARE: Create properly structured messages with specialized system prompt
+[150-200 words explaining practical applications, use cases, or benefits found in the file]
+
+**Example:** [One real example from the file content]
+
+**Summary:** [One-line takeaway]
+
+## Page 3: [Challenges/Limitations/Ethics/Future Outlook from File]
+**Learning Goal:** [One sentence about understanding challenges or future aspects]
+
+[150-200 words about challenges, limitations, ethics, or future outlook mentioned in the file]
+
+**Example:** [One real example from the file content]
+
+**Summary:** [One-line takeaway]
+
+REQUIREMENTS:
+- Use ONLY content from the uploaded file
+- Do not hallucinate or add generic educational content
+- Paraphrase and explain, don't copy verbatim
+- Keep language simple and beginner-friendly
+- No AI disclaimers or development notes
+- If file is too short/empty, return validation error
+
+Generate the 3-page course now:`;
+
+    // PREPARE: Create properly structured messages with new system prompt
     const messages = [
       {
         role: 'system',
-        content: `You are an AI-powered course generation assistant responsible for creating high-quality, structured, and accurate educational content (courses) based solely on the content of user-uploaded files. Your task is to extract and understand the material and produce a clear, modular, multi-section course suitable for beginner learners.
+        content: `You are an AI-powered course generation assistant responsible for creating structured, accurate, and file-specific educational content. Users will upload a file (e.g., PDF, DOCX, TXT) and select "Generate Course", "Generate Questions", or "Generate Both" from a popup. No manual prompt will be provided.
 
-CORE RESPONSIBILITIES:
-- Extract all readable text from uploaded files
-- Parse content by structure (headings, paragraphs, examples, definitions)
-- Generate structured 3-page courses with specific formatting
-- Use ONLY content present in the uploaded file
-- Never fabricate educational frameworks or methodologies
-- Keep content beginner-friendly and jargon-free
+Your Responsibilities (for Course Generation):
 
-BEHAVIORAL GUIDELINES:
-- Do not infer or create educational frameworks unless instructed
-- Do not duplicate content across pages
-- If file lacks depth, summarize what is available without fabrication
-- Respond with clear course breakdown, not generic text blocks`
+Content Extraction & Understanding:
+- Parse all readable content from the uploaded file
+- Understand topic structure, core concepts, examples, and any technical terms
+- Do not hallucinate, assume, or expand beyond the file's actual contents
+
+Course Structure and Logic:
+- Generate a beginner-friendly 3-page course
+- Page 1: Introduction — topic overview, basic concepts or definitions
+- Page 2: Practical applications, use cases, or benefits
+- Page 3: Challenges, limitations, ethics, or future outlook
+
+Each page must contain:
+- A clear heading (e.g., "Page 1: Introduction to XYZ")
+- A one-sentence learning goal
+- ~150–200 words of explanation in simple, beginner-level language
+- One real example or insight pulled directly from the file content
+- A one-line summary or takeaway
+
+Content Quality Requirements:
+- Use only what is provided in the uploaded file
+- Avoid hallucinated structures like "learning outcomes" or "assessment prep" unless explicitly in the file
+- No invented content, no generic academic filler
+- Use plain, relatable explanations — no jargon or vague claims
+- Maintain originality across all pages (no repeated points or phrases)
+
+Behavioral Guidelines:
+- Do not copy large sections of text from the file verbatim — paraphrase and explain
+- Do not include AI disclaimers, development notes, or signatures in output
+- If the file is too short or empty, return a clean validation error
+- Always return structured output unless the generation is blocked by a clear file failure`
       },
       {
         role: 'user',
@@ -228,3 +251,4 @@ BEHAVIORAL GUIDELINES:
     }
   }
 }
+
