@@ -1,4 +1,3 @@
-
 import { Course, CourseMaterial } from './CourseTypes';
 import { CourseContentProcessor } from './CourseContentProcessor';
 import { CourseSectionCreator } from './CourseSectionCreator';
@@ -12,96 +11,85 @@ export class CourseGenerator {
     fileContent: string = '', 
     testName?: string
   ): Promise<Course> {
-    console.log('🔍 ENHANCED COURSE GENERATION START (Following System Prompt):', { 
+    console.log('🔍 SYSTEM PROMPT GUIDED COURSE GENERATION START:', { 
       prompt: prompt.substring(0, 150) + '...', 
       fileCount: files.length, 
       hasFileContent: !!fileContent,
       fileContentLength: fileContent?.length || 0,
       fileNames: files.map(f => f.name),
       testName,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      usingSystemPrompt: true
     });
 
     const courseId = CourseNameGenerator.generateId();
 
     try {
-      // ENHANCED: Validate content requirements per system prompt
-      CourseContentProcessor.validateContentRequirements(files, fileContent);
-      
-      // ENHANCED: Process content with detailed analysis
-      const processedContent = await this.analyzeContentForCourse(fileContent, prompt);
-      
-      console.log('✅ ENHANCED Content Analysis Complete:', {
-        contentType: processedContent.type,
-        complexity: processedContent.complexity,
-        keyTopics: processedContent.keyTopics.slice(0, 3),
-        structureDetected: processedContent.hasStructure,
-        wordCount: processedContent.wordCount
-      });
+      // SYSTEM PROMPT RULE: Validate content requirements
+      if (!fileContent || fileContent.length < 200) {
+        throw new Error('Course generation requires substantial file content (minimum 200 characters). The system prompt mandates content extraction from uploaded files only.');
+      }
 
+      console.log('✅ SYSTEM PROMPT VALIDATION: File content meets minimum requirements');
+      
+      // SYSTEM PROMPT RULE: Process content strictly from files
       const validatedFileContent = await CourseContentProcessor.processAndValidateContent(
         files, 
         fileContent
       );
 
-      // ENHANCED: Generate course materials with structured approach
-      console.log('🔒 GENERATING: Enhanced course sections from analyzed content');
-      const materials = await this.createStructuredCourseMaterials(
+      // SYSTEM PROMPT RULE: Create structured course materials (3 pages default)
+      console.log('🔒 GENERATING: Course sections following System Prompt structure (3-page default)');
+      const materials = await CourseSectionCreator.createEnhancedFileBasedSections(
         prompt, 
         validatedFileContent,
-        processedContent
+        { followsSystemPrompt: true }
       );
 
       if (!materials || materials.length === 0) {
-        console.error('❌ NO SECTIONS CREATED from analyzed content');
-        throw new Error('Unable to generate course sections from the file content. The content analysis could not identify suitable learning materials. Please ensure your file contains substantial readable educational content.');
+        console.error('❌ NO SECTIONS CREATED following System Prompt guidelines');
+        throw new Error('Unable to generate course sections from the file content following system prompt guidelines. Please ensure your file contains substantial readable educational content.');
       }
 
-      // Optimize section count based on content complexity
-      const optimalSectionCount = this.calculateOptimalSections(processedContent);
-      const finalMaterials = materials.slice(0, optimalSectionCount);
-      
-      if (finalMaterials.length === 0) {
-        throw new Error('No valid course sections could be created from the analyzed content.');
-      }
-
-      const estimatedTime = CourseNameGenerator.calculateEstimatedTime(finalMaterials);
+      // SYSTEM PROMPT RULE: Estimate time based on content (beginner-friendly)
+      const estimatedTime = this.calculateBeginnerFriendlyTime(materials);
 
       const course: Course = {
         id: courseId,
-        name: testName || this.generateEnhancedCourseName(prompt, processedContent),
-        description: this.generateEnhancedCourseDescription(prompt, processedContent, finalMaterials.length),
-        materials: finalMaterials,
+        name: testName || this.generateSystemPromptCourseName(prompt, fileContent),
+        description: this.generateSystemPromptDescription(prompt, fileContent),
+        materials: materials,
         estimatedTime,
         createdAt: new Date().toISOString(),
-        difficulty: this.mapComplexityToDifficulty(processedContent.complexity)
+        difficulty: 'easy', // System prompt mandates beginner-friendly content
+        isActive: true
       };
 
       // Generate PDF with error recovery
       try {
         const pdfUrl = PDFGenerationService.generateCoursePDF(course);
         course.pdfUrl = pdfUrl;
-        console.log('✅ Enhanced Course PDF generated successfully');
+        console.log('✅ System Prompt Course PDF generated successfully');
       } catch (pdfError) {
         console.error('⚠️ PDF generation failed, continuing without PDF:', pdfError);
       }
 
-      console.log('✅ ENHANCED COURSE GENERATION SUCCESS:', {
+      console.log('✅ SYSTEM PROMPT GUIDED COURSE GENERATION SUCCESS:', {
         id: course.id,
         name: course.name,
         materialsCount: course.materials.length,
         totalContentLength: course.materials.reduce((sum, m) => sum + m.content.length, 0),
         estimatedTime: course.estimatedTime,
         hasPDF: !!course.pdfUrl,
-        contentSource: 'ENHANCED_FILE_ANALYSIS',
-        contentType: processedContent.type,
-        complexity: processedContent.complexity,
+        contentSource: 'SYSTEM_PROMPT_GUIDED',
+        difficulty: course.difficulty,
+        isBeginnerFriendly: true,
         timestamp: new Date().toISOString()
       });
 
       return course;
     } catch (error) {
-      console.error('❌ ENHANCED COURSE GENERATION FAILURE:', {
+      console.error('❌ SYSTEM PROMPT GUIDED COURSE GENERATION FAILURE:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined,
         prompt: prompt.substring(0, 100),
@@ -111,8 +99,62 @@ export class CourseGenerator {
       
       // Enhanced error message for user
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      throw new Error(`Enhanced course generation failed: ${errorMessage}. Please ensure your uploaded files contain substantial readable educational content that can be analyzed according to the system prompt requirements.`);
+      throw new Error(`System prompt guided course generation failed: ${errorMessage}. Please ensure your uploaded files contain substantial readable educational content.`);
     }
+  }
+
+  // SYSTEM PROMPT RULE: Calculate time for beginner-friendly content
+  private static calculateBeginnerFriendlyTime(materials: CourseMaterial[]): number {
+    const totalWords = materials.reduce((sum, material) => {
+      return sum + (material.content ? material.content.split(/\s+/).length : 0);
+    }, 0);
+    
+    // Beginner-friendly reading pace: ~150 words per minute
+    const readingTime = Math.ceil(totalWords / 150);
+    
+    // Add time for reflection and understanding (beginner-friendly)
+    return Math.max(readingTime + 10, 15); // Minimum 15 minutes for any course
+  }
+
+  // SYSTEM PROMPT RULE: Generate course name from file content
+  private static generateSystemPromptCourseName(prompt: string, fileContent: string): string {
+    // Extract key terms from file content (not fabricated)
+    const words = fileContent.toLowerCase().split(/[^\w]+/);
+    const meaningfulWords = words.filter(word => 
+      word.length > 4 && 
+      !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'she', 'use', 'your', 'how', 'said', 'each', 'which', 'their', 'time', 'will', 'about', 'would', 'there', 'could', 'other', 'after', 'first', 'well', 'many', 'some', 'what', 'know', 'water', 'than', 'call', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'over', 'such', 'take', 'them', 'well', 'were'].includes(word)
+    );
+    
+    // Count word frequency
+    const wordCount: { [key: string]: number } = {};
+    meaningfulWords.forEach(word => {
+      wordCount[word] = (wordCount[word] || 0) + 1;
+    });
+    
+    // Get most frequent meaningful word
+    const topWord = Object.entries(wordCount)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    if (topWord && topWord[0]) {
+      const capitalizedWord = topWord[0].charAt(0).toUpperCase() + topWord[0].slice(1);
+      return `${capitalizedWord} Course`;
+    }
+    
+    // Fallback to prompt-based name
+    const promptWords = prompt.split(/\s+/).filter(w => w.length > 3);
+    if (promptWords.length > 0) {
+      return `${promptWords[0].charAt(0).toUpperCase() + promptWords[0].slice(1)} Course`;
+    }
+    
+    return 'Educational Course';
+  }
+
+  // SYSTEM PROMPT RULE: Generate description from file content
+  private static generateSystemPromptDescription(prompt: string, fileContent: string): string {
+    const wordCount = fileContent.split(/\s+/).length;
+    const estimatedReadingTime = Math.ceil(wordCount / 150);
+    
+    return `This beginner-friendly course is generated from uploaded file content following structured learning principles. The course presents key concepts, practical applications, and important considerations in an accessible format. Content is based strictly on the provided file material with approximately ${wordCount} words, estimated reading time of ${estimatedReadingTime} minutes.`;
   }
 
   // ENHANCED: Analyze content structure and themes for better course generation
