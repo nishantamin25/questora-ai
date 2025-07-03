@@ -59,6 +59,7 @@ export class SupabaseQuestionnaireService {
           type: question.type as 'multiple-choice' | 'text' | 'boolean',
           options: question.options || [],
           correct_answer: question.correctAnswer,
+          admin_selected_answer: question.correctAnswer || 0,
           explanation: question.explanation
         }));
 
