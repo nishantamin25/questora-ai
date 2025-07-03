@@ -245,22 +245,21 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                   </Button>
                 </div>
                 
-                <div className="space-y-6">
-                  <div>
-                    <Label className="text-slate-700 font-bold font-poppins text-base">Question Text</Label>
-                    <Textarea
-                      value={question.text}
-                      onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
-                      className="mt-2 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter text-base"
-                      rows={3}
-                    />
-                  </div>
+                {/* Question Text */}
+                <div className="mb-6">
+                  <Label className="text-slate-700 font-bold font-poppins text-base">Question Text</Label>
+                  <Textarea
+                    value={question.text}
+                    onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
+                    className="mt-2 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter text-base"
+                    rows={3}
+                  />
+                </div>
 
-                  {/* Options Section */}
-                  <div className="space-y-4">
-                    <Label className="text-slate-700 font-bold font-poppins text-base">Options</Label>
-                    
-                    {/* Regular option inputs */}
+                {/* Options Section */}
+                <div className="mb-6">
+                  <Label className="text-slate-700 font-bold font-poppins text-base">Options</Label>
+                  <div className="mt-2 space-y-3">
                     {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
                       <div key={optionIndex} className="flex items-center space-x-3">
                         <span className="text-lg font-bold text-slate-700 min-w-[30px]">
@@ -275,60 +274,60 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                       </div>
                     ))}
                   </div>
+                </div>
 
-                  {/* CORRECT ANSWER SELECTION SECTION */}
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-4 border-orange-300 rounded-xl p-6 shadow-lg">
-                    <div className="mb-6 text-center">
-                      <h5 className="text-2xl font-bold text-orange-800 font-poppins mb-3">
-                        🎯 SELECT THE CORRECT ANSWER
-                      </h5>
-                      <p className="text-orange-700 font-medium font-inter text-lg">
-                        Click the radio button next to the correct option
-                      </p>
-                    </div>
-                    
-                    <RadioGroup
-                      value={question.correctAnswer?.toString() || "0"}
-                      onValueChange={(value) => {
-                        const correctIndex = parseInt(value);
-                        console.log(`🎯 RADIO BUTTON CLICKED - Question ${question.id}, selecting option ${correctIndex} (${String.fromCharCode(65 + correctIndex)})`);
-                        handleCorrectAnswerChange(question.id, correctIndex);
-                      }}
-                      className="space-y-3"
-                    >
-                      {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
-                        <div 
-                          key={optionIndex} 
-                          className={`flex items-center space-x-4 p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
-                            question.correctAnswer === optionIndex 
-                              ? 'bg-green-100 border-green-500 shadow-lg' 
-                              : 'bg-white border-gray-300 hover:border-orange-400 hover:shadow-md'
-                          }`}
+                {/* CORRECT ANSWER SELECTION SECTION - This is the missing section! */}
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-4 border-orange-300 rounded-xl p-6 shadow-lg">
+                  <div className="mb-6 text-center">
+                    <h5 className="text-2xl font-bold text-orange-800 font-poppins mb-3">
+                      🎯 SELECT THE CORRECT ANSWER
+                    </h5>
+                    <p className="text-orange-700 font-medium font-inter text-lg">
+                      Click the radio button next to the correct option
+                    </p>
+                  </div>
+                  
+                  <RadioGroup
+                    value={question.correctAnswer?.toString() || "0"}
+                    onValueChange={(value) => {
+                      const correctIndex = parseInt(value);
+                      console.log(`🎯 RADIO BUTTON CLICKED - Question ${question.id}, selecting option ${correctIndex} (${String.fromCharCode(65 + correctIndex)})`);
+                      handleCorrectAnswerChange(question.id, correctIndex);
+                    }}
+                    className="space-y-3"
+                  >
+                    {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
+                      <div 
+                        key={optionIndex} 
+                        className={`flex items-center space-x-4 p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                          question.correctAnswer === optionIndex 
+                            ? 'bg-green-100 border-green-500 shadow-lg' 
+                            : 'bg-white border-gray-300 hover:border-orange-400 hover:shadow-md'
+                        }`}
+                      >
+                        <RadioGroupItem 
+                          value={optionIndex.toString()} 
+                          id={`${question.id}-correct-${optionIndex}`}
+                          className="w-6 h-6 border-2 border-orange-500"
+                        />
+                        <Label 
+                          htmlFor={`${question.id}-correct-${optionIndex}`}
+                          className="text-lg font-bold text-slate-800 cursor-pointer font-poppins flex-1"
                         >
-                          <RadioGroupItem 
-                            value={optionIndex.toString()} 
-                            id={`${question.id}-correct-${optionIndex}`}
-                            className="w-6 h-6 border-2 border-orange-500"
-                          />
-                          <Label 
-                            htmlFor={`${question.id}-correct-${optionIndex}`}
-                            className="text-lg font-bold text-slate-800 cursor-pointer font-poppins flex-1"
-                          >
-                            {String.fromCharCode(65 + optionIndex)}. {option}
-                          </Label>
-                          {question.correctAnswer === optionIndex && (
-                            <span className="text-green-600 font-bold text-lg">✓ CORRECT</span>
-                          )}
-                        </div>
-                      ))}
-                    </RadioGroup>
-                    
-                    <div className="mt-6 text-center bg-white rounded-lg p-4 border-2 border-orange-200">
-                      <p className="text-lg text-orange-800 font-bold font-inter">
-                        <strong>Currently selected:</strong> Option {String.fromCharCode(65 + (question.correctAnswer || 0))} 
-                        {question.correctAnswer !== undefined ? ' ✅' : ' ❌ (Please select an answer)'}
-                      </p>
-                    </div>
+                          {String.fromCharCode(65 + optionIndex)}. {option}
+                        </Label>
+                        {question.correctAnswer === optionIndex && (
+                          <span className="text-green-600 font-bold text-lg">✓ CORRECT</span>
+                        )}
+                      </div>
+                    ))}
+                  </RadioGroup>
+                  
+                  <div className="mt-6 text-center bg-white rounded-lg p-4 border-2 border-orange-200">
+                    <p className="text-lg text-orange-800 font-bold font-inter">
+                      <strong>Currently selected:</strong> Option {String.fromCharCode(65 + (question.correctAnswer || 0))} 
+                      {question.correctAnswer !== undefined ? ' ✅' : ' ❌ (Please select an answer)'}
+                    </p>
                   </div>
                 </div>
               </div>
