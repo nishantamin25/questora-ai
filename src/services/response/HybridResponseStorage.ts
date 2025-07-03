@@ -30,28 +30,20 @@ export class HybridResponseStorage {
       console.log('Could not get authenticated user info:', error);
     }
     
-    // For guests, get the username from localStorage or generate a unique guest name
-    let guestUsername = localStorage.getItem('guestUsername');
+    // For guests, get the actual username from the current user stored by AuthService
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
     
-    // If no guest username exists, create one and store it
-    if (!guestUsername) {
-      // Try to get it from session storage first
-      guestUsername = sessionStorage.getItem('currentGuestUsername');
-      
-      if (!guestUsername) {
-        // Generate a unique guest username with timestamp
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
-        guestUsername = `Guest_${timestamp}`;
-        sessionStorage.setItem('currentGuestUsername', guestUsername);
-      }
-      
-      // Store it in localStorage for persistence
-      localStorage.setItem('guestUsername', guestUsername);
+    if (currentUser && currentUser.role === 'guest') {
+      return {
+        userId: 'anonymous',
+        username: currentUser.username
+      };
     }
     
+    // Fallback to a default guest name if no current user is found
     return {
       userId: 'anonymous',
-      username: guestUsername
+      username: 'Guest User'
     };
   }
 
