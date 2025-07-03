@@ -1,4 +1,3 @@
-
 import { QuestionnaireResponse, SubmitResponseData } from '../ResponseService';
 import { SupabaseResponseService } from '../supabase/SupabaseResponseService';
 import { QuestionnaireService } from '../QuestionnaireService';
@@ -28,9 +27,9 @@ export class HybridResponseStorage {
       // Calculate score using admin-selected answers
       const { score, totalQuestions, answers } = this.calculateScore(userAnswers, questionnaire);
 
-      // Create response object
+      // Create response object with proper UUID
       const response: QuestionnaireResponse = {
-        id: this.generateId(),
+        id: this.generateUUID(),
         questionnaireId: responseData.questionnaireId,
         questionnaireTitle: questionnaire.title,
         userId: 'anonymous',
@@ -164,7 +163,7 @@ export class HybridResponseStorage {
     }
   }
 
-  private static generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  private static generateUUID(): string {
+    return crypto.randomUUID();
   }
 }

@@ -24,8 +24,8 @@ export class QuestionnaireGenerator {
       currentLanguage: LanguageService.getCurrentLanguage()
     });
 
-    const questionnaireId = this.generateId();
-    const testId = `${questionnaireId}-set${setNumber}`;
+    const questionnaireId = this.generateUUID();
+    const testId = questionnaireId; // Use UUID directly instead of appending set number
     const currentLanguage = LanguageService.getCurrentLanguage();
     
     try {
@@ -290,7 +290,7 @@ export class QuestionnaireGenerator {
       }
 
       let formattedQuestions: Question[] = chatGPTQuestions.map((q, index) => ({
-        id: this.generateId(),
+        id: this.generateUUID(),
         text: q.question,
         type: 'multiple-choice' as const,
         options: q.options,
@@ -407,7 +407,7 @@ export class QuestionnaireGenerator {
     }
   }
 
-  private static generateId(): string {
-    return Math.random().toString(36).substr(2, 15);
+  private static generateUUID(): string {
+    return crypto.randomUUID();
   }
 }

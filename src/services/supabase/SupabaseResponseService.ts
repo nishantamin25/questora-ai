@@ -128,7 +128,7 @@ export class SupabaseResponseService {
       const { data: { user } } = await supabase.auth.getUser();
       
       const response: QuestionnaireResponse = {
-        id: this.generateId(),
+        id: this.generateUUID(),
         questionnaireId: responseData.questionnaireId,
         questionnaireTitle: 'Questionnaire',
         userId: user?.id || 'anonymous',
@@ -150,7 +150,7 @@ export class SupabaseResponseService {
     }
   }
 
-  private static generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  private static generateUUID(): string {
+    return crypto.randomUUID();
   }
 }
