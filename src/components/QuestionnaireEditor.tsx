@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Edit3, Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -275,46 +276,48 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                   </div>
                 </div>
 
-                {/* SIMPLIFIED CORRECT ANSWER SELECTION - Using native HTML radio buttons */}
+                {/* Correct Answer Selection - Using Shadcn RadioGroup */}
                 <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-4 border-orange-300 rounded-xl p-6 shadow-lg">
                   <div className="mb-6 text-center">
                     <h5 className="text-2xl font-bold text-orange-800 font-poppins mb-3">
                       🎯 SELECT THE CORRECT ANSWER
                     </h5>
                     <p className="text-orange-700 font-medium font-inter text-lg">
-                      Click the radio button next to the correct option
+                      Choose the correct option for this question
                     </p>
                   </div>
                   
-                  <div className="space-y-4">
+                  <RadioGroup
+                    value={question.correctAnswer?.toString() || "0"}
+                    onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
+                    className="space-y-4"
+                  >
                     {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
                       <div 
                         key={optionIndex} 
-                        className={`flex items-center space-x-4 p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                        className={`flex items-center space-x-4 p-4 rounded-lg border-2 transition-all duration-200 ${
                           question.correctAnswer === optionIndex 
                             ? 'bg-green-100 border-green-500 shadow-lg' 
                             : 'bg-white border-gray-300 hover:border-orange-400 hover:shadow-md'
                         }`}
-                        onClick={() => handleCorrectAnswerChange(question.id, optionIndex)}
                       >
-                        <input
-                          type="radio"
-                          name={`correct-answer-${question.id}`}
-                          checked={question.correctAnswer === optionIndex}
-                          onChange={() => handleCorrectAnswerChange(question.id, optionIndex)}
-                          className="w-6 h-6 text-orange-500 border-2 border-orange-500 focus:ring-orange-500 cursor-pointer"
+                        <RadioGroupItem 
+                          value={optionIndex.toString()} 
+                          id={`${question.id}-option-${optionIndex}`}
+                          className="w-6 h-6"
                         />
-                        <label 
+                        <Label 
+                          htmlFor={`${question.id}-option-${optionIndex}`}
                           className="text-lg font-bold text-slate-800 cursor-pointer font-poppins flex-1"
                         >
                           {String.fromCharCode(65 + optionIndex)}. {option}
-                        </label>
+                        </Label>
                         {question.correctAnswer === optionIndex && (
                           <span className="text-green-600 font-bold text-lg">✓ CORRECT</span>
                         )}
                       </div>
                     ))}
-                  </div>
+                  </RadioGroup>
                   
                   <div className="mt-6 text-center bg-white rounded-lg p-4 border-2 border-orange-200">
                     <p className="text-lg text-orange-800 font-bold font-inter">
