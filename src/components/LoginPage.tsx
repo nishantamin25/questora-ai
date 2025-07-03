@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,11 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from "@/components/ui/use-toast"
 import { GuestAssignmentService } from '@/services/GuestAssignmentService';
 
-interface LoginPageProps {
-  onLogin: (userData: any) => void;
-}
-
-const LoginPage = ({ onLogin }: LoginPageProps) => {
+const LoginPage = () => {
   const [guestUsername, setGuestUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,12 +31,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       
       console.log('🎯 Guest login successful:', guestUsername.trim());
       
-      // Call the onLogin callback with user data
-      onLogin({
-        username: guestUsername.trim(),
-        role: 'guest'
-      });
-      
+      // Redirect to dashboard
+      navigate('/');
     } catch (error) {
       console.error('Guest login failed:', error);
       setError('Login failed. Please try again.');

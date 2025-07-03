@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { MoreVertical, Plus } from 'lucide-react';
 import { CourseService } from '@/services/CourseService';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
+import { AuthService } from '@/services/AuthService';
 import { Link } from 'react-router-dom';
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
@@ -15,7 +16,9 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAuth } from '@/hooks/useAuth';
+import { Icons } from './icons';
+import { auth } from '@/integrations/firebase/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
 import { getUserInfo } from '@/utils';
 import { Questionnaire } from '@/services/questionnaire/QuestionnaireTypes';
 
@@ -23,7 +26,7 @@ const Dashboard = () => {
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, signOut } = useAuth();
+  const [user, userLoading, userError] = useAuthState(auth);
   const navigate = useNavigate();
   const { toast } = useToast()
 
@@ -126,8 +129,8 @@ const Dashboard = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.user_metadata?.avatar_url || ""} alt={user?.user_metadata?.username || "Avatar"} />
-                  <AvatarFallback>{user?.user_metadata?.username?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
+                  <AvatarImage src={user?.photoURL || ""} alt={user?.displayName || "Avatar"} />
+                  <AvatarFallback>{user?.displayName?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -144,7 +147,7 @@ const Dashboard = () => {
                 <Link to="/settings" className="w-full h-full block">Settings</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => signOut()}>
+              <DropdownMenuItem onClick={() => AuthService.signOut()}>
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
