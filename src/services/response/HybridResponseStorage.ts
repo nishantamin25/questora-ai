@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
 import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
 import { ResponseScoring } from './ResponseScoring';
+import { GuestAssignmentService } from '../GuestAssignmentService';
 
 export class HybridResponseStorage {
   private static isOnline(): boolean {
@@ -31,11 +32,11 @@ export class HybridResponseStorage {
       console.log('Could not get authenticated user info:', error);
     }
     
-    // For guests, prioritize the actual username they entered over generated guest names
-    // First check for actual guest username (from login form)
-    let actualGuestUsername = localStorage.getItem('actualGuestUsername');
+    // For guests, use the GuestAssignmentService to get the actual username
+    const actualGuestUsername = GuestAssignmentService.getGuestUsername();
     
     if (actualGuestUsername) {
+      console.log('🎯 Using actual guest username:', actualGuestUsername);
       return {
         userId: 'anonymous',
         username: actualGuestUsername
