@@ -35,32 +35,23 @@ export class QuestionGenerationService {
         throw new Error('OpenAI API key not configured. Please set your API key in settings.');
       }
 
-      // Check if we have file content that looks like it contains base64 data
-      const hasFileData = fileContent.includes('=== File:') && fileContent.includes('base64');
-      
-      if (hasFileData) {
-        console.log('📄 Detected file data in content, using structured format');
-        return await this.generateQuestionsWithFileData(
-          prompt,
-          numberOfQuestions,
-          difficulty,
-          fileContent,
-          setNumber,
-          totalSets,
-          language
-        );
-      } else {
-        console.log('📝 Using text-only format');
-        return await this.generateQuestionsTextOnly(
-          prompt,
-          numberOfQuestions,
-          difficulty,
-          fileContent,
-          setNumber,
-          totalSets,
-          language
-        );
+      // Check if file content looks like an error message
+      if (fileContent.includes('Error: Could not process file content') || 
+          fileContent.includes('PDF processing failed') ||
+          fileContent.length < 200) {
+        throw new Error('PDF content could not be processed. Please ensure the PDF contains readable text and try uploading again.');
       }
+
+      console.log('📝 Using text-based question generation');
+      return await this.generateQuestionsTextOnly(
+        prompt,
+        numberOfQuestions,
+        difficulty,
+        fileContent,
+        setNumber,
+        totalSets,
+        language
+      );
 
     } catch (error) {
       console.error('❌ Question generation failed:', error);
@@ -194,24 +185,18 @@ CRITICAL REQUIREMENTS:
 4. If content seems limited, extract every possible detail and create variations
 5. Return valid JSON format with the exact structure specified
 
-CONTENT ACCURACY AND NON-REPETITION ENFORCEMENT:
-All questions must be generated only from the instructional content in the provided text.
+CONTENT ACCURACY REQUIREMENTS:
+- All questions must be generated ONLY from the actual content provided
+- Each question must reference specific information, procedures, steps, or facts from the text
+- Do not create general knowledge questions
+- Do not guess or assume information not present in the text
+- Every question must be traceable to specific content in the provided text
 
-You must not guess or generate general questions. Each question must directly reference real steps, procedures, roles, rules, or examples described in the content.
-
-Do not generate templated SOP questions unless those specific topics exist in the content.
-
-For every question:
-- Verify that it represents a unique concept or instruction from the content
-- Do not reuse question stems or logic across questions in the same set
-- Do not rephrase or reword previous questions in a way that makes them appear different
-- If a topic has already been covered in a question, do not create a second question about it — even with different wording.
-
-Example: If one question asks about scanning procedure, don't ask again about the same action using different phrasing.
-
-If the same content is used in future generations, track previously used concepts and avoid repeating them.
-
-Every new set must contain fresh, non-overlapping questions.
+QUESTION VARIETY REQUIREMENTS:
+- Create questions about different sections/topics from the content
+- Use various question types: what, how, when, where, why, which
+- Focus on key procedures, important facts, specific requirements, and critical details
+- Ensure each question tests a unique aspect of the content
 
 JSON STRUCTURE (MANDATORY):
 {
@@ -220,7 +205,7 @@ JSON STRUCTURE (MANDATORY):
       "question": "Question text here",  
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": 0,
-      "explanation": "Brief explanation"
+      "explanation": "Brief explanation referencing the specific content"
     }
   ]
 }
@@ -230,17 +215,16 @@ CONTENT GUIDELINES:
 - Use only information from the provided text
 - Each question must have exactly 4 options
 - correct_answer must be 0, 1, 2, or 3 (array index)
-- Include brief explanations
-- No duplicates or repetitive questions
+- Include brief explanations that reference the source content
 - Extract questions from procedures, definitions, steps, rules, requirements, etc.
 
-IMPORTANT: You must return exactly ${numberOfQuestions} questions. Analyze the content thoroughly and create questions about different aspects, details, procedures, or requirements mentioned in the text.`;
+IMPORTANT: You must return exactly ${numberOfQuestions} questions. Read the content carefully and create questions that test understanding of the actual material provided.`;
 
     const userPrompt = `Generate exactly ${numberOfQuestions} ${difficulty} difficulty questions from this content in valid JSON format:
 
 ${fileContent}
 
-Remember: Return exactly ${numberOfQuestions} questions in the specified JSON structure.`;
+Remember: Base all questions strictly on the content above. Return exactly ${numberOfQuestions} questions in the specified JSON structure.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -251,12 +235,12 @@ Remember: Return exactly ${numberOfQuestions} questions in the specified JSON st
       model: 'gpt-4.1-2025-04-14',
       messages,
       max_tokens: numberOfQuestions * 300,
-      temperature: 0.2,
+      temperature: 0.1,
       response_format: { type: "json_object" }
     };
 
-    console.log('📤 Sending text-only request to ChatGPT...');
-    const content = await ApiCallService.makeApiCall(requestBody, 'TEXT-BASED QUESTION GENERATION');
+    console.log('📤 Sending content-based request to ChatGPT...');
+    const content = await ApiCallService.makeApiCall(requestBody, 'CONTENT-BASED QUESTION GENERATION');
 
     return this.processQuestionResponse(content, numberOfQuestions);
   }
