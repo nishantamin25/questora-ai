@@ -214,18 +214,18 @@ export class QuestionnaireGenerator {
       if (questionnaire.course) {
         const course = questionnaire.course;
         if (targetLanguage !== 'en') {
-          if (course.name) {
-            course.name = await LanguageService.translateContent(course.name, targetLanguage);
+          // Use 'title' instead of 'name' for Course type
+          if (course.title) {
+            course.title = await LanguageService.translateContent(course.title, targetLanguage);
           }
-          if (course.description) {
-            course.description = await LanguageService.translateContent(course.description, targetLanguage);
-          }
-          if (course.materials && Array.isArray(course.materials)) {
-            course.materials = await Promise.all(
-              course.materials.map(async (material: any) => ({
-                ...material,
-                title: material.title ? await LanguageService.translateContent(material.title, targetLanguage) : material.title,
-                content: material.content ? await LanguageService.translateContent(material.content, targetLanguage) : material.content
+          // Course type doesn't have 'description' property, so we skip this
+          // Course type doesn't have 'materials' property, so we translate sections instead
+          if (course.sections && Array.isArray(course.sections)) {
+            course.sections = await Promise.all(
+              course.sections.map(async (section: any) => ({
+                ...section,
+                title: section.title ? await LanguageService.translateContent(section.title, targetLanguage) : section.title,
+                content: section.content ? await LanguageService.translateContent(section.content, targetLanguage) : section.content
               }))
             );
           }
@@ -335,19 +335,22 @@ export class QuestionnaireGenerator {
         try {
           console.log(`🌐 Translating course to ${currentLanguage}...`);
           
-          if (course.name) {
-            course.name = await LanguageService.translateContent(course.name, currentLanguage);
+          // Use 'title' instead of 'name' for Course type
+          if (course.title) {
+            course.title = await LanguageService.translateContent(course.title, currentLanguage);
           }
-          if (course.description) {
-            course.description = await LanguageService.translateContent(course.description, currentLanguage);
+          // Course type doesn't have 'description' property, so we translate 'content' instead
+          if (course.content) {
+            course.content = await LanguageService.translateContent(course.content, currentLanguage);
           }
           
-          if (course.materials && Array.isArray(course.materials)) {
-            course.materials = await Promise.all(
-              course.materials.map(async (material: any) => ({
-                ...material,
-                title: material.title ? await LanguageService.translateContent(material.title, currentLanguage) : material.title,
-                content: material.content ? await LanguageService.translateContent(material.content, currentLanguage) : material.content
+          // Course type doesn't have 'materials' property, so we translate 'sections' instead
+          if (course.sections && Array.isArray(course.sections)) {
+            course.sections = await Promise.all(
+              course.sections.map(async (section: any) => ({
+                ...section,
+                title: section.title ? await LanguageService.translateContent(section.title, currentLanguage) : section.title,
+                content: section.content ? await LanguageService.translateContent(section.content, currentLanguage) : section.content
               }))
             );
           }
