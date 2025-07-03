@@ -2,7 +2,7 @@
 import { ChatGPTService } from '../ChatGPTService';
 import { CourseService } from '../CourseService';
 import { LanguageService } from '../LanguageService';
-import { Questionnaire, TestOptions, Question } from './QuestionnaireTypes';
+import { Questionnaire, TestOptions, Question, Course } from './QuestionnaireTypes';
 import { QuestionnaireStorage } from './QuestionnaireStorage';
 
 export class QuestionnaireGenerator {
@@ -214,12 +214,13 @@ export class QuestionnaireGenerator {
       if (questionnaire.course) {
         const course = questionnaire.course;
         if (targetLanguage !== 'en') {
-          // Use 'title' instead of 'name' for Course type
+          // Use the correct Course type properties
           if (course.title) {
             course.title = await LanguageService.translateContent(course.title, targetLanguage);
           }
-          // Course type doesn't have 'description' property, so we skip this
-          // Course type doesn't have 'materials' property, so we translate sections instead
+          if (course.content) {
+            course.content = await LanguageService.translateContent(course.content, targetLanguage);
+          }
           if (course.sections && Array.isArray(course.sections)) {
             course.sections = await Promise.all(
               course.sections.map(async (section: any) => ({
@@ -319,7 +320,7 @@ export class QuestionnaireGenerator {
     prompt: string,
     fileContent: string,
     currentLanguage: string
-  ): Promise<any> {
+  ): Promise<Course> {
     console.log('🔍 ENFORCING: File content requirement for course...');
     
     if (!fileContent || fileContent.length < 200) {
@@ -328,23 +329,35 @@ export class QuestionnaireGenerator {
     }
 
     try {
-      let course = await CourseService.generateCourse(prompt, [], fileContent);
+      // CourseService returns a different Course type, so we need to convert it
+      const generatedCourse = await CourseService.generateCourse(prompt, [], fileContent);
+      
+      // Convert from CourseService Course type to Questionnaire Course type
+      let course: Course = {
+        id: generatedCourse.id,
+        title: generatedCourse.name, // Convert name to title
+        content: generatedCourse.description || '', // Convert description to content
+        sections: generatedCourse.materials?.map(material => ({
+          id: material.id,
+          title: material.title,
+          content: material.content,
+          order: material.order
+        })) || [],
+        createdAt: generatedCourse.createdAt
+      };
       
       // PRODUCTION: Multilingual support - translate course if needed
       if (currentLanguage !== 'en' && course) {
         try {
           console.log(`🌐 Translating course to ${currentLanguage}...`);
           
-          // Use 'title' instead of 'name' for Course type
           if (course.title) {
             course.title = await LanguageService.translateContent(course.title, currentLanguage);
           }
-          // Course type doesn't have 'description' property, so we translate 'content' instead
           if (course.content) {
             course.content = await LanguageService.translateContent(course.content, currentLanguage);
           }
           
-          // Course type doesn't have 'materials' property, so we translate 'sections' instead
           if (course.sections && Array.isArray(course.sections)) {
             course.sections = await Promise.all(
               course.sections.map(async (section: any) => ({
