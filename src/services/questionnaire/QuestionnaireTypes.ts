@@ -33,6 +33,7 @@ export interface Questionnaire {
   timeframe?: number;
   questions: Question[];
   course?: Course;
+  courseContent?: any;
   createdAt: string;
   isActive?: boolean;
   isSaved?: boolean;

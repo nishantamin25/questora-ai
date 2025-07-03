@@ -1,3 +1,4 @@
+
 import { ChatGPTService } from '../ChatGPTService';
 import { QuestionnaireStorage } from './QuestionnaireStorage';
 import { LanguageService } from '../LanguageService';
@@ -124,9 +125,7 @@ export class QuestionnaireGenerator {
       const userPrompt = `Content to create questions from:\n\n${fileContent}`;
 
       const response = await ChatGPTService.generateContent(
-        systemPrompt,
-        userPrompt,
-        'gpt-4o-mini'
+        `${systemPrompt}\n\n${userPrompt}`
       );
 
       const chatGPTQuestions = JSON.parse(response);
@@ -173,9 +172,7 @@ export class QuestionnaireGenerator {
       ]`;
 
       const response = await ChatGPTService.generateContent(
-        systemPrompt,
-        prompt,
-        'gpt-4o-mini'
+        `${systemPrompt}\n\nTopic: ${prompt}`
       );
 
       const chatGPTQuestions = JSON.parse(response);
@@ -227,9 +224,7 @@ export class QuestionnaireGenerator {
       const userPrompt = `Content to create course from:\n\n${fileContent}`;
 
       const response = await ChatGPTService.generateContent(
-        systemPrompt,
-        userPrompt,
-        'gpt-4o-mini'
+        `${systemPrompt}\n\n${userPrompt}`
       );
 
       const courseContent = JSON.parse(response);
@@ -265,9 +260,7 @@ export class QuestionnaireGenerator {
       }`;
 
       const response = await ChatGPTService.generateContent(
-        systemPrompt,
-        prompt,
-        'gpt-4o-mini'
+        `${systemPrompt}\n\nTopic: ${prompt}`
       );
 
       const courseContent = JSON.parse(response);
