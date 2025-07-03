@@ -97,6 +97,25 @@ CRITICAL REQUIREMENTS:
 4. If the file has limited content, create variations and different angles from available material
 5. Return valid JSON format with the exact structure specified
 
+CONTENT ACCURACY AND NON-REPETITION ENFORCEMENT:
+All questions must be generated only from the instructional content in the uploaded file.
+
+You must not guess or generate general questions. Each question must directly reference real steps, procedures, roles, rules, or examples described in the file.
+
+Do not generate templated SOP questions unless those specific topics exist in the file.
+
+For every question:
+- Verify that it represents a unique concept or instruction from the file
+- Do not reuse question stems or logic across questions in the same set
+- Do not rephrase or reword previous questions in a way that makes them appear different
+- If a topic has already been covered in a question, do not create a second question about it — even with different wording.
+
+Example: If one question asks about scanning procedure, don't ask again about the same action using different phrasing.
+
+If the same file is used in future generations, track previously used concepts and avoid repeating them.
+
+Every new set must contain fresh, non-overlapping questions.
+
 JSON STRUCTURE (MANDATORY):
 {
   "questions": [
@@ -174,6 +193,25 @@ CRITICAL REQUIREMENTS:
 3. Never generate fewer questions than requested
 4. If content seems limited, extract every possible detail and create variations
 5. Return valid JSON format with the exact structure specified
+
+CONTENT ACCURACY AND NON-REPETITION ENFORCEMENT:
+All questions must be generated only from the instructional content in the provided text.
+
+You must not guess or generate general questions. Each question must directly reference real steps, procedures, roles, rules, or examples described in the content.
+
+Do not generate templated SOP questions unless those specific topics exist in the content.
+
+For every question:
+- Verify that it represents a unique concept or instruction from the content
+- Do not reuse question stems or logic across questions in the same set
+- Do not rephrase or reword previous questions in a way that makes them appear different
+- If a topic has already been covered in a question, do not create a second question about it — even with different wording.
+
+Example: If one question asks about scanning procedure, don't ask again about the same action using different phrasing.
+
+If the same content is used in future generations, track previously used concepts and avoid repeating them.
+
+Every new set must contain fresh, non-overlapping questions.
 
 JSON STRUCTURE (MANDATORY):
 {
