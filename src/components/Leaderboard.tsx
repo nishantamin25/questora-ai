@@ -40,12 +40,17 @@ const Leaderboard = () => {
     try {
       const responses = await ResponseService.getResponsesByQuestionnaire(questionnaireId);
       
-      // Sort responses by score (highest first), then by submission time (earliest first)
+      // Sort responses by correct answers count (highest first), then by submission time (earliest first)
       const sortedResponses = responses
-        .filter(response => response.score !== undefined)
+        .filter(response => response.answers && Array.isArray(response.answers))
+        .map(response => {
+          // Calculate correct answers from the response
+          const correctAnswers = response.answers.filter(answer => answer.isCorrect).length;
+          return { ...response, correctAnswersCount: correctAnswers };
+        })
         .sort((a, b) => {
-          if (b.score !== a.score) {
-            return (b.score || 0) - (a.score || 0);
+          if (b.correctAnswersCount !== a.correctAnswersCount) {
+            return b.correctAnswersCount - a.correctAnswersCount;
           }
           return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
         });
@@ -82,9 +87,9 @@ const Leaderboard = () => {
     }
   };
 
-  const getScorePercentage = (score: number, totalQuestions: number) => {
+  const getScorePercentage = (correctAnswers: number, totalQuestions: number) => {
     if (!totalQuestions) return 0;
-    return Math.round((score / totalQuestions) * 100);
+    return Math.round((correctAnswers / totalQuestions) * 100);
   };
 
   const exportToExcel = (data: any[], filename: string) => {
@@ -157,13 +162,16 @@ const Leaderboard = () => {
   };
 
   const prepareLeaderboardExportData = () => {
-    return leaderboardData.map((response, index) => ({
-      Rank: index + 1,
-      Player: response.username,
-      Score: `${response.score}/${response.totalQuestions}`,
-      Percentage: `${getScorePercentage(response.score || 0, response.totalQuestions || 0)}%`,
-      Submitted: new Date(response.submittedAt).toLocaleDateString()
-    }));
+    return leaderboardData.map((response, index) => {
+      const correctAnswers = response.correctAnswersCount || 0;
+      return {
+        Rank: index + 1,
+        Player: response.username,
+        Score: `${correctAnswers}/${response.totalQuestions}`,
+        Percentage: `${getScorePercentage(correctAnswers, response.totalQuestions || 0)}%`,
+        Submitted: new Date(response.submittedAt).toLocaleDateString()
+      };
+    });
   };
 
   const getCurrentTestTitle = () => {
@@ -258,7 +266,8 @@ const Leaderboard = () => {
                             <TableBody>
                               {leaderboardData.map((response, index) => {
                                 const rank = index + 1;
-                                const percentage = getScorePercentage(response.score || 0, response.totalQuestions || 0);
+                                const correctAnswers = response.correctAnswersCount || 0;
+                                const percentage = getScorePercentage(correctAnswers, response.totalQuestions || 0);
                                 
                                 return (
                                   <TableRow 
@@ -276,7 +285,7 @@ const Leaderboard = () => {
                                       {response.username}
                                     </TableCell>
                                     <TableCell className="text-white">
-                                      {response.score}/{response.totalQuestions}
+                                      {correctAnswers}/{response.totalQuestions}
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex items-center space-x-2">
