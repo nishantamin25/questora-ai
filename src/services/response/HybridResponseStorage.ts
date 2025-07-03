@@ -1,3 +1,4 @@
+
 import { QuestionnaireResponse, SubmitResponseData } from '../ResponseService';
 import { SupabaseResponseService } from '../supabase/SupabaseResponseService';
 import { QuestionnaireService } from '../QuestionnaireService';
@@ -6,6 +7,12 @@ export class HybridResponseStorage {
   static async submitResponse(responseData: SubmitResponseData): Promise<void> {
     try {
       console.log('📤 Processing response submission:', responseData.questionnaireId);
+      
+      // Validate that questionnaire ID is a valid UUID
+      if (!this.isValidUUID(responseData.questionnaireId)) {
+        console.error('❌ Invalid questionnaire ID format:', responseData.questionnaireId);
+        throw new Error(`Invalid questionnaire ID format: ${responseData.questionnaireId}`);
+      }
       
       // Get questionnaire with admin-selected answers
       const questionnaire = await QuestionnaireService.getQuestionnaireById(responseData.questionnaireId);
@@ -30,7 +37,7 @@ export class HybridResponseStorage {
       // Create response object with proper UUID
       const response: QuestionnaireResponse = {
         id: this.generateUUID(),
-        questionnaireId: responseData.questionnaireId,
+        questionnaireId: responseData.questionnaireId, // This should now be a valid UUID
         questionnaireTitle: questionnaire.title,
         userId: 'anonymous',
         username: 'Anonymous User',
@@ -39,6 +46,14 @@ export class HybridResponseStorage {
         score: score,
         totalQuestions: totalQuestions
       };
+
+      console.log('📋 Response object created:', {
+        responseId: response.id,
+        questionnaireId: response.questionnaireId,
+        score: response.score,
+        totalQuestions: response.totalQuestions,
+        isQuestionnaireIdUUID: this.isValidUUID(response.questionnaireId)
+      });
 
       // Save to Supabase
       await SupabaseResponseService.saveResponse(response);
@@ -165,5 +180,10 @@ export class HybridResponseStorage {
 
   private static generateUUID(): string {
     return crypto.randomUUID();
+  }
+
+  private static isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
   }
 }
