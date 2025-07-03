@@ -46,6 +46,13 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     }))
   });
 
+  console.log('🎯 QuestionnaireEditor - Current questions:', editedQuestionnaire.questions.map(q => ({
+    id: q.id,
+    text: q.text.substring(0, 30) + '...',
+    correctAnswer: q.correctAnswer,
+    hasOptions: !!q.options
+  })));
+
   const handleQuestionTextChange = (questionId: string, newText: string) => {
     setEditedQuestionnaire(prev => ({
       ...prev,
@@ -68,7 +75,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   const handleCorrectAnswerChange = (questionId: string, correctIndex: number) => {
-    console.log(`Admin selected correct answer for question ${questionId}: Option ${String.fromCharCode(65 + correctIndex)} (index ${correctIndex})`);
+    console.log(`🎯 Admin selecting correct answer for question ${questionId}: Option ${String.fromCharCode(65 + correctIndex)} (index ${correctIndex})`);
     setEditedQuestionnaire(prev => ({
       ...prev,
       questions: prev.questions.map(q => 
@@ -215,16 +222,16 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
             const answerStatus = getAnswerStatus(question);
             
             return (
-              <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-slate-100">
-                <div className="flex items-start justify-between mb-3">
+              <div key={question.id} className="border-2 border-slate-300 rounded-xl p-6 bg-gradient-to-r from-slate-50 to-slate-100">
+                <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <h4 className="font-medium text-slate-800 font-poppins">Question {index + 1}</h4>
-                    <div className={`flex items-center text-xs px-2 py-1 rounded-full ${
+                    <h4 className="font-bold text-slate-800 font-poppins text-lg">Question {index + 1}</h4>
+                    <div className={`flex items-center text-sm px-3 py-2 rounded-full font-semibold ${
                       answerStatus.status === 'error' 
-                        ? 'bg-red-100 text-red-700' 
-                        : 'bg-green-100 text-green-700'
+                        ? 'bg-red-100 text-red-700 border border-red-300' 
+                        : 'bg-green-100 text-green-700 border border-green-300'
                     }`}>
-                      {answerStatus.status === 'error' && <AlertCircle className="h-3 w-3 mr-1" />}
+                      {answerStatus.status === 'error' && <AlertCircle className="h-4 w-4 mr-1" />}
                       {answerStatus.message}
                     </div>
                   </div>
@@ -238,50 +245,62 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                   </Button>
                 </div>
                 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <Label className="text-slate-700 font-medium font-poppins text-sm">Question Text</Label>
+                    <Label className="text-slate-700 font-bold font-poppins text-base">Question Text</Label>
                     <Textarea
                       value={question.text}
                       onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
-                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                      rows={2}
+                      className="mt-2 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter text-base"
+                      rows={3}
                     />
                   </div>
 
-                  <div>
-                    <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Correct Answer</Label>
-                    <div className="mt-2 space-y-2">
+                  <div className="bg-white border-2 border-violet-200 rounded-lg p-4">
+                    <Label className="text-slate-700 font-bold font-poppins text-base mb-3 block">
+                      Select the Correct Answer (Click the radio button next to the correct option)
+                    </Label>
+                    <div className="space-y-3">
                       <RadioGroup
                         value={question.correctAnswer?.toString()}
-                        onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
+                        onValueChange={(value) => {
+                          console.log(`🎯 Radio button clicked for question ${question.id}, value: ${value}`);
+                          handleCorrectAnswerChange(question.id, parseInt(value));
+                        }}
+                        className="space-y-0"
                       >
                         {(question.options || []).map((option, optionIndex) => (
-                          <div key={optionIndex} className="flex items-center space-x-2 p-3 bg-white border border-slate-200 rounded-lg hover:border-violet-300 transition-colors">
+                          <div key={optionIndex} className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all ${
+                            question.correctAnswer === optionIndex 
+                              ? 'bg-green-50 border-green-400 shadow-md' 
+                              : 'bg-gray-50 border-gray-200 hover:border-violet-300'
+                          }`}>
                             <RadioGroupItem 
                               value={optionIndex.toString()} 
                               id={`${question.id}-correct-${optionIndex}`}
-                              className="border-2 border-green-500 text-green-600 data-[state=checked]:border-green-600 data-[state=checked]:bg-green-600"
+                              className="w-6 h-6 border-3 border-green-500 text-green-600 data-[state=checked]:border-green-600 data-[state=checked]:bg-green-600"
                             />
                             <Label 
                               htmlFor={`${question.id}-correct-${optionIndex}`}
-                              className="text-sm text-slate-700 font-semibold min-w-[24px] cursor-pointer"
+                              className="text-base text-slate-700 font-bold min-w-[32px] cursor-pointer"
                             >
                               {String.fromCharCode(65 + optionIndex)}.
                             </Label>
                             <Input
                               value={option}
                               onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                              className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-sm rounded-lg font-inter"
+                              className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-base rounded-lg font-inter"
                               placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                             />
                           </div>
                         ))}
                       </RadioGroup>
-                      <p className="text-xs text-slate-500 font-inter flex items-center">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        Select the radio button next to the correct answer
-                      </p>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                        <p className="text-sm text-blue-800 font-inter flex items-center">
+                          <AlertCircle className="h-4 w-4 mr-2 text-blue-500" />
+                          <strong>Instructions:</strong> Click the green radio button (○) next to the option that contains the correct answer for this question.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
