@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Edit3, Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -276,7 +275,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                   </div>
                 </div>
 
-                {/* CORRECT ANSWER SELECTION SECTION - This is the missing section! */}
+                {/* SIMPLIFIED CORRECT ANSWER SELECTION - Using native HTML radio buttons */}
                 <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-4 border-orange-300 rounded-xl p-6 shadow-lg">
                   <div className="mb-6 text-center">
                     <h5 className="text-2xl font-bold text-orange-800 font-poppins mb-3">
@@ -287,15 +286,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                     </p>
                   </div>
                   
-                  <RadioGroup
-                    value={question.correctAnswer?.toString() || "0"}
-                    onValueChange={(value) => {
-                      const correctIndex = parseInt(value);
-                      console.log(`🎯 RADIO BUTTON CLICKED - Question ${question.id}, selecting option ${correctIndex} (${String.fromCharCode(65 + correctIndex)})`);
-                      handleCorrectAnswerChange(question.id, correctIndex);
-                    }}
-                    className="space-y-3"
-                  >
+                  <div className="space-y-4">
                     {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
                       <div 
                         key={optionIndex} 
@@ -304,24 +295,26 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                             ? 'bg-green-100 border-green-500 shadow-lg' 
                             : 'bg-white border-gray-300 hover:border-orange-400 hover:shadow-md'
                         }`}
+                        onClick={() => handleCorrectAnswerChange(question.id, optionIndex)}
                       >
-                        <RadioGroupItem 
-                          value={optionIndex.toString()} 
-                          id={`${question.id}-correct-${optionIndex}`}
-                          className="w-6 h-6 border-2 border-orange-500"
+                        <input
+                          type="radio"
+                          name={`correct-answer-${question.id}`}
+                          checked={question.correctAnswer === optionIndex}
+                          onChange={() => handleCorrectAnswerChange(question.id, optionIndex)}
+                          className="w-6 h-6 text-orange-500 border-2 border-orange-500 focus:ring-orange-500 cursor-pointer"
                         />
-                        <Label 
-                          htmlFor={`${question.id}-correct-${optionIndex}`}
+                        <label 
                           className="text-lg font-bold text-slate-800 cursor-pointer font-poppins flex-1"
                         >
                           {String.fromCharCode(65 + optionIndex)}. {option}
-                        </Label>
+                        </label>
                         {question.correctAnswer === optionIndex && (
                           <span className="text-green-600 font-bold text-lg">✓ CORRECT</span>
                         )}
                       </div>
                     ))}
-                  </RadioGroup>
+                  </div>
                   
                   <div className="mt-6 text-center bg-white rounded-lg p-4 border-2 border-orange-200">
                     <p className="text-lg text-orange-800 font-bold font-inter">
