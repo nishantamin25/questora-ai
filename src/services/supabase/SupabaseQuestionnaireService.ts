@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Questionnaire, Question } from '../questionnaire/QuestionnaireTypes';
 import { Database } from '@/integrations/supabase/types';
@@ -49,7 +50,7 @@ export class SupabaseQuestionnaireService {
         throw deleteError;
       }
 
-      // Save questions with admin selected answers
+      // Save questions
       if (questionnaire.questions && questionnaire.questions.length > 0) {
         const questionsToInsert = questionnaire.questions.map(question => ({
           id: question.id,
@@ -58,7 +59,6 @@ export class SupabaseQuestionnaireService {
           type: question.type as 'multiple-choice' | 'text' | 'boolean',
           options: question.options || [],
           correct_answer: question.correctAnswer,
-          admin_selected_answer: (question as any).adminSelectedAnswer ?? question.correctAnswer ?? 0,
           explanation: question.explanation
         }));
 
@@ -110,9 +110,8 @@ export class SupabaseQuestionnaireService {
         type: q.type as 'multiple-choice' | 'text' | 'boolean',
         options: Array.isArray(q.options) ? q.options as string[] : [],
         correctAnswer: q.correct_answer || 0,
-        adminSelectedAnswer: q.admin_selected_answer || q.correct_answer || 0,
         explanation: q.explanation || ''
-      } as any));
+      }));
 
       const questionnaire: Questionnaire = {
         id: questionnaireData.id,
@@ -160,9 +159,8 @@ export class SupabaseQuestionnaireService {
           type: question.type as 'multiple-choice' | 'text' | 'boolean',
           options: Array.isArray(question.options) ? question.options as string[] : [],
           correctAnswer: question.correct_answer || 0,
-          adminSelectedAnswer: question.admin_selected_answer || question.correct_answer || 0,
           explanation: question.explanation || ''
-        } as any));
+        }));
 
         return {
           id: q.id,

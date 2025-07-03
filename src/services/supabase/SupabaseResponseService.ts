@@ -33,15 +33,6 @@ export class SupabaseResponseService {
     try {
       console.log('💾 Saving response to Supabase:', response.id);
       
-      // Validate UUID format before saving
-      if (!this.isValidUUID(response.id)) {
-        throw new Error(`Invalid response ID format: ${response.id}`);
-      }
-      
-      if (!this.isValidUUID(response.questionnaireId)) {
-        throw new Error(`Invalid questionnaire ID format: ${response.questionnaireId}`);
-      }
-      
       const { error } = await supabase
         .from('responses')
         .insert({
@@ -101,12 +92,6 @@ export class SupabaseResponseService {
 
   static async getResponsesByQuestionnaire(questionnaireId: string): Promise<QuestionnaireResponse[]> {
     try {
-      // Validate UUID format
-      if (!this.isValidUUID(questionnaireId)) {
-        console.error('❌ Invalid questionnaire ID format for query:', questionnaireId);
-        return [];
-      }
-
       const { data, error } = await supabase
         .from('responses')
         .select('*')
@@ -143,7 +128,7 @@ export class SupabaseResponseService {
       const { data: { user } } = await supabase.auth.getUser();
       
       const response: QuestionnaireResponse = {
-        id: this.generateUUID(),
+        id: this.generateId(),
         questionnaireId: responseData.questionnaireId,
         questionnaireTitle: 'Questionnaire',
         userId: user?.id || 'anonymous',
@@ -165,12 +150,7 @@ export class SupabaseResponseService {
     }
   }
 
-  private static generateUUID(): string {
-    return crypto.randomUUID();
-  }
-
-  private static isValidUUID(uuid: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
+  private static generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 }

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
@@ -286,10 +285,6 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
   };
 
   const handleSubmitResponses = async () => {
-    console.log('🚀 Starting response submission...');
-    console.log('📋 Questionnaire ID:', questionnaire.id);
-    console.log('📝 Responses:', responses);
-    
     setIsSubmitting(true);
     try {
       const responseData = {
@@ -297,23 +292,17 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         responses: responses,
         submittedAt: new Date().toISOString()
       };
-      
-      console.log('📤 Submitting response data:', responseData);
-      
       await ResponseService.submitResponse(responseData);
-      
-      console.log('✅ Response submitted successfully');
-      
       toast({
         title: "Success",
         description: "Responses submitted successfully!",
       });
       setResponses({});
     } catch (error) {
-      console.error('❌ Error submitting responses:', error);
+      console.error('Error submitting responses:', error);
       toast({
         title: "Error",
-        description: "Failed to submit responses. Please try again.",
+        description: "Failed to submit responses",
         variant: "destructive"
       });
     } finally {

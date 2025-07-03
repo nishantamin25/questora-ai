@@ -49,10 +49,6 @@ class ResponseServiceClass {
   async getResponseStats(questionnaireId: string) {
     return HybridResponseStorage.getResponseStats(questionnaireId);
   }
-
-  generateUUID(): string {
-    return crypto.randomUUID();
-  }
 }
 
 export const ResponseService = new ResponseServiceClass();

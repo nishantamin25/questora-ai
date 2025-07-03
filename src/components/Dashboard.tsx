@@ -445,7 +445,7 @@ Note: File processing failed, but file information is available.
           
           const questionnaire = await QuestionnaireService.generateQuestionnaire(
             "Generate questions from uploaded files",
-            { testName, difficulty, numberOfQuestions, timeframe, includeCourse: false, includeQuestionnaire: true, numberOfSets },
+            { testName, difficulty, numberOfQuestions, timeframe, includeCourse: false, includeQuestionnaire: true },
             fileContentToUse,
             setIndex,
             numberOfSets

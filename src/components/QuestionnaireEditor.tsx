@@ -15,7 +15,6 @@ interface Question {
   type: string;
   options?: string[];
   correctAnswer?: number;
-  adminSelectedAnswer?: number;
 }
 
 interface Questionnaire {
@@ -43,8 +42,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     questions: questionnaire.questions.map(q => ({
       ...q,
       options: q.options?.length === 4 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: q.correctAnswer ?? 0,
-      adminSelectedAnswer: q.adminSelectedAnswer ?? q.correctAnswer ?? 0
+      correctAnswer: q.correctAnswer ?? 0
     }))
   });
 
@@ -69,15 +67,11 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     }));
   };
 
-  const handleAdminSelectedAnswerChange = (questionId: string, selectedIndex: number) => {
+  const handleCorrectAnswerChange = (questionId: string, correctIndex: number) => {
     setEditedQuestionnaire(prev => ({
       ...prev,
       questions: prev.questions.map(q => 
-        q.id === questionId ? { 
-          ...q, 
-          adminSelectedAnswer: selectedIndex,
-          correctAnswer: selectedIndex  // Keep both in sync for compatibility
-        } : q
+        q.id === questionId ? { ...q, correctAnswer: correctIndex } : q
       )
     }));
   };
@@ -88,8 +82,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
       text: 'New question',
       type: 'multiple-choice',
       options: ['Option A', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: 0,
-      adminSelectedAnswer: 0
+      correctAnswer: 0
     };
 
     setEditedQuestionnaire(prev => ({
@@ -106,9 +99,9 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   const handleSave = () => {
-    // Validate that all questions have 4 options and a correct answer selected
+    // Validate that all questions have 4 options and a correct answer
     const invalidQuestions = editedQuestionnaire.questions.filter(q => 
-      !q.options || q.options.length !== 4 || q.adminSelectedAnswer === undefined
+      !q.options || q.options.length !== 4 || q.correctAnswer === undefined
     );
     if (invalidQuestions.length > 0) {
       toast({
@@ -206,11 +199,11 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                 </div>
 
                 <div>
-                  <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Select Correct Answer</Label>
+                  <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Correct Answer</Label>
                   <div className="mt-2 space-y-2">
                     <RadioGroup
-                      value={question.adminSelectedAnswer?.toString()}
-                      onValueChange={(value) => handleAdminSelectedAnswerChange(question.id, parseInt(value))}
+                      value={question.correctAnswer?.toString()}
+                      onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
                     >
                       {(question.options || []).map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center space-x-2 p-2 bg-white border border-slate-200 rounded-lg">
@@ -235,7 +228,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                       ))}
                     </RadioGroup>
                     <p className="text-xs text-slate-500 font-inter">
-                      Select the radio button next to the correct answer for this test
+                      Select the radio button next to the correct answer
                     </p>
                   </div>
                 </div>

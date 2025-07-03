@@ -3,43 +3,9 @@ export interface Question {
   id: string;
   text: string;
   type: 'multiple-choice' | 'text' | 'boolean';
-  options?: string[];
-  correctAnswer?: number;
-  adminSelectedAnswer?: number;
+  options: string[];
+  correctAnswer: number;
   explanation?: string;
-}
-
-export interface Course {
-  id: string;
-  title: string;
-  content: string;
-  sections: CourseSection[];
-  createdAt: string;
-}
-
-export interface CourseSection {
-  id: string;
-  title: string;
-  content: string;
-  order: number;
-}
-
-export interface Questionnaire {
-  id: string;
-  title: string;
-  description: string;
-  testName?: string;
-  difficulty?: 'easy' | 'medium' | 'hard';
-  timeframe?: number;
-  questions: Question[];
-  course?: Course;
-  courseContent?: any;
-  createdAt: string;
-  isActive?: boolean;
-  isSaved?: boolean;
-  setNumber?: number;
-  totalSets?: number;
-  language?: string;
 }
 
 export interface TestOptions {
@@ -49,5 +15,21 @@ export interface TestOptions {
   timeframe: number;
   includeCourse: boolean;
   includeQuestionnaire: boolean;
-  numberOfSets: number;
+}
+
+export interface Questionnaire {
+  id: string;
+  title: string;
+  description: string;
+  questions: Question[];
+  createdAt: string;
+  isActive: boolean;
+  testName: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  isSaved: boolean;
+  timeframe: number;
+  setNumber?: number;
+  totalSets?: number;
+  course?: any;
+  language?: string;
 }
