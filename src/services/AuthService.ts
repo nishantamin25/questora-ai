@@ -62,6 +62,10 @@ class AuthServiceClass {
     localStorage.removeItem('currentUser');
   }
 
+  signOut(): void {
+    this.logout();
+  }
+
   getCurrentUser(): User | null {
     if (this.currentUser) {
       return this.currentUser;
