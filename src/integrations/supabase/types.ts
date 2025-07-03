@@ -125,6 +125,7 @@ export type Database = {
       }
       questions: {
         Row: {
+          admin_selected_answer: number
           correct_answer: number | null
           created_at: string | null
           explanation: string | null
@@ -136,6 +137,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_selected_answer: number
           correct_answer?: number | null
           created_at?: string | null
           explanation?: string | null
@@ -147,6 +149,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_selected_answer?: number
           correct_answer?: number | null
           created_at?: string | null
           explanation?: string | null

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
 
@@ -14,6 +13,27 @@ export class HybridResponseStorage {
     } catch {
       return false;
     }
+  }
+
+  private static async getUserInfo(): Promise<{ userId: string; username: string }> {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (!error && user) {
+        // For authenticated users, use their email or metadata username
+        const username = user.user_metadata?.username || user.email || 'Authenticated User';
+        return { userId: user.id, username };
+      }
+    } catch (error) {
+      console.log('Could not get authenticated user info:', error);
+    }
+    
+    // For guests or when authentication fails, try to get guest username from localStorage
+    const guestUsername = localStorage.getItem('guestUsername');
+    return {
+      userId: 'anonymous',
+      username: guestUsername || 'Anonymous User'
+    };
   }
 
   static async saveResponse(response: QuestionnaireResponse): Promise<void> {
@@ -100,6 +120,12 @@ export class HybridResponseStorage {
 
   static async submitResponse(responseData: SubmitResponseData): Promise<void> {
     try {
+      console.log('📤 Submitting response:', responseData);
+      
+      // Get user info (authenticated user or guest)
+      const { userId, username } = await this.getUserInfo();
+      console.log('👤 User info for response:', { userId, username });
+      
       // Try Supabase first if online and authenticated
       if (this.isOnline() && await this.isAuthenticated()) {
         try {
@@ -112,14 +138,12 @@ export class HybridResponseStorage {
       }
       
       // Fallback to local storage
-      const { data: { user } } = await supabase.auth.getUser();
-      
       const response: QuestionnaireResponse = {
         id: this.generateId(),
         questionnaireId: responseData.questionnaireId,
         questionnaireTitle: 'Questionnaire',
-        userId: user?.id || 'anonymous',
-        username: user?.email || 'Anonymous User',
+        userId,
+        username,
         answers: Object.entries(responseData.responses).map(([questionId, selectedOption]) => ({
           questionId,
           questionText: '',
@@ -131,7 +155,7 @@ export class HybridResponseStorage {
       };
 
       this.saveToLocalStorage(response);
-      console.log('📁 Response submitted to local storage');
+      console.log('📁 Response submitted to local storage with username:', username);
     } catch (error) {
       console.error('❌ Failed to submit response:', error);
       throw error;

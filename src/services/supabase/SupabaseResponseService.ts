@@ -29,6 +29,27 @@ export interface SubmitResponseData {
 }
 
 export class SupabaseResponseService {
+  private static async getUserInfo(): Promise<{ userId: string; username: string }> {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (!error && user) {
+        // For authenticated users, use their email or metadata username
+        const username = user.user_metadata?.username || user.email || 'Authenticated User';
+        return { userId: user.id, username };
+      }
+    } catch (error) {
+      console.log('Could not get authenticated user info:', error);
+    }
+    
+    // For guests or when authentication fails, try to get guest username from localStorage
+    const guestUsername = localStorage.getItem('guestUsername');
+    return {
+      userId: 'anonymous',
+      username: guestUsername || 'Anonymous User'
+    };
+  }
+
   static async saveResponse(response: QuestionnaireResponse): Promise<void> {
     try {
       console.log('💾 Saving response to Supabase:', response.id);
@@ -125,14 +146,18 @@ export class SupabaseResponseService {
 
   static async submitResponse(responseData: SubmitResponseData): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log('📤 Submitting response to Supabase:', responseData);
+      
+      // Get user info (authenticated user or guest)
+      const { userId, username } = await this.getUserInfo();
+      console.log('👤 User info for Supabase response:', { userId, username });
       
       const response: QuestionnaireResponse = {
         id: this.generateId(),
         questionnaireId: responseData.questionnaireId,
         questionnaireTitle: 'Questionnaire',
-        userId: user?.id || 'anonymous',
-        username: user?.email || 'Anonymous User',
+        userId,
+        username,
         answers: Object.entries(responseData.responses).map(([questionId, selectedOption]) => ({
           questionId,
           questionText: '',
@@ -144,13 +169,79 @@ export class SupabaseResponseService {
       };
 
       await this.saveResponse(response);
+      console.log('✅ Response submitted to Supabase with username:', username);
     } catch (error) {
-      console.error('❌ Failed to submit response:', error);
+      console.error('❌ Failed to submit response to Supabase:', error);
       throw error;
     }
   }
 
   private static generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  static async getAllResponses(): Promise<QuestionnaireResponse[]> {
+    try {
+      const { data, error } = await supabase
+        .from('responses')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error loading responses:', error);
+        throw error;
+      }
+
+      const responses: QuestionnaireResponse[] = (data || []).map(r => ({
+        id: r.id,
+        questionnaireId: r.questionnaire_id || '',
+        questionnaireTitle: 'Questionnaire',
+        userId: r.user_id || '',
+        username: r.username,
+        answers: Array.isArray(r.answers) ? r.answers as any[] : [],
+        submittedAt: r.submitted_at || new Date().toISOString(),
+        score: r.score || undefined,
+        totalQuestions: r.total_questions || undefined
+      }));
+
+      console.log('✅ Loaded responses from Supabase:', responses.length);
+      return responses;
+    } catch (error) {
+      console.error('❌ Failed to load responses from Supabase:', error);
+      return [];
+    }
+  }
+
+  static async getResponsesByQuestionnaire(questionnaireId: string): Promise<QuestionnaireResponse[]> {
+    try {
+      const { data, error } = await supabase
+        .from('responses')
+        .select('*')
+        .eq('questionnaire_id', questionnaireId)
+        .order('submitted_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error loading responses for questionnaire:', error);
+        throw error;
+      }
+
+      const responses: QuestionnaireResponse[] = (data || []).map(r => ({
+        id: r.id,
+        questionnaireId: r.questionnaire_id || '',
+        questionnaireTitle: 'Questionnaire',
+        userId: r.user_id || '',
+        username: r.username,
+        answers: Array.isArray(r.answers) ? r.answers as any[] : [],
+        submittedAt: r.submitted_at || new Date().toISOString(),
+        score: r.score || undefined,
+        totalQuestions: r.total_questions || undefined
+      }));
+
+      console.log('✅ Loaded responses for questionnaire from Supabase:', questionnaireId, responses.length);
+      return responses;
+    } catch (error) {
+      console.error('❌ Failed to load responses for questionnaire from Supabase:', error);
+      return [];
+    }
   }
 }
