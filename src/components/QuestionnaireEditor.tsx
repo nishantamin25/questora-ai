@@ -245,7 +245,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                   </Button>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
                     <Label className="text-slate-700 font-bold font-poppins text-base">Question Text</Label>
                     <Textarea
@@ -256,51 +256,64 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                     />
                   </div>
 
-                  <div className="bg-white border-2 border-violet-200 rounded-lg p-4">
-                    <Label className="text-slate-700 font-bold font-poppins text-base mb-3 block">
-                      Select the Correct Answer (Click the radio button next to the correct option)
-                    </Label>
-                    <div className="space-y-3">
-                      <RadioGroup
-                        value={question.correctAnswer?.toString()}
-                        onValueChange={(value) => {
-                          console.log(`🎯 Radio button clicked for question ${question.id}, value: ${value}`);
-                          handleCorrectAnswerChange(question.id, parseInt(value));
-                        }}
-                        className="space-y-0"
-                      >
-                        {(question.options || []).map((option, optionIndex) => (
-                          <div key={optionIndex} className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all ${
-                            question.correctAnswer === optionIndex 
-                              ? 'bg-green-50 border-green-400 shadow-md' 
-                              : 'bg-gray-50 border-gray-200 hover:border-violet-300'
-                          }`}>
+                  {/* PROMINENT RADIO BUTTON SECTION */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-4 border-blue-300 rounded-xl p-6 shadow-lg">
+                    <div className="mb-4 text-center">
+                      <h5 className="text-xl font-bold text-blue-800 font-poppins mb-2">
+                        🎯 SELECT THE CORRECT ANSWER
+                      </h5>
+                      <p className="text-blue-700 font-medium font-inter">
+                        Click the radio button (○) next to the correct option below
+                      </p>
+                    </div>
+                    
+                    <RadioGroup
+                      value={question.correctAnswer?.toString() || "0"}
+                      onValueChange={(value) => {
+                        const correctIndex = parseInt(value);
+                        console.log(`🎯 RADIO BUTTON CLICKED - Question ${question.id}, selecting option ${correctIndex} (${String.fromCharCode(65 + correctIndex)})`);
+                        handleCorrectAnswerChange(question.id, correctIndex);
+                      }}
+                      className="space-y-4"
+                    >
+                      {(question.options || []).map((option, optionIndex) => (
+                        <div key={optionIndex} className={`flex items-center space-x-4 p-4 rounded-xl border-3 transition-all duration-200 cursor-pointer ${
+                          question.correctAnswer === optionIndex 
+                            ? 'bg-green-100 border-green-500 shadow-lg ring-2 ring-green-300' 
+                            : 'bg-white border-gray-300 hover:border-blue-400 hover:shadow-md'
+                        }`}>
+                          <div className="flex items-center space-x-3">
                             <RadioGroupItem 
                               value={optionIndex.toString()} 
-                              id={`${question.id}-correct-${optionIndex}`}
-                              className="w-6 h-6 border-3 border-green-500 text-green-600 data-[state=checked]:border-green-600 data-[state=checked]:bg-green-600"
+                              id={`${question.id}-answer-${optionIndex}`}
+                              className={`w-8 h-8 border-4 ${
+                                question.correctAnswer === optionIndex 
+                                  ? 'border-green-600 bg-green-600 text-white' 
+                                  : 'border-blue-500 hover:border-blue-600'
+                              }`}
                             />
                             <Label 
-                              htmlFor={`${question.id}-correct-${optionIndex}`}
-                              className="text-base text-slate-700 font-bold min-w-[32px] cursor-pointer"
+                              htmlFor={`${question.id}-answer-${optionIndex}`}
+                              className="text-lg font-bold text-slate-800 min-w-[40px] cursor-pointer font-poppins"
                             >
                               {String.fromCharCode(65 + optionIndex)}.
                             </Label>
-                            <Input
-                              value={option}
-                              onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                              className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-base rounded-lg font-inter"
-                              placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                            />
                           </div>
-                        ))}
-                      </RadioGroup>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-                        <p className="text-sm text-blue-800 font-inter flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-2 text-blue-500" />
-                          <strong>Instructions:</strong> Click the green radio button (○) next to the option that contains the correct answer for this question.
-                        </p>
-                      </div>
+                          <Input
+                            value={option}
+                            onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
+                            className="flex-1 border-2 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-lg rounded-lg font-inter font-medium"
+                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                          />
+                        </div>
+                      ))}
+                    </RadioGroup>
+                    
+                    <div className="mt-4 text-center">
+                      <p className="text-sm text-blue-700 font-inter">
+                        <strong>Current selection:</strong> Option {String.fromCharCode(65 + (question.correctAnswer || 0))} 
+                        {question.correctAnswer !== undefined ? ' ✅' : ' ❌ (Please select an answer)'}
+                      </p>
                     </div>
                   </div>
                 </div>
