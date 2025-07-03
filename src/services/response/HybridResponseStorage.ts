@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
 import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
@@ -30,7 +31,18 @@ export class HybridResponseStorage {
       console.log('Could not get authenticated user info:', error);
     }
     
-    // For guests, get the username from localStorage or generate a unique guest name
+    // For guests, prioritize the actual username they entered over generated guest names
+    // First check for actual guest username (from login form)
+    let actualGuestUsername = localStorage.getItem('actualGuestUsername');
+    
+    if (actualGuestUsername) {
+      return {
+        userId: 'anonymous',
+        username: actualGuestUsername
+      };
+    }
+    
+    // Fallback to the generated guest name system for backward compatibility
     let guestUsername = localStorage.getItem('guestUsername');
     
     // If no guest username exists, create one and store it
