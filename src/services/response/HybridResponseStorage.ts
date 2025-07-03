@@ -30,11 +30,28 @@ export class HybridResponseStorage {
       console.log('Could not get authenticated user info:', error);
     }
     
-    // For guests or when authentication fails, try to get guest username from localStorage
-    const guestUsername = localStorage.getItem('guestUsername');
+    // For guests, get the username from localStorage or generate a unique guest name
+    let guestUsername = localStorage.getItem('guestUsername');
+    
+    // If no guest username exists, create one and store it
+    if (!guestUsername) {
+      // Try to get it from session storage first
+      guestUsername = sessionStorage.getItem('currentGuestUsername');
+      
+      if (!guestUsername) {
+        // Generate a unique guest username with timestamp
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
+        guestUsername = `Guest_${timestamp}`;
+        sessionStorage.setItem('currentGuestUsername', guestUsername);
+      }
+      
+      // Store it in localStorage for persistence
+      localStorage.setItem('guestUsername', guestUsername);
+    }
+    
     return {
       userId: 'anonymous',
-      username: guestUsername || 'Anonymous User'
+      username: guestUsername
     };
   }
 
