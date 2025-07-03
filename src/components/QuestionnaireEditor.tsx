@@ -256,13 +256,13 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                     />
                   </div>
 
-                  {/* PROMINENT RADIO BUTTON SECTION */}
+                  {/* ALWAYS SHOW THE RADIO BUTTON SECTION */}
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-4 border-blue-300 rounded-xl p-6 shadow-lg">
-                    <div className="mb-4 text-center">
-                      <h5 className="text-xl font-bold text-blue-800 font-poppins mb-2">
+                    <div className="mb-6 text-center">
+                      <h5 className="text-2xl font-bold text-blue-800 font-poppins mb-3">
                         🎯 SELECT THE CORRECT ANSWER
                       </h5>
-                      <p className="text-blue-700 font-medium font-inter">
+                      <p className="text-blue-700 font-medium font-inter text-lg">
                         Click the radio button (○) next to the correct option below
                       </p>
                     </div>
@@ -276,25 +276,25 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                       }}
                       className="space-y-4"
                     >
-                      {(question.options || []).map((option, optionIndex) => (
-                        <div key={optionIndex} className={`flex items-center space-x-4 p-4 rounded-xl border-3 transition-all duration-200 cursor-pointer ${
+                      {(question.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((option, optionIndex) => (
+                        <div key={optionIndex} className={`flex items-center space-x-4 p-6 rounded-xl border-3 transition-all duration-200 cursor-pointer ${
                           question.correctAnswer === optionIndex 
-                            ? 'bg-green-100 border-green-500 shadow-lg ring-2 ring-green-300' 
-                            : 'bg-white border-gray-300 hover:border-blue-400 hover:shadow-md'
+                            ? 'bg-green-200 border-green-600 shadow-xl ring-4 ring-green-400' 
+                            : 'bg-white border-gray-400 hover:border-blue-500 hover:shadow-lg hover:bg-blue-50'
                         }`}>
-                          <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-4">
                             <RadioGroupItem 
                               value={optionIndex.toString()} 
                               id={`${question.id}-answer-${optionIndex}`}
                               className={`w-8 h-8 border-4 ${
                                 question.correctAnswer === optionIndex 
                                   ? 'border-green-600 bg-green-600 text-white' 
-                                  : 'border-blue-500 hover:border-blue-600'
+                                  : 'border-blue-600 hover:border-blue-700'
                               }`}
                             />
                             <Label 
                               htmlFor={`${question.id}-answer-${optionIndex}`}
-                              className="text-lg font-bold text-slate-800 min-w-[40px] cursor-pointer font-poppins"
+                              className="text-xl font-bold text-slate-800 min-w-[50px] cursor-pointer font-poppins"
                             >
                               {String.fromCharCode(65 + optionIndex)}.
                             </Label>
@@ -302,15 +302,15 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
                           <Input
                             value={option}
                             onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                            className="flex-1 border-2 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-lg rounded-lg font-inter font-medium"
+                            className="flex-1 border-2 border-slate-400 focus:border-violet-600 focus:ring-violet-600 text-lg rounded-lg font-inter font-medium py-3"
                             placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                           />
                         </div>
                       ))}
                     </RadioGroup>
                     
-                    <div className="mt-4 text-center">
-                      <p className="text-sm text-blue-700 font-inter">
+                    <div className="mt-6 text-center bg-white rounded-lg p-4 border-2 border-blue-200">
+                      <p className="text-lg text-blue-800 font-bold font-inter">
                         <strong>Current selection:</strong> Option {String.fromCharCode(65 + (question.correctAnswer || 0))} 
                         {question.correctAnswer !== undefined ? ' ✅' : ' ❌ (Please select an answer)'}
                       </p>
