@@ -88,138 +88,39 @@ export class QuestionGenerationService {
 
     console.log('📄 Using file:', fileInfo.filename, 'Type:', fileInfo.type);
 
-    const systemPrompt = `System Role:
-You are an AI assistant responsible for generating multiple-choice questions (MCQs) based solely on the uploaded SOP, training document, or instructional file. No user prompt will be provided. The questions will be used in guest-facing tests. You must generate clean, relevant, non-repetitive MCQs, and never return zero output or an error under any condition.
+    const systemPrompt = `You are an expert question generator that creates multiple-choice questions from uploaded documents. You MUST generate EXACTLY ${numberOfQuestions} questions in JSON format.
 
-Inputs You Will Receive:
+CRITICAL REQUIREMENTS:
+1. Generate EXACTLY ${numberOfQuestions} questions - no more, no less
+2. Base ALL questions strictly on the uploaded file content only
+3. Never generate fewer questions than requested
+4. If the file has limited content, create variations and different angles from available material
+5. Return valid JSON format with the exact structure specified
 
-One uploaded file (PDF, DOCX, or TXT)
-
-A system instruction to generate questions (or both course and questions)
-
-A target question count (e.g., 5 or 10)
-
-Your Responsibilities — Do NOT fail:
-
-Use only the file content.
-
-All questions must be traceable to instructions, procedures, roles, or rules in the file
-
-No general knowledge, no made-up SOP logic, no hallucinated industry practices
-
-Never repeat questions.
-
-No duplicates within the same set
-
-No reused logic or reworded versions across regenerations
-
-Every question must cover a unique point from the file
-
-Never return zero questions.
-
-If fewer than requested questions can be generated (e.g., 3 of 5), return those 3
-
-Do not throw an error
-
-Do not block output
-
-Only return this message if the file is completely empty:
-
-"The uploaded file does not contain any readable instructional content for question generation."
-
-Question Format (Strict):
-
-Use this format for every question, without variation:
-
-Question X: [Insert the question text]
-A. [Option A]
-B. [Option B]
-C. [Option C]
-D. [Option D]
-Correct Answer: [A/B/C/D]
-
-All sets must follow this exact structure. No bullets. No Markdown. No extra whitespace.
-
-Question Types:
-
-Guest-facing multiple-choice only
-
-1 correct answer
-
-3 distractors
-
-4 total options per question
-
-Simple, clear language — no jargon, no nested logic
-
-Valid Content Areas for Questions:
-
-You may generate questions from:
-
-Staff roles or SOP instructions
-
-Onboarding and demonstration flows
-
-Troubleshooting, issue resolution, and escalation
-
-Daily prep or hygiene routines
-
-Exit protocols and receipt validation
-
-Do's and Don'ts
-
-FAQs or usage scenarios
-
-Any real procedure, checklist, or rule in the file
-
-You may not generate questions about:
-
-File metadata (e.g., size, upload status)
-
-GPT/system/API behavior
-
-Generic or invented questions
-
-Course content summaries (unless explicitly in the file)
-
-Fallback Behavior (Never Throw Errors):
-
-If content is limited:
-
-Return fewer than requested questions
-
-Always return whatever can be generated
-
-Never output zero unless the file is truly unreadable
-
-If file = empty → return this only:
-
-"The uploaded file does not contain any readable instructional content for question generation."
-
-Uniformity Across Sets:
-
-Maintain exact formatting across all sets
-
-Do not change style, punctuation, or layout
-
-Consistency is required in every generation
-
-Bottom Line:
-Generate the maximum number of valid, non-repetitive, file-based MCQs possible — no matter what. If it's even slightly possible, return usable output. Never throw an error. Ever. Return something. Always.
-
-Generate exactly ${numberOfQuestions} questions in JSON format with this structure:
+JSON STRUCTURE (MANDATORY):
 {
   "questions": [
     {
-      "question": "Question text",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "question": "Question text here",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": 0,
       "explanation": "Brief explanation"
     }
   ]
-}`;
+}
 
-    const questionText = `Generate ${numberOfQuestions} ${difficulty} questions from the uploaded file content following the strict format requirements.`;
+CONTENT GUIDELINES:
+- Create ${difficulty} difficulty level questions
+- Use only information directly from the uploaded document
+- Each question must have exactly 4 options
+- correct_answer must be 0, 1, 2, or 3 (array index)
+- Include brief explanations
+- No duplicates or repetitive questions
+- Cover different aspects of the document content
+
+IMPORTANT: You must return exactly ${numberOfQuestions} questions. If you think there isn't enough content, create questions about procedures, rules, definitions, steps, requirements, or any factual information in the document. Use different question types: what, how, when, why, which, etc.`;
+
+    const questionText = `Generate exactly ${numberOfQuestions} ${difficulty} difficulty questions from the uploaded file. Return valid JSON with the exact structure specified.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -243,8 +144,8 @@ Generate exactly ${numberOfQuestions} questions in JSON format with this structu
     const requestBody = {
       model: 'gpt-4.1-2025-04-14',
       messages,
-      max_tokens: numberOfQuestions * 200,
-      temperature: 0.3,
+      max_tokens: numberOfQuestions * 300,
+      temperature: 0.2,
       response_format: { type: "json_object" }
     };
 
@@ -265,142 +166,43 @@ Generate exactly ${numberOfQuestions} questions in JSON format with this structu
   ): Promise<any[]> {
     console.log('🚀 GENERATING QUESTIONS WITH TEXT CONTENT...');
     
-    const systemPrompt = `System Role:
-You are an AI assistant responsible for generating multiple-choice questions (MCQs) based solely on the uploaded SOP, training document, or instructional file. No user prompt will be provided. The questions will be used in guest-facing tests. You must generate clean, relevant, non-repetitive MCQs, and never return zero output or an error under any condition.
+    const systemPrompt = `You are an expert question generator that creates multiple-choice questions from provided text content. You MUST generate EXACTLY ${numberOfQuestions} questions in JSON format.
 
-Inputs You Will Receive:
+CRITICAL REQUIREMENTS:
+1. Generate EXACTLY ${numberOfQuestions} questions - no more, no less
+2. Base ALL questions strictly on the provided content only
+3. Never generate fewer questions than requested
+4. If content seems limited, extract every possible detail and create variations
+5. Return valid JSON format with the exact structure specified
 
-One uploaded file (PDF, DOCX, or TXT)
-
-A system instruction to generate questions (or both course and questions)
-
-A target question count (e.g., 5 or 10)
-
-Your Responsibilities — Do NOT fail:
-
-Use only the file content.
-
-All questions must be traceable to instructions, procedures, roles, or rules in the file
-
-No general knowledge, no made-up SOP logic, no hallucinated industry practices
-
-Never repeat questions.
-
-No duplicates within the same set
-
-No reused logic or reworded versions across regenerations
-
-Every question must cover a unique point from the file
-
-Never return zero questions.
-
-If fewer than requested questions can be generated (e.g., 3 of 5), return those 3
-
-Do not throw an error
-
-Do not block output
-
-Only return this message if the file is completely empty:
-
-"The uploaded file does not contain any readable instructional content for question generation."
-
-Question Format (Strict):
-
-Use this format for every question, without variation:
-
-Question X: [Insert the question text]
-A. [Option A]
-B. [Option B]
-C. [Option C]
-D. [Option D]
-Correct Answer: [A/B/C/D]
-
-All sets must follow this exact structure. No bullets. No Markdown. No extra whitespace.
-
-Question Types:
-
-Guest-facing multiple-choice only
-
-1 correct answer
-
-3 distractors
-
-4 total options per question
-
-Simple, clear language — no jargon, no nested logic
-
-Valid Content Areas for Questions:
-
-You may generate questions from:
-
-Staff roles or SOP instructions
-
-Onboarding and demonstration flows
-
-Troubleshooting, issue resolution, and escalation
-
-Daily prep or hygiene routines
-
-Exit protocols and receipt validation
-
-Do's and Don'ts
-
-FAQs or usage scenarios
-
-Any real procedure, checklist, or rule in the file
-
-You may not generate questions about:
-
-File metadata (e.g., size, upload status)
-
-GPT/system/API behavior
-
-Generic or invented questions
-
-Course content summaries (unless explicitly in the file)
-
-Fallback Behavior (Never Throw Errors):
-
-If content is limited:
-
-Return fewer than requested questions
-
-Always return whatever can be generated
-
-Never output zero unless the file is truly unreadable
-
-If file = empty → return this only:
-
-"The uploaded file does not contain any readable instructional content for question generation."
-
-Uniformity Across Sets:
-
-Maintain exact formatting across all sets
-
-Do not change style, punctuation, or layout
-
-Consistency is required in every generation
-
-Bottom Line:
-Generate the maximum number of valid, non-repetitive, file-based MCQs possible — no matter what. If it's even slightly possible, return usable output. Never throw an error. Ever. Return something. Always.
-
-Generate exactly ${numberOfQuestions} questions in JSON format with this structure:
+JSON STRUCTURE (MANDATORY):
 {
   "questions": [
     {
-      "question": "Question text",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "question": "Question text here",  
+      "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": 0,
       "explanation": "Brief explanation"
     }
   ]
-}`;
+}
 
-    const userPrompt = `Generate ${numberOfQuestions} ${difficulty} questions from this content following the strict format requirements:
+CONTENT GUIDELINES:
+- Create ${difficulty} difficulty level questions
+- Use only information from the provided text
+- Each question must have exactly 4 options
+- correct_answer must be 0, 1, 2, or 3 (array index)
+- Include brief explanations
+- No duplicates or repetitive questions
+- Extract questions from procedures, definitions, steps, rules, requirements, etc.
+
+IMPORTANT: You must return exactly ${numberOfQuestions} questions. Analyze the content thoroughly and create questions about different aspects, details, procedures, or requirements mentioned in the text.`;
+
+    const userPrompt = `Generate exactly ${numberOfQuestions} ${difficulty} difficulty questions from this content in valid JSON format:
 
 ${fileContent}
 
-Generate exactly ${numberOfQuestions} questions in JSON format.`;
+Remember: Return exactly ${numberOfQuestions} questions in the specified JSON structure.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -410,8 +212,8 @@ Generate exactly ${numberOfQuestions} questions in JSON format.`;
     const requestBody = {
       model: 'gpt-4.1-2025-04-14',
       messages,
-      max_tokens: numberOfQuestions * 200,
-      temperature: 0.3,
+      max_tokens: numberOfQuestions * 300,
+      temperature: 0.2,
       response_format: { type: "json_object" }
     };
 
@@ -453,33 +255,74 @@ Generate exactly ${numberOfQuestions} questions in JSON format.`;
       throw new Error('No response from AI');
     }
 
+    console.log('🔍 Processing AI response:', {
+      responseLength: content.length,
+      responsePreview: content.substring(0, 200) + '...'
+    });
+
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(content);
+      console.log('✅ JSON parsed successfully:', parsedResponse);
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      throw new Error('Invalid AI response format');
+      console.error('❌ JSON parse error:', parseError);
+      console.error('Raw response:', content);
+      throw new Error('Invalid AI response format - not valid JSON');
     }
 
     let questions = parsedResponse.questions || [];
 
     if (!Array.isArray(questions)) {
+      console.error('❌ Questions is not an array:', questions);
       throw new Error('Invalid response - expected questions array');
     }
 
-    // Simple validation and formatting
+    console.log(`🔍 Found ${questions.length} questions in response`);
+
+    // Enhanced validation and formatting
     const validQuestions = questions
-      .filter(q => q && q.question && q.options && Array.isArray(q.options))
-      .map(q => ({
-        question: q.question,
-        options: q.options.slice(0, 4),
-        correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
-                       typeof q.correct_answer === 'number' ? q.correct_answer : 0,
-        explanation: q.explanation || 'Based on the provided content'
-      }))
+      .filter(q => {
+        const isValid = q && 
+          q.question && 
+          q.options && 
+          Array.isArray(q.options) && 
+          q.options.length >= 4 &&
+          (typeof q.correctAnswer === 'number' || typeof q.correct_answer === 'number');
+        
+        if (!isValid) {
+          console.warn('⚠️ Invalid question filtered out:', q);
+        }
+        return isValid;
+      })
+      .map((q, index) => {
+        const correctAnswer = typeof q.correctAnswer === 'number' ? q.correctAnswer : 
+                            typeof q.correct_answer === 'number' ? q.correct_answer : 0;
+        
+        return {
+          question: q.question,
+          options: q.options.slice(0, 4), // Ensure exactly 4 options
+          correctAnswer: Math.max(0, Math.min(3, correctAnswer)), // Ensure valid index
+          explanation: q.explanation || 'Based on the provided content'
+        };
+      })
       .slice(0, numberOfQuestions);
 
-    console.log(`✅ Processed ${validQuestions.length} valid questions from response`);
+    console.log(`✅ Processed ${validQuestions.length} valid questions from ${questions.length} total`);
+
+    // More flexible validation - accept what we got if it's reasonable
+    if (validQuestions.length === 0) {
+      throw new Error('No valid questions could be extracted from AI response');
+    }
+
+    if (validQuestions.length < numberOfQuestions) {
+      console.warn(`⚠️ Generated ${validQuestions.length} questions instead of ${numberOfQuestions}`);
+      
+      // Only throw error if we got significantly fewer questions
+      if (validQuestions.length < Math.max(1, Math.floor(numberOfQuestions * 0.6))) {
+        throw new Error(`Generated only ${validQuestions.length} questions, but ${numberOfQuestions} were requested. The file content may not support the requested number of questions.`);
+      }
+    }
+
     return validQuestions;
   }
 }
