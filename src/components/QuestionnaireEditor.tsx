@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Edit3, Save, X, Plus, Trash2 } from 'lucide-react';
+import { Edit3, Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface Question {
@@ -68,6 +68,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
   };
 
   const handleCorrectAnswerChange = (questionId: string, correctIndex: number) => {
+    console.log(`Admin selected correct answer for question ${questionId}: Option ${String.fromCharCode(65 + correctIndex)} (index ${correctIndex})`);
     setEditedQuestionnaire(prev => ({
       ...prev,
       questions: prev.questions.map(q => 
@@ -98,25 +99,62 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
     }));
   };
 
+  const validateQuestionnaire = () => {
+    const errors: string[] = [];
+
+    if (!editedQuestionnaire.title.trim()) {
+      errors.push("Title is required");
+    }
+
+    editedQuestionnaire.questions.forEach((question, index) => {
+      if (!question.text.trim()) {
+        errors.push(`Question ${index + 1}: Question text is required`);
+      }
+      if (!question.options || question.options.length !== 4) {
+        errors.push(`Question ${index + 1}: Must have exactly 4 options`);
+      }
+      if (question.options?.some(opt => !opt.trim())) {
+        errors.push(`Question ${index + 1}: All options must have text`);
+      }
+      if (question.correctAnswer === undefined || question.correctAnswer < 0 || question.correctAnswer > 3) {
+        errors.push(`Question ${index + 1}: Must have a valid correct answer selected`);
+      }
+    });
+
+    return errors;
+  };
+
   const handleSave = () => {
-    // Validate that all questions have 4 options and a correct answer
-    const invalidQuestions = editedQuestionnaire.questions.filter(q => 
-      !q.options || q.options.length !== 4 || q.correctAnswer === undefined
-    );
-    if (invalidQuestions.length > 0) {
+    const validationErrors = validateQuestionnaire();
+    
+    if (validationErrors.length > 0) {
       toast({
-        title: "Error",
-        description: "All questions must have exactly 4 options and a correct answer selected",
+        title: "Validation Error",
+        description: validationErrors.join('. '),
         variant: "destructive"
       });
       return;
     }
 
+    // Log the admin's answer selections for debugging
+    console.log('💾 Saving questionnaire with admin-selected answers:');
+    editedQuestionnaire.questions.forEach((q, index) => {
+      console.log(`Question ${index + 1}: Correct answer is ${String.fromCharCode(65 + (q.correctAnswer || 0))} (index ${q.correctAnswer})`);
+    });
+
     onSave(editedQuestionnaire);
     toast({
       title: "Success",
-      description: "Questionnaire updated successfully",
+      description: "Questionnaire updated successfully with your selected correct answers",
     });
+  };
+
+  const getAnswerStatus = (question: Question) => {
+    if (question.correctAnswer === undefined || question.correctAnswer < 0 || question.correctAnswer > 3) {
+      return { status: 'error', message: 'No correct answer selected' };
+    }
+    const optionLetter = String.fromCharCode(65 + question.correctAnswer);
+    return { status: 'success', message: `Correct answer: ${optionLetter}` };
   };
 
   return (
@@ -125,7 +163,7 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
         <div className="flex items-center justify-between">
           <CardTitle className="text-slate-900 flex items-center space-x-2 font-poppins">
             <Edit3 className="h-5 w-5 text-violet-600" />
-            <span>Edit Questionnaire</span>
+            <span>Edit Questionnaire & Select Correct Answers</span>
           </CardTitle>
           <div className="flex space-x-2">
             <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white rounded-lg font-poppins">
@@ -173,68 +211,83 @@ const QuestionnaireEditor = ({ questionnaire, onSave, onCancel }: QuestionnaireE
             </Button>
           </div>
 
-          {editedQuestionnaire.questions.map((question, index) => (
-            <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-slate-100">
-              <div className="flex items-start justify-between mb-3">
-                <h4 className="font-medium text-slate-800 font-poppins">Question {index + 1}</h4>
-                <Button
-                  onClick={() => handleDeleteQuestion(question.id)}
-                  size="sm"
-                  variant="destructive"
-                  className="ml-2 rounded-lg"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-slate-700 font-medium font-poppins text-sm">Question Text</Label>
-                  <Textarea
-                    value={question.text}
-                    onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
-                    className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
-                    rows={2}
-                  />
+          {editedQuestionnaire.questions.map((question, index) => {
+            const answerStatus = getAnswerStatus(question);
+            
+            return (
+              <div key={question.id} className="border border-slate-300 rounded-xl p-4 bg-gradient-to-r from-slate-50 to-slate-100">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <h4 className="font-medium text-slate-800 font-poppins">Question {index + 1}</h4>
+                    <div className={`flex items-center text-xs px-2 py-1 rounded-full ${
+                      answerStatus.status === 'error' 
+                        ? 'bg-red-100 text-red-700' 
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      {answerStatus.status === 'error' && <AlertCircle className="h-3 w-3 mr-1" />}
+                      {answerStatus.message}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleDeleteQuestion(question.id)}
+                    size="sm"
+                    variant="destructive"
+                    className="ml-2 rounded-lg"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-slate-700 font-medium font-poppins text-sm">Question Text</Label>
+                    <Textarea
+                      value={question.text}
+                      onChange={(e) => handleQuestionTextChange(question.id, e.target.value)}
+                      className="mt-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 rounded-lg font-inter"
+                      rows={2}
+                    />
+                  </div>
 
-                <div>
-                  <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Correct Answer</Label>
-                  <div className="mt-2 space-y-2">
-                    <RadioGroup
-                      value={question.correctAnswer?.toString()}
-                      onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
-                    >
-                      {(question.options || []).map((option, optionIndex) => (
-                        <div key={optionIndex} className="flex items-center space-x-2 p-2 bg-white border border-slate-200 rounded-lg">
-                          <RadioGroupItem 
-                            value={optionIndex.toString()} 
-                            id={`${question.id}-correct-${optionIndex}`}
-                            className="border-green-500 text-green-600"
-                          />
-                          <Label 
-                            htmlFor={`${question.id}-correct-${optionIndex}`}
-                            className="text-xs text-slate-600 font-medium min-w-[20px]"
-                          >
-                            {String.fromCharCode(65 + optionIndex)}.
-                          </Label>
-                          <Input
-                            value={option}
-                            onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
-                            className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-sm rounded-lg font-inter"
-                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                          />
-                        </div>
-                      ))}
-                    </RadioGroup>
-                    <p className="text-xs text-slate-500 font-inter">
-                      Select the radio button next to the correct answer
-                    </p>
+                  <div>
+                    <Label className="text-slate-700 font-medium font-poppins text-sm">Options & Correct Answer</Label>
+                    <div className="mt-2 space-y-2">
+                      <RadioGroup
+                        value={question.correctAnswer?.toString()}
+                        onValueChange={(value) => handleCorrectAnswerChange(question.id, parseInt(value))}
+                      >
+                        {(question.options || []).map((option, optionIndex) => (
+                          <div key={optionIndex} className="flex items-center space-x-2 p-3 bg-white border border-slate-200 rounded-lg hover:border-violet-300 transition-colors">
+                            <RadioGroupItem 
+                              value={optionIndex.toString()} 
+                              id={`${question.id}-correct-${optionIndex}`}
+                              className="border-2 border-green-500 text-green-600 data-[state=checked]:border-green-600 data-[state=checked]:bg-green-600"
+                            />
+                            <Label 
+                              htmlFor={`${question.id}-correct-${optionIndex}`}
+                              className="text-sm text-slate-700 font-semibold min-w-[24px] cursor-pointer"
+                            >
+                              {String.fromCharCode(65 + optionIndex)}.
+                            </Label>
+                            <Input
+                              value={option}
+                              onChange={(e) => handleOptionChange(question.id, optionIndex, e.target.value)}
+                              className="flex-1 border-slate-300 focus:border-violet-500 focus:ring-violet-500 text-sm rounded-lg font-inter"
+                              placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                            />
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      <p className="text-xs text-slate-500 font-inter flex items-center">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Select the radio button next to the correct answer
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
     </Card>

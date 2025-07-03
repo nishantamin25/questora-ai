@@ -1,5 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
+import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
+import { ResponseScoring } from './ResponseScoring';
 
 export class HybridResponseStorage {
   private static isOnline(): boolean {
@@ -120,42 +122,45 @@ export class HybridResponseStorage {
 
   static async submitResponse(responseData: SubmitResponseData): Promise<void> {
     try {
-      console.log('📤 Submitting response:', responseData);
+      console.log('📤 Submitting response with admin-selected answer validation');
       
-      // Get user info (authenticated user or guest)
-      const { userId, username } = await this.getUserInfo();
-      console.log('👤 User info for response:', { userId, username });
-      
-      // Try Supabase first if online and authenticated
-      if (this.isOnline() && await this.isAuthenticated()) {
-        try {
-          await SupabaseResponseService.submitResponse(responseData);
-          console.log('✅ Response submitted to Supabase');
-          return;
-        } catch (error) {
-          console.warn('⚠️ Failed to submit to Supabase, falling back to local storage:', error);
-        }
+      // Get the questionnaire to access admin-selected correct answers
+      const questionnaire = await QuestionnaireManager.getQuestionnaireById(responseData.questionnaireId);
+      if (!questionnaire) {
+        throw new Error('Questionnaire not found');
       }
+
+      // Convert responses to the format expected by scoring
+      const userAnswers = Object.entries(responseData.responses).map(([questionId, selectedOption]) => {
+        const question = questionnaire.questions.find(q => q.id === questionId);
+        const selectedOptionIndex = question?.options?.indexOf(selectedOption) ?? 0;
+        return {
+          questionId,
+          selectedOptionIndex
+        };
+      });
+
+      // Calculate score using admin-selected correct answers
+      const scoringResult = ResponseScoring.calculateScore(userAnswers, questionnaire);
       
-      // Fallback to local storage
+      // Get user info
+      const { userId, username } = await this.getUserInfo();
+      
       const response: QuestionnaireResponse = {
         id: this.generateId(),
         questionnaireId: responseData.questionnaireId,
-        questionnaireTitle: 'Questionnaire',
+        questionnaireTitle: questionnaire.title,
         userId,
         username,
-        answers: Object.entries(responseData.responses).map(([questionId, selectedOption]) => ({
-          questionId,
-          questionText: '',
-          selectedOption,
-          selectedOptionIndex: 0,
-          isCorrect: undefined
-        })),
-        submittedAt: responseData.submittedAt
+        answers: scoringResult.answers,
+        submittedAt: responseData.submittedAt,
+        score: scoringResult.score,
+        totalQuestions: scoringResult.totalQuestions
       };
 
-      this.saveToLocalStorage(response);
-      console.log('📁 Response submitted to local storage with username:', username);
+      // Save to both localStorage and Supabase
+      await this.saveResponse(response);
+      console.log('✅ Response submitted successfully with calculated score:', scoringResult.score);
     } catch (error) {
       console.error('❌ Failed to submit response:', error);
       throw error;
@@ -186,32 +191,8 @@ export class HybridResponseStorage {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 
-  static calculateScore(userAnswers: Array<{questionId: string; selectedOptionIndex: number}>, questionnaire: any): { score: number; totalQuestions: number; answers: Array<any> } {
-    let correctCount = 0;
-    const totalQuestions = questionnaire.questions.length;
-    
-    const answersWithCorrectness = userAnswers.map(userAnswer => {
-      const question = questionnaire.questions.find((q: any) => q.id === userAnswer.questionId);
-      const isCorrect = question?.correctAnswer !== undefined && 
-                       question.correctAnswer === userAnswer.selectedOptionIndex;
-      
-      if (isCorrect) {
-        correctCount++;
-      }
-      
-      return {
-        ...userAnswer,
-        questionText: question?.text || '',
-        selectedOption: question?.options?.[userAnswer.selectedOptionIndex] || '',
-        isCorrect
-      };
-    });
-
-    return {
-      score: correctCount,
-      totalQuestions,
-      answers: answersWithCorrectness
-    };
+  static calculateScore(userAnswers: Array<{questionId: string; selectedOptionIndex: number}>, questionnaire: any) {
+    return ResponseScoring.calculateScore(userAnswers, questionnaire);
   }
 
   static async getResponseStats(questionnaireId: string) {
