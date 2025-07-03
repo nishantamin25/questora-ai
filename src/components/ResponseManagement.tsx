@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -133,12 +134,17 @@ const ResponseManagement = () => {
   };
 
   const prepareResponseExportData = () => {
-    return responses.map(response => ({
-      Player: response.username,
-      Score: `${response.score}/${response.totalQuestions}`,
-      Submitted: new Date(response.submittedAt).toLocaleDateString(),
-      Answers: response.answers.map(answer => `${answer.questionText}: ${answer.selectedOption}`).join('; ')
-    }));
+    return responses.map(response => {
+      // Calculate correct answers from the response
+      const correctAnswers = response.answers.filter(answer => answer.isCorrect).length;
+      
+      return {
+        Player: response.username,
+        Score: `${correctAnswers}/${response.totalQuestions}`,
+        Submitted: new Date(response.submittedAt).toLocaleDateString(),
+        Answers: response.answers.map(answer => `${answer.questionText}: ${answer.selectedOption}`).join('; ')
+      };
+    });
   };
 
   const getCurrentTestTitle = () => {
@@ -252,20 +258,25 @@ const ResponseManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {responses.map((response) => (
-                    <TableRow key={response.id} className="border-gray-700">
-                      <TableCell className="text-white font-medium">{response.username}</TableCell>
-                      <TableCell className="text-white">{response.score}/{response.totalQuestions}</TableCell>
-                      <TableCell className="text-gray-400 text-sm">{new Date(response.submittedAt).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-gray-400 text-sm">
-                        {response.answers.map(answer => (
-                          <div key={answer.questionId}>
-                            {answer.questionText}: {answer.selectedOption}
-                          </div>
-                        ))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {responses.map((response) => {
+                    // Calculate correct answers from the response
+                    const correctAnswers = response.answers.filter(answer => answer.isCorrect).length;
+                    
+                    return (
+                      <TableRow key={response.id} className="border-gray-700">
+                        <TableCell className="text-white font-medium">{response.username}</TableCell>
+                        <TableCell className="text-white">{correctAnswers}/{response.totalQuestions}</TableCell>
+                        <TableCell className="text-gray-400 text-sm">{new Date(response.submittedAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-gray-400 text-sm">
+                          {response.answers.map(answer => (
+                            <div key={answer.questionId}>
+                              {answer.questionText}: {answer.selectedOption}
+                            </div>
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
