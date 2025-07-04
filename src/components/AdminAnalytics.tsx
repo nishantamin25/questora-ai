@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AnalyticsService } from '@/services/AnalyticsService';
+import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { BarChart3, Users, TestTube, Trophy, Eye, EyeOff } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -15,32 +15,115 @@ const AdminAnalytics = () => {
     totalUsers: 0,
     testStats: []
   });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadAnalytics();
   }, []);
 
-  const loadAnalytics = () => {
-    const data = AnalyticsService.getAnalytics();
-    setAnalytics(data);
+  const loadAnalytics = async () => {
+    setLoading(true);
+    try {
+      const questionnaires = await QuestionnaireService.getAllQuestionnaires();
+      const savedQuestionnaires = questionnaires.filter(q => q.isSaved);
+      
+      const totalTests = savedQuestionnaires.length;
+      const activeTests = savedQuestionnaires.filter(q => q.isActive).length;
+      const inactiveTests = totalTests - activeTests;
+      
+      const testStats = savedQuestionnaires.map(q => ({
+        id: q.id,
+        title: q.title,
+        isActive: q.isActive,
+        usersTaken: 0 // This would need to be calculated from responses
+      }));
+
+      setAnalytics({
+        totalTests,
+        activeTests,
+        inactiveTests,
+        totalUsers: 0, // This would need to be calculated separately
+        testStats
+      });
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleActivateTest = (testId: string) => {
-    AnalyticsService.activateQuestionnaire(testId);
-    loadAnalytics();
-    toast({
-      title: "Success",
-      description: "Test activated successfully",
-    });
+  const handleActivateTest = async (testId: string) => {
+    if (loading) return;
+    
+    setLoading(true);
+    try {
+      await QuestionnaireService.activateQuestionnaire(testId);
+      
+      // Update the local state immediately to prevent duplication
+      setAnalytics(prev => ({
+        ...prev,
+        activeTests: prev.activeTests + 1,
+        inactiveTests: prev.inactiveTests - 1,
+        testStats: prev.testStats.map(test => 
+          test.id === testId 
+            ? { ...test, isActive: true }
+            : test
+        )
+      }));
+
+      toast({
+        title: "Success",
+        description: "Test activated successfully",
+      });
+    } catch (error) {
+      console.error('Failed to activate test:', error);
+      toast({
+        title: "Error",
+        description: "Failed to activate test",
+        variant: "destructive"
+      });
+      // Reload analytics to ensure consistency
+      loadAnalytics();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeactivateTest = (testId: string) => {
-    AnalyticsService.deactivateQuestionnaire(testId);
-    loadAnalytics();
-    toast({
-      title: "Success",
-      description: "Test deactivated successfully",
-    });
+  const handleDeactivateTest = async (testId: string) => {
+    if (loading) return;
+    
+    setLoading(true);
+    try {
+      await QuestionnaireService.deactivateQuestionnaire(testId);
+      
+      // Update the local state immediately to prevent duplication
+      setAnalytics(prev => ({
+        ...prev,
+        activeTests: prev.activeTests - 1,
+        inactiveTests: prev.inactiveTests + 1,
+        testStats: prev.testStats.map(test => 
+          test.id === testId 
+            ? { ...test, isActive: false }
+            : test
+        )
+      }));
+
+      toast({
+        title: "Success",
+        description: "Test deactivated successfully",
+      });
+    } catch (error) {
+      console.error('Failed to deactivate test:', error);
+      toast({
+        title: "Error",
+        description: "Failed to deactivate test",
+        variant: "destructive"
+      });
+      // Reload analytics to ensure consistency
+      loadAnalytics();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleViewLeaderboard = (testId: string, testTitle: string) => {
@@ -147,6 +230,7 @@ const AdminAnalytics = () => {
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDeactivateTest(test.id)}
+                        disabled={loading}
                       >
                         Deactivate
                       </Button>
@@ -155,6 +239,7 @@ const AdminAnalytics = () => {
                         size="sm"
                         className="bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => handleActivateTest(test.id)}
+                        disabled={loading}
                       >
                         Activate
                       </Button>
