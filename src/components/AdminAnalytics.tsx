@@ -16,6 +16,7 @@ const AdminAnalytics = () => {
     testStats: []
   });
   const [loading, setLoading] = useState(false);
+  const [processingTests, setProcessingTests] = useState(new Set());
 
   useEffect(() => {
     loadAnalytics();
@@ -53,13 +54,13 @@ const AdminAnalytics = () => {
   };
 
   const handleActivateTest = async (testId: string) => {
-    if (loading) return;
+    if (loading || processingTests.has(testId)) return;
     
-    setLoading(true);
+    // Add test to processing set to prevent concurrent operations
+    setProcessingTests(prev => new Set(prev).add(testId));
+    
     try {
-      await QuestionnaireService.activateQuestionnaire(testId);
-      
-      // Update the local state while preserving order
+      // First update the UI optimistically
       setAnalytics(prev => {
         const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
@@ -75,6 +76,9 @@ const AdminAnalytics = () => {
         };
       });
 
+      // Then perform the backend operation
+      await QuestionnaireService.activateQuestionnaire(testId);
+
       toast({
         title: "Success",
         description: "Test activated successfully",
@@ -86,21 +90,39 @@ const AdminAnalytics = () => {
         description: "Failed to activate test",
         variant: "destructive"
       });
-      // Reload analytics to ensure consistency
-      loadAnalytics();
+      // Revert the optimistic update on error
+      setAnalytics(prev => {
+        const updatedTestStats = prev.testStats.map(test => 
+          test.id === testId 
+            ? { ...test, isActive: false }
+            : test
+        );
+        
+        return {
+          ...prev,
+          activeTests: prev.activeTests - 1,
+          inactiveTests: prev.inactiveTests + 1,
+          testStats: updatedTestStats
+        };
+      });
     } finally {
-      setLoading(false);
+      // Remove test from processing set
+      setProcessingTests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(testId);
+        return newSet;
+      });
     }
   };
 
   const handleDeactivateTest = async (testId: string) => {
-    if (loading) return;
+    if (loading || processingTests.has(testId)) return;
     
-    setLoading(true);
+    // Add test to processing set to prevent concurrent operations
+    setProcessingTests(prev => new Set(prev).add(testId));
+    
     try {
-      await QuestionnaireService.deactivateQuestionnaire(testId);
-      
-      // Update the local state while preserving order
+      // First update the UI optimistically
       setAnalytics(prev => {
         const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
@@ -116,6 +138,9 @@ const AdminAnalytics = () => {
         };
       });
 
+      // Then perform the backend operation
+      await QuestionnaireService.deactivateQuestionnaire(testId);
+
       toast({
         title: "Success",
         description: "Test deactivated successfully",
@@ -127,10 +152,28 @@ const AdminAnalytics = () => {
         description: "Failed to deactivate test",
         variant: "destructive"
       });
-      // Reload analytics to ensure consistency
-      loadAnalytics();
+      // Revert the optimistic update on error
+      setAnalytics(prev => {
+        const updatedTestStats = prev.testStats.map(test => 
+          test.id === testId 
+            ? { ...test, isActive: true }
+            : test
+        );
+        
+        return {
+          ...prev,
+          activeTests: prev.activeTests + 1,
+          inactiveTests: prev.inactiveTests - 1,
+          testStats: updatedTestStats
+        };
+      });
     } finally {
-      setLoading(false);
+      // Remove test from processing set
+      setProcessingTests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(testId);
+        return newSet;
+      });
     }
   };
 
@@ -238,18 +281,18 @@ const AdminAnalytics = () => {
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDeactivateTest(test.id)}
-                        disabled={loading}
+                        disabled={processingTests.has(test.id)}
                       >
-                        Deactivate
+                        {processingTests.has(test.id) ? 'Processing...' : 'Deactivate'}
                       </Button>
                     ) : (
                       <Button
                         size="sm"
                         className="bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => handleActivateTest(test.id)}
-                        disabled={loading}
+                        disabled={processingTests.has(test.id)}
                       >
-                        Activate
+                        {processingTests.has(test.id) ? 'Processing...' : 'Activate'}
                       </Button>
                     )}
                   </div>
