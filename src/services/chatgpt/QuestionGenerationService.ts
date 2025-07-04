@@ -1,4 +1,3 @@
-
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -89,13 +88,25 @@ export class QuestionGenerationService {
 
     console.log('📄 Using file:', fileInfo.filename, 'Type:', fileInfo.type);
 
-    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided file content.
+    const systemPrompt = `You are an AI assistant that generates comprehension and training questions based on detailed retail SOP documents.
+
+Your task is to generate clear, practical questions that help retail store staff understand, remember, and apply the processes described in the Scan and Go SOP. The questions should cover:
+- System architecture and overview
+- Device setup and daily checks
+- Customer onboarding process
+- Exception and issue handling
+- Security protocols
+- End-of-shift reporting
+- FAQs and real-world scenarios
 
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
 - Use ${difficulty} difficulty level
 - Each question has 4 answer choices
 - Base questions on the file content provided
+- Format each question as a numbered list
+- Avoid yes/no questions
+- Prefer scenario-based or action-oriented questions that test understanding of procedures and responsibilities
 - Return valid JSON format
 
 Response format:
@@ -110,7 +121,7 @@ Response format:
   ]
 }`;
 
-    const questionText = `Create ${numberOfQuestions} ${difficulty} questions from the uploaded file content.`;
+    const questionText = `Create ${numberOfQuestions} ${difficulty} comprehension and training questions from the uploaded retail SOP document content. Focus on practical scenarios that test staff understanding of procedures and responsibilities.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -156,13 +167,25 @@ Response format:
   ): Promise<any[]> {
     console.log('🚀 GENERATING QUESTIONS WITH TEXT CONTENT...');
     
-    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided content.
+    const systemPrompt = `You are an AI assistant that generates comprehension and training questions based on detailed retail SOP documents.
+
+Your task is to generate clear, practical questions that help retail store staff understand, remember, and apply the processes described in the Scan and Go SOP. The questions should cover:
+- System architecture and overview
+- Device setup and daily checks
+- Customer onboarding process
+- Exception and issue handling
+- Security protocols
+- End-of-shift reporting
+- FAQs and real-world scenarios
 
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
 - Use ${difficulty} difficulty level
 - Each question has 4 answer choices
 - Base questions on the provided content
+- Format each question as a numbered list
+- Avoid yes/no questions
+- Prefer scenario-based or action-oriented questions that test understanding of procedures and responsibilities
 - Return valid JSON format
 
 Response format:
@@ -177,7 +200,7 @@ Response format:
   ]
 }`;
 
-    const userPrompt = `Create ${numberOfQuestions} ${difficulty} questions from this content:
+    const userPrompt = `Create ${numberOfQuestions} ${difficulty} comprehension and training questions from this retail SOP content. Focus on practical scenarios that test staff understanding of procedures and responsibilities:
 
 ${fileContent}
 
