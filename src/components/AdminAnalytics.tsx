@@ -59,17 +59,21 @@ const AdminAnalytics = () => {
     try {
       await QuestionnaireService.activateQuestionnaire(testId);
       
-      // Update the local state immediately to prevent duplication
-      setAnalytics(prev => ({
-        ...prev,
-        activeTests: prev.activeTests + 1,
-        inactiveTests: prev.inactiveTests - 1,
-        testStats: prev.testStats.map(test => 
+      // Update the local state while preserving order
+      setAnalytics(prev => {
+        const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
             ? { ...test, isActive: true }
             : test
-        )
-      }));
+        );
+        
+        return {
+          ...prev,
+          activeTests: prev.activeTests + 1,
+          inactiveTests: prev.inactiveTests - 1,
+          testStats: updatedTestStats
+        };
+      });
 
       toast({
         title: "Success",
@@ -96,17 +100,21 @@ const AdminAnalytics = () => {
     try {
       await QuestionnaireService.deactivateQuestionnaire(testId);
       
-      // Update the local state immediately to prevent duplication
-      setAnalytics(prev => ({
-        ...prev,
-        activeTests: prev.activeTests - 1,
-        inactiveTests: prev.inactiveTests + 1,
-        testStats: prev.testStats.map(test => 
+      // Update the local state while preserving order
+      setAnalytics(prev => {
+        const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
             ? { ...test, isActive: false }
             : test
-        )
-      }));
+        );
+        
+        return {
+          ...prev,
+          activeTests: prev.activeTests - 1,
+          inactiveTests: prev.inactiveTests + 1,
+          testStats: updatedTestStats
+        };
+      });
 
       toast({
         title: "Success",
