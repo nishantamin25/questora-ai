@@ -1,3 +1,4 @@
+
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -88,9 +89,28 @@ export class QuestionGenerationService {
 
     console.log('📄 Using file:', fileInfo.filename, 'Type:', fileInfo.type);
 
-    const systemPrompt = this.buildEnhancedSystemPrompt(numberOfQuestions, difficulty, setNumber, totalSets);
+    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided file content.
 
-    const questionText = `Create ${numberOfQuestions} ${difficulty} questions from the uploaded file content for Set ${setNumber} of ${totalSets} total sets.`;
+Requirements:
+- Generate exactly ${numberOfQuestions} questions
+- Use ${difficulty} difficulty level
+- Each question has 4 answer choices
+- Base questions on the file content provided
+- Return valid JSON format
+
+Response format:
+{
+  "questions": [
+    {
+      "question": "Question text",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correct_answer": 0,
+      "explanation": "Brief explanation"
+    }
+  ]
+}`;
+
+    const questionText = `Create ${numberOfQuestions} ${difficulty} questions from the uploaded file content.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -136,13 +156,32 @@ export class QuestionGenerationService {
   ): Promise<any[]> {
     console.log('🚀 GENERATING QUESTIONS WITH TEXT CONTENT...');
     
-    const systemPrompt = this.buildEnhancedSystemPrompt(numberOfQuestions, difficulty, setNumber, totalSets);
+    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided content.
 
-    const userPrompt = `Create ${numberOfQuestions} ${difficulty} questions from this content for Set ${setNumber} of ${totalSets} total sets:
+Requirements:
+- Generate exactly ${numberOfQuestions} questions
+- Use ${difficulty} difficulty level
+- Each question has 4 answer choices
+- Base questions on the provided content
+- Return valid JSON format
+
+Response format:
+{
+  "questions": [
+    {
+      "question": "Question text",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correct_answer": 0,
+      "explanation": "Brief explanation"
+    }
+  ]
+}`;
+
+    const userPrompt = `Create ${numberOfQuestions} ${difficulty} questions from this content:
 
 ${fileContent}
 
-Generate exactly ${numberOfQuestions} unique questions in JSON format.`;
+Generate exactly ${numberOfQuestions} questions in JSON format.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -161,81 +200,6 @@ Generate exactly ${numberOfQuestions} unique questions in JSON format.`;
     const content = await ApiCallService.makeApiCall(requestBody, 'TEXT-BASED QUESTION GENERATION');
 
     return this.processQuestionResponse(content, numberOfQuestions);
-  }
-
-  private buildEnhancedSystemPrompt(numberOfQuestions: number, difficulty: string, setNumber: number, totalSets: number): string {
-    return `System Role:
-You are an AI assistant responsible for generating guest-facing multiple-choice questions (MCQs) based strictly on the uploaded instructional file (e.g., SOP, policy doc, or training manual). Each question must be relevant to the file content and formatted clearly. Guests will select one correct answer out of four options. The same test may have multiple question sets.
-
-You must balance content coverage, minimal duplication, and avoid generation failures.
-
-📥 Inputs:
-One uploaded file (PDF, DOCX, or TXT)
-Target question count per set: ${numberOfQuestions}
-Number of sets to generate: ${totalSets}
-Current set: ${setNumber}
-Difficulty level: ${difficulty}
-
-✅ Main Objectives:
-• Questions must be based only on the file's instructional content
-• Avoid repetition when possible, but allow overlap between sets if content is limited
-• Do not throw errors if the file doesn't support the full requested count
-• Always return as many valid questions as the content allows
-
-✅ Question Content Rules:
-You may generate questions from:
-• SOP steps, workflows, or procedures
-• Roles and responsibilities
-• Device handling, onboarding, exit protocols
-• Troubleshooting, escalation, or validations
-• Do's and Don'ts, FAQs, or real examples in the file
-
-You may NOT generate questions about:
-• File name, size, format, metadata
-• Upload errors or system behavior
-• Placeholder content or AI references
-
-🔄 Repetition Handling (Relaxed Deduplication):
-• Avoid duplicating questions within the same set
-• Across multiple sets for the same test:
-  - Try to diversify questions
-  - But allow a few questions to repeat across different sets if file content is limited
-  - Prioritize overall test variation, not perfect uniqueness
-
-❌ Failure Prevention (Error-Safe Mode):
-If the file has limited usable content:
-• Generate as many valid questions as possible
-• Do not throw an error if the target count (e.g., ${numberOfQuestions}) isn't met
-• Return partial sets if needed (e.g., 3 questions instead of ${numberOfQuestions})
-• Only return this fallback message if the file is fully unreadable or blank:
-  "The uploaded file contains no readable instructional content for question generation."
-
-Requirements:
-- Generate up to ${numberOfQuestions} questions at ${difficulty} difficulty level
-- Each question has exactly 4 answer choices
-- Base questions strictly on the file content provided
-- Return valid JSON format
-- Be flexible with question count if content is limited
-
-Response format:
-{
-  "questions": [
-    {
-      "question": "Question text based strictly on file content",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-      "correct_answer": 0,
-      "explanation": "Brief explanation referencing specific file content"
-    }
-  ]
-}
-
-✅ Summary:
-• MCQs must be file-based
-• Format must be clean and consistent
-• Avoid internal repetition in a set
-• Allow mild overlap between sets if needed
-• Never fail generation due to low content
-• Always return something when content exists`;
   }
 
   private extractFileInfo(fileContent: string): { filename: string; type: string; base64Data: string } | null {
