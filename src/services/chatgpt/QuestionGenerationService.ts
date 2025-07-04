@@ -88,16 +88,16 @@ export class QuestionGenerationService {
 
     console.log('📄 Using file:', fileInfo.filename, 'Type:', fileInfo.type);
 
-    const systemPrompt = `You are an AI assistant that generates comprehension and training questions based on detailed retail SOP documents.
+    const systemPrompt = `You are an AI assistant that generates thoughtful, context-aware questions from any given document. Your goal is to help learners or readers reflect on and understand the key ideas, processes, or information presented in the file.
 
-Your task is to generate clear, practical questions that help retail store staff understand, remember, and apply the processes described in the Scan and Go SOP. The questions should cover:
-- System architecture and overview
-- Device setup and daily checks
-- Customer onboarding process
-- Exception and issue handling
-- Security protocols
-- End-of-shift reporting
-- FAQs and real-world scenarios
+The content may relate to any topic—technical guides, training manuals, academic papers, policy documents, business plans, or standard operating procedures.
+
+Your task:
+- Extract the core ideas from the provided document
+- Formulate ${numberOfQuestions} meaningful questions
+- Ensure the questions are open-ended, scenario-based, or comprehension-driven
+- Use the terminology and structure of the document appropriately
+- Avoid yes/no or single-word-answer questions unless contextually necessary
 
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
@@ -105,8 +105,6 @@ Requirements:
 - Each question has 4 answer choices
 - Base questions on the file content provided
 - Format each question as a numbered list
-- Avoid yes/no questions
-- Prefer scenario-based or action-oriented questions that test understanding of procedures and responsibilities
 - Return valid JSON format
 
 Response format:
@@ -121,7 +119,7 @@ Response format:
   ]
 }`;
 
-    const questionText = `Create ${numberOfQuestions} ${difficulty} comprehension and training questions from the uploaded retail SOP document content. Focus on practical scenarios that test staff understanding of procedures and responsibilities.`;
+    const questionText = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from the uploaded document content. Focus on helping learners understand and reflect on the key ideas and processes presented.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -167,16 +165,16 @@ Response format:
   ): Promise<any[]> {
     console.log('🚀 GENERATING QUESTIONS WITH TEXT CONTENT...');
     
-    const systemPrompt = `You are an AI assistant that generates comprehension and training questions based on detailed retail SOP documents.
+    const systemPrompt = `You are an AI assistant that generates thoughtful, context-aware questions from any given document. Your goal is to help learners or readers reflect on and understand the key ideas, processes, or information presented in the file.
 
-Your task is to generate clear, practical questions that help retail store staff understand, remember, and apply the processes described in the Scan and Go SOP. The questions should cover:
-- System architecture and overview
-- Device setup and daily checks
-- Customer onboarding process
-- Exception and issue handling
-- Security protocols
-- End-of-shift reporting
-- FAQs and real-world scenarios
+The content may relate to any topic—technical guides, training manuals, academic papers, policy documents, business plans, or standard operating procedures.
+
+Your task:
+- Extract the core ideas from the provided document
+- Formulate ${numberOfQuestions} meaningful questions
+- Ensure the questions are open-ended, scenario-based, or comprehension-driven
+- Use the terminology and structure of the document appropriately
+- Avoid yes/no or single-word-answer questions unless contextually necessary
 
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
@@ -184,8 +182,6 @@ Requirements:
 - Each question has 4 answer choices
 - Base questions on the provided content
 - Format each question as a numbered list
-- Avoid yes/no questions
-- Prefer scenario-based or action-oriented questions that test understanding of procedures and responsibilities
 - Return valid JSON format
 
 Response format:
@@ -200,7 +196,7 @@ Response format:
   ]
 }`;
 
-    const userPrompt = `Create ${numberOfQuestions} ${difficulty} comprehension and training questions from this retail SOP content. Focus on practical scenarios that test staff understanding of procedures and responsibilities:
+    const userPrompt = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from this document content. Focus on helping learners understand and reflect on the key ideas and processes presented:
 
 ${fileContent}
 
