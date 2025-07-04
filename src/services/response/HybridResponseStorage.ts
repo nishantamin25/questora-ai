@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
 import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
 import { ResponseScoring } from './ResponseScoring';
+import { AuthService } from '../AuthService';
 
 export class HybridResponseStorage {
   private static isOnline(): boolean {
@@ -30,12 +31,20 @@ export class HybridResponseStorage {
       console.log('Could not get authenticated user info:', error);
     }
     
-    // For guests, get the actual username they entered during login
+    // For guests, get the username from the current user session
+    const currentUser = AuthService.getCurrentUser();
+    if (currentUser && currentUser.role === 'guest') {
+      return {
+        userId: 'anonymous',
+        username: currentUser.username
+      };
+    }
+    
+    // Fallback to stored username if available
     let guestUsername = sessionStorage.getItem('currentGuestUsername') || localStorage.getItem('guestUsername');
     
-    // If no guest username exists, try to get it from the current session or generate one
+    // Only generate timestamp username as last resort
     if (!guestUsername) {
-      // Generate a unique guest username with timestamp as fallback
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
       guestUsername = `Guest_${timestamp}`;
       sessionStorage.setItem('currentGuestUsername', guestUsername);
