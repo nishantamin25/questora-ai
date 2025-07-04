@@ -21,32 +21,29 @@ export class ChatGPTPDFProcessor {
     }
 
     try {
-      // STEP 1: Extract actual text from PDF
-      console.log('📄 Extracting text from PDF...');
-      const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
+      // STEP 1: Extract base64 from PDF for maximum accuracy
+      console.log('📄 Converting PDF to base64 for ChatGPT processing...');
+      const base64Data = await this.fileToBase64(file);
       
-      // if (!extractedText || extractedText.length < 200) {
-      //   throw new Error(`Insufficient text extracted from PDF. Only ${extractedText?.length || 0} characters found. The PDF may be image-based or corrupted.`);
-      // }
-      
-      console.log('✅ PDF text extraction successful:', {
-        length: extractedText.length,
-        preview: extractedText.substring(0, 200) + '...'
+      console.log('✅ PDF conversion successful:', {
+        size: Math.round(base64Data.length * 0.75 / 1024) + 'KB',
+        fileName: file.name
       });
       
-      // STEP 2: Use ChatGPT to clean and analyze the extracted text
-      const systemPrompt = `You are a PDF content processor. Your task is to:
+      // STEP 2: Use ChatGPT to extract and analyze with maximum accuracy
+      const systemPrompt = `You are an expert PDF content extractor and analyzer. Your task is to:
 
-1. Clean and organize the provided text that was extracted from a PDF
-2. Remove any PDF artifacts, formatting issues, or corrupted characters
-3. Structure the content into readable, educational material
-4. Analyze the content for educational value and complexity
+1. Extract ALL text content from the provided PDF with maximum accuracy
+2. Preserve formatting, structure, and hierarchy
+3. Maintain tables, lists, and special formatting
+4. Clean up any extraction artifacts while preserving all meaningful content
+5. Analyze the content for educational value and complexity
 
-The text may contain some extraction artifacts, so please clean it up while preserving all meaningful content.
+CRITICAL: Extract every single word, number, and piece of information from the document. Do not summarize or condense - provide complete, verbatim extraction.
 
 Return your response in this exact JSON format:
 {
-  "cleanedContent": "The cleaned and organized text content",
+  "cleanedContent": "The complete extracted text content with perfect accuracy",
   "analysis": {
     "type": "educational|business|technical|research|other",
     "complexity": "basic|intermediate|advanced", 
@@ -57,10 +54,7 @@ Return your response in this exact JSON format:
   }
 }`;
 
-      const userPrompt = `The following is a base64-encoded PDF
-      Please clean and analyze this text extracted from the PDF file":
-      Clean up any extraction artifacts and organize this into readable educational content.
-      `;
+      const userPrompt = `Please extract ALL content from this PDF with maximum accuracy. Extract every word, number, table, list, and piece of information. Maintain the original structure and formatting as much as possible.`;
 
       const messages = [
         {
@@ -68,45 +62,44 @@ Return your response in this exact JSON format:
           content: systemPrompt
         },
         {
-          role: 'user', 
-          content: userPrompt
-        },
-        {
           role: 'user',
           content: [
-                {
-                    type: "input_file",
-                    filename: file.name,
-                    file_data: `data:application/pdf;base64,${extractedText}`,
-                }
-            ],
+            {
+              type: 'text',
+              text: userPrompt
+            },
+            {
+              type: 'input_file',
+              filename: file.name,
+              file_data: base64Data
+            }
+          ]
         }
       ];
 
       const requestBody = {
         model: 'gpt-4.1-2025-04-14',
         messages,
-        max_tokens: 4000,
-        temperature: 0.1,
+        max_tokens: 8000,
+        temperature: 0.0, // Maximum accuracy
         response_format: { type: "json_object" }
       };
 
-      console.log('📤 Sending extracted text to ChatGPT for cleaning and analysis...');
-      const response = await ApiCallService.makeApiCall(requestBody, 'CHATGPT_PDF_CLEANING');
+      console.log('📤 Sending PDF to ChatGPT for high-accuracy extraction...');
+      const response = await ApiCallService.makeApiCall(requestBody, 'CHATGPT_HIGH_ACCURACY_PDF_EXTRACTION');
 
       if (!response) {
-        throw new Error('No response from ChatGPT PDF cleaning');
+        throw new Error('No response from ChatGPT PDF extraction');
       }
 
       const parsedResponse = JSON.parse(response);
       
       if (!parsedResponse.cleanedContent || !parsedResponse.analysis) {
-        throw new Error('Invalid response format from ChatGPT PDF cleaning');
+        throw new Error('Invalid response format from ChatGPT PDF extraction');
       }
 
-      console.log('✅ CHATGPT PDF CLEANING SUCCESS:', {
-        originalLength: extractedText.length,
-        cleanedLength: parsedResponse.cleanedContent.length,
+      console.log('✅ CHATGPT HIGH-ACCURACY PDF EXTRACTION SUCCESS:', {
+        extractedLength: parsedResponse.cleanedContent.length,
         wordCount: parsedResponse.analysis.wordCount,
         type: parsedResponse.analysis.type,
         complexity: parsedResponse.analysis.complexity,
@@ -119,9 +112,28 @@ Return your response in this exact JSON format:
       };
 
     } catch (error) {
-      console.error('❌ ChatGPT PDF processing failed:', error);
+      console.error('❌ ChatGPT high-accuracy PDF processing failed:', error);
       throw new Error(`ChatGPT PDF processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private static async fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        // Remove the data URL prefix to get just the base64 data
+        const base64 = result.split(',')[1] || result;
+        resolve(base64);
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('Failed to convert file to base64'));
+      };
+      
+      reader.readAsDataURL(file);
+    });
   }
 
   static async extractTextWithFallback(file: File): Promise<string> {
