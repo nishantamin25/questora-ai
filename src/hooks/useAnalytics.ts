@@ -67,7 +67,10 @@ export const useAnalytics = () => {
     setProcessingTests(prev => new Set(prev).add(testId));
     
     try {
-      // First update the UI optimistically
+      // Perform the backend operation first
+      await QuestionnaireService.activateQuestionnaire(testId);
+
+      // Only update the UI after successful backend operation
       setAnalytics(prev => {
         const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
@@ -83,9 +86,6 @@ export const useAnalytics = () => {
         };
       });
 
-      // Then perform the backend operation
-      await QuestionnaireService.activateQuestionnaire(testId);
-
       toast({
         title: "Success",
         description: "Test activated successfully",
@@ -96,21 +96,6 @@ export const useAnalytics = () => {
         title: "Error",
         description: "Failed to activate test",
         variant: "destructive"
-      });
-      // Revert the optimistic update on error
-      setAnalytics(prev => {
-        const updatedTestStats = prev.testStats.map(test => 
-          test.id === testId 
-            ? { ...test, isActive: false }
-            : test
-        );
-        
-        return {
-          ...prev,
-          activeTests: prev.activeTests - 1,
-          inactiveTests: prev.inactiveTests + 1,
-          testStats: updatedTestStats
-        };
       });
     } finally {
       // Remove test from processing set
@@ -129,7 +114,10 @@ export const useAnalytics = () => {
     setProcessingTests(prev => new Set(prev).add(testId));
     
     try {
-      // First update the UI optimistically
+      // Perform the backend operation first
+      await QuestionnaireService.deactivateQuestionnaire(testId);
+
+      // Only update the UI after successful backend operation
       setAnalytics(prev => {
         const updatedTestStats = prev.testStats.map(test => 
           test.id === testId 
@@ -145,9 +133,6 @@ export const useAnalytics = () => {
         };
       });
 
-      // Then perform the backend operation
-      await QuestionnaireService.deactivateQuestionnaire(testId);
-
       toast({
         title: "Success",
         description: "Test deactivated successfully",
@@ -158,21 +143,6 @@ export const useAnalytics = () => {
         title: "Error",
         description: "Failed to deactivate test",
         variant: "destructive"
-      });
-      // Revert the optimistic update on error
-      setAnalytics(prev => {
-        const updatedTestStats = prev.testStats.map(test => 
-          test.id === testId 
-            ? { ...test, isActive: true }
-            : test
-        );
-        
-        return {
-          ...prev,
-          activeTests: prev.activeTests + 1,
-          inactiveTests: prev.inactiveTests - 1,
-          testStats: updatedTestStats
-        };
       });
     } finally {
       // Remove test from processing set
