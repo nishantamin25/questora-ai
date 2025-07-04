@@ -89,28 +89,9 @@ export class QuestionGenerationService {
 
     console.log('📄 Using file:', fileInfo.filename, 'Type:', fileInfo.type);
 
-    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided file content.
+    const systemPrompt = this.buildEnhancedSystemPrompt(numberOfQuestions, difficulty, setNumber, totalSets);
 
-Requirements:
-- Generate exactly ${numberOfQuestions} questions
-- Use ${difficulty} difficulty level
-- Each question has 4 answer choices
-- Base questions on the file content provided
-- Return valid JSON format
-
-Response format:
-{
-  "questions": [
-    {
-      "question": "Question text",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-      "correct_answer": 0,
-      "explanation": "Brief explanation"
-    }
-  ]
-}`;
-
-    const questionText = `Create ${numberOfQuestions} ${difficulty} questions from the uploaded file content.`;
+    const questionText = `Create ${numberOfQuestions} ${difficulty} questions from the uploaded file content for Set ${setNumber} of ${totalSets} total sets.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -156,32 +137,13 @@ Response format:
   ): Promise<any[]> {
     console.log('🚀 GENERATING QUESTIONS WITH TEXT CONTENT...');
     
-    const systemPrompt = `You are a question generator. Create exactly ${numberOfQuestions} multiple-choice questions based on the provided content.
+    const systemPrompt = this.buildEnhancedSystemPrompt(numberOfQuestions, difficulty, setNumber, totalSets);
 
-Requirements:
-- Generate exactly ${numberOfQuestions} questions
-- Use ${difficulty} difficulty level
-- Each question has 4 answer choices
-- Base questions on the provided content
-- Return valid JSON format
-
-Response format:
-{
-  "questions": [
-    {
-      "question": "Question text",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-      "correct_answer": 0,
-      "explanation": "Brief explanation"
-    }
-  ]
-}`;
-
-    const userPrompt = `Create ${numberOfQuestions} ${difficulty} questions from this content:
+    const userPrompt = `Create ${numberOfQuestions} ${difficulty} questions from this content for Set ${setNumber} of ${totalSets} total sets:
 
 ${fileContent}
 
-Generate exactly ${numberOfQuestions} questions in JSON format.`;
+Generate exactly ${numberOfQuestions} unique questions in JSON format.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -200,6 +162,92 @@ Generate exactly ${numberOfQuestions} questions in JSON format.`;
     const content = await ApiCallService.makeApiCall(requestBody, 'TEXT-BASED QUESTION GENERATION');
 
     return this.processQuestionResponse(content, numberOfQuestions);
+  }
+
+  private buildEnhancedSystemPrompt(numberOfQuestions: number, difficulty: string, setNumber: number, totalSets: number): string {
+    return `System Role:
+You are an AI-powered questionnaire generator. Your sole responsibility is to generate guest-facing multiple-choice questions (MCQs) based strictly on the instructional content of the uploaded file (SOP, training guide, or manual). Each test may include multiple randomized sets to prevent answer copying between guests.
+
+🚫 Key Problems to Avoid
+1. Irrelevant Questions:
+   • Do NOT generate general, guessed, or fabricated questions
+   • All questions must be directly derived from the uploaded file — nothing else
+   • If a fact or concept isn't in the file, you must not write a question about it
+
+2. Repetition Within or Across Sets:
+   • No duplicate or reworded questions within a single set
+   • No duplicate questions across multiple sets for the same test
+   • Every question in every set must be unique and cover a distinct topic from the file
+
+✅ Current Task:
+Generate Set ${setNumber} of ${totalSets} total sets
+Each set must have exactly ${numberOfQuestions} questions at ${difficulty} difficulty level
+
+✅ What You Must Do
+Generate only from the file's real content.
+
+You may use:
+• Procedures, steps, workflows
+• Staff roles and responsibilities
+• Troubleshooting, onboarding, checklists
+• Do's and Don'ts
+• Escalation protocols
+• FAQs or real-world examples in the file
+
+You may NOT use:
+• System behavior, file size, GPT metadata, hallucinated SOP logic
+• Placeholder phrases like "according to the document..." if the content isn't explicitly in the file
+
+Ensure every question is unique.
+• Each question must target a different fact, instruction, or action from the file
+• If generating multiple sets for one test:
+  - Track all previously used questions
+  - Do not regenerate or rephrase them in the next set
+
+🚨 Repetition Block Logic
+Within a single set:
+➤ No reworded duplicates or similar phrasing allowed
+
+Across sets in the same test:
+➤ All questions must be mutually exclusive — no topic overlap or shared logic
+
+Goal: Prevent guest users from seeing the same or similar questions in different sets of the same test.
+
+🧩 Partial Output Handling
+If the file contains only limited content:
+• Still return as many unique questions as possible
+• Do not return repeated questions to fill the gap
+• Never hallucinate just to meet the requested count
+
+Requirements:
+- Generate exactly ${numberOfQuestions} questions
+- Use ${difficulty} difficulty level
+- Each question has exactly 4 answer choices
+- Base questions strictly on the file content provided
+- Return valid JSON format
+- Ensure all questions are unique and non-repetitive
+
+Response format:
+{
+  "questions": [
+    {
+      "question": "Question text based strictly on file content",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correct_answer": 0,
+      "explanation": "Brief explanation referencing specific file content"
+    }
+  ]
+}
+
+🧾 Summary:
+• Strictly file-based MCQs only
+• Unique questions per set
+• Zero repetition within or across sets
+• 4 options per question
+• One correct answer per question
+• Fixed question format
+• Multiple sets = zero overlap
+• Never guess or use general training logic`;
   }
 
   private extractFileInfo(fileContent: string): { filename: string; type: string; base64Data: string } | null {
