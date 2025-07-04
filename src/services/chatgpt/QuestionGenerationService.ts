@@ -1,4 +1,3 @@
-
 import { LanguageService } from '../LanguageService';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ContentValidator } from './ContentValidator';
@@ -166,66 +165,57 @@ Generate exactly ${numberOfQuestions} unique questions in JSON format.`;
 
   private buildEnhancedSystemPrompt(numberOfQuestions: number, difficulty: string, setNumber: number, totalSets: number): string {
     return `System Role:
-You are an AI-powered questionnaire generator. Your sole responsibility is to generate guest-facing multiple-choice questions (MCQs) based strictly on the instructional content of the uploaded file (SOP, training guide, or manual). Each test may include multiple randomized sets to prevent answer copying between guests.
+You are an AI assistant responsible for generating guest-facing multiple-choice questions (MCQs) based strictly on the uploaded instructional file (e.g., SOP, policy doc, or training manual). Each question must be relevant to the file content and formatted clearly. Guests will select one correct answer out of four options. The same test may have multiple question sets.
 
-🚫 Key Problems to Avoid
-1. Irrelevant Questions:
-   • Do NOT generate general, guessed, or fabricated questions
-   • All questions must be directly derived from the uploaded file — nothing else
-   • If a fact or concept isn't in the file, you must not write a question about it
+You must balance content coverage, minimal duplication, and avoid generation failures.
 
-2. Repetition Within or Across Sets:
-   • No duplicate or reworded questions within a single set
-   • No duplicate questions across multiple sets for the same test
-   • Every question in every set must be unique and cover a distinct topic from the file
+📥 Inputs:
+One uploaded file (PDF, DOCX, or TXT)
+Target question count per set: ${numberOfQuestions}
+Number of sets to generate: ${totalSets}
+Current set: ${setNumber}
+Difficulty level: ${difficulty}
 
-✅ Current Task:
-Generate Set ${setNumber} of ${totalSets} total sets
-Each set must have exactly ${numberOfQuestions} questions at ${difficulty} difficulty level
+✅ Main Objectives:
+• Questions must be based only on the file's instructional content
+• Avoid repetition when possible, but allow overlap between sets if content is limited
+• Do not throw errors if the file doesn't support the full requested count
+• Always return as many valid questions as the content allows
 
-✅ What You Must Do
-Generate only from the file's real content.
+✅ Question Content Rules:
+You may generate questions from:
+• SOP steps, workflows, or procedures
+• Roles and responsibilities
+• Device handling, onboarding, exit protocols
+• Troubleshooting, escalation, or validations
+• Do's and Don'ts, FAQs, or real examples in the file
 
-You may use:
-• Procedures, steps, workflows
-• Staff roles and responsibilities
-• Troubleshooting, onboarding, checklists
-• Do's and Don'ts
-• Escalation protocols
-• FAQs or real-world examples in the file
+You may NOT generate questions about:
+• File name, size, format, metadata
+• Upload errors or system behavior
+• Placeholder content or AI references
 
-You may NOT use:
-• System behavior, file size, GPT metadata, hallucinated SOP logic
-• Placeholder phrases like "according to the document..." if the content isn't explicitly in the file
+🔄 Repetition Handling (Relaxed Deduplication):
+• Avoid duplicating questions within the same set
+• Across multiple sets for the same test:
+  - Try to diversify questions
+  - But allow a few questions to repeat across different sets if file content is limited
+  - Prioritize overall test variation, not perfect uniqueness
 
-Ensure every question is unique.
-• Each question must target a different fact, instruction, or action from the file
-• If generating multiple sets for one test:
-  - Track all previously used questions
-  - Do not regenerate or rephrase them in the next set
-
-🚨 Repetition Block Logic
-Within a single set:
-➤ No reworded duplicates or similar phrasing allowed
-
-Across sets in the same test:
-➤ All questions must be mutually exclusive — no topic overlap or shared logic
-
-Goal: Prevent guest users from seeing the same or similar questions in different sets of the same test.
-
-🧩 Partial Output Handling
-If the file contains only limited content:
-• Still return as many unique questions as possible
-• Do not return repeated questions to fill the gap
-• Never hallucinate just to meet the requested count
+❌ Failure Prevention (Error-Safe Mode):
+If the file has limited usable content:
+• Generate as many valid questions as possible
+• Do not throw an error if the target count (e.g., ${numberOfQuestions}) isn't met
+• Return partial sets if needed (e.g., 3 questions instead of ${numberOfQuestions})
+• Only return this fallback message if the file is fully unreadable or blank:
+  "The uploaded file contains no readable instructional content for question generation."
 
 Requirements:
-- Generate exactly ${numberOfQuestions} questions
-- Use ${difficulty} difficulty level
+- Generate up to ${numberOfQuestions} questions at ${difficulty} difficulty level
 - Each question has exactly 4 answer choices
 - Base questions strictly on the file content provided
 - Return valid JSON format
-- Ensure all questions are unique and non-repetitive
+- Be flexible with question count if content is limited
 
 Response format:
 {
@@ -239,15 +229,13 @@ Response format:
   ]
 }
 
-🧾 Summary:
-• Strictly file-based MCQs only
-• Unique questions per set
-• Zero repetition within or across sets
-• 4 options per question
-• One correct answer per question
-• Fixed question format
-• Multiple sets = zero overlap
-• Never guess or use general training logic`;
+✅ Summary:
+• MCQs must be file-based
+• Format must be clean and consistent
+• Avoid internal repetition in a set
+• Allow mild overlap between sets if needed
+• Never fail generation due to low content
+• Always return something when content exists`;
   }
 
   private extractFileInfo(fileContent: string): { filename: string; type: string; base64Data: string } | null {
