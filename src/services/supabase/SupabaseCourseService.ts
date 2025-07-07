@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Course } from '../course/CourseTypes';
 
@@ -51,7 +50,8 @@ export class SupabaseCourseService {
         createdAt: c.created_at || new Date().toISOString(),
         difficulty: 'medium' as const, // Default difficulty
         isActive: true,
-        videoUrl: c.video_url || undefined // Map video_url to videoUrl
+        videoUrl: c.video_url || undefined, // Map video_url to videoUrl
+        isCompleted: false // Default to not completed
       }));
 
       console.log('✅ Loaded courses from Supabase:', courses.length);
@@ -84,7 +84,8 @@ export class SupabaseCourseService {
         createdAt: courseData.created_at || new Date().toISOString(),
         difficulty: 'medium' as const, // Default difficulty
         isActive: true,
-        videoUrl: courseData.video_url || undefined // Map video_url to videoUrl
+        videoUrl: courseData.video_url || undefined, // Map video_url to videoUrl
+        isCompleted: false // Default to not completed
       };
 
       console.log('✅ Course loaded from Supabase:', course.id);
