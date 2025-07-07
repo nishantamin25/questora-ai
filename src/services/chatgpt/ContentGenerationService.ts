@@ -18,8 +18,8 @@ export class ContentGenerationService {
     // MERGE: Combine prompt and file content properly
     const mergedContent = PayloadValidator.mergePromptAndFileContent(prompt, fileContent);
     
-    // VALIDATE: Reduced word count limit to accommodate short but valid documents
-    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 5000);
+    // VALIDATE: Check word count before processing
+    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 2000);
     if (!wordValidation.isValid) {
       throw new Error(wordValidation.error!);
     }
@@ -40,7 +40,6 @@ STRICT GENERATION RULES:
 - Do NOT fabricate "learning objectives", "assessment preparation", "educational structure" unless in source
 - Honor the user's intent while staying strictly within document boundaries
 - Generate content based on actual file information only
-- Work with whatever content is available, even if brief
 
 Generate response now:`
       : `USER REQUEST: "${prompt}"
@@ -51,7 +50,7 @@ Generate focused content based strictly on this request. Do not add generic educ
     const messages = [
       {
         role: 'system',
-        content: 'You generate content that respects user intent and source material boundaries. When provided with source content, you use ONLY that content. You never fabricate educational frameworks, methodologies, or terminology not present in the source or explicitly requested by the user. You work effectively with both comprehensive and concise source materials.'
+        content: 'You generate content that respects user intent and source material boundaries. When provided with source content, you use ONLY that content. You never fabricate educational frameworks, methodologies, or terminology not present in the source or explicitly requested by the user.'
       },
       {
         role: 'user',
@@ -108,16 +107,15 @@ Generate focused content based strictly on this request. Do not add generic educ
       throw new Error('Prompt is required for course content generation');
     }
 
-    // REDUCED: Lower minimum requirement to support short but valid instructional content
-    if (!fileContent || fileContent.length < 50) {
-      throw new Error('Course generation requires file content (minimum 50 characters)');
+    if (!fileContent || fileContent.length < 200) {
+      throw new Error('Course generation requires substantial file content (minimum 200 characters)');
     }
 
     // MERGE: Combine prompt and file content properly
     const mergedContent = PayloadValidator.mergePromptAndFileContent(prompt, fileContent);
     
-    // VALIDATE: Significantly increased word limit and made more lenient for short documents
-    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 20000);
+    // VALIDATE: Check word count before processing - increased limit for comprehensive coverage
+    const wordValidation = PayloadValidator.validateWordCount(mergedContent, 15000);
     if (!wordValidation.isValid) {
       throw new Error(wordValidation.error!);
     }
@@ -136,67 +134,83 @@ Generate focused content based strictly on this request. Do not add generic educ
       contentPreview: fileContent.substring(0, 300) + '...'
     });
     
-    const enhancedCourseGenerationPrompt = `UPLOADED FILE CONTENT - WORK WITH AVAILABLE CONTENT:
+    const enhancedCourseGenerationPrompt = `UPLOADED FILE CONTENT - COMPLETE EXTRACTION REQUIRED:
 """
 ${fileContent}
 """
 
-INSTRUCTION: Generate a comprehensive course that EXTRACTS and EXPANDS upon ALL content from the uploaded file. Work effectively with whatever content is available, whether extensive or concise. Make the most of brief content by explaining concepts thoroughly.`;
+CRITICAL INSTRUCTION: Generate a comprehensive, detailed course that EXTRACTS and EXPANDS upon ALL content from the uploaded file. DO NOT SUMMARIZE - EXTRACT EVERYTHING.`;
 
-    // PREPARE: Create properly structured messages with UPDATED system prompt for short content handling
+    // PREPARE: Create properly structured messages with UPDATED COMPREHENSIVE system prompt
     const messages = [
       {
         role: 'system',
-        content: `You are an AI-powered course generator that creates clear, structured, concept-driven courses from uploaded files (PDF, DOCX, TXT). You work effectively with both comprehensive documents and concise content like SOPs, training summaries, or slide-based guides.
+        content: `You are an AI-powered course generator. Your job is to generate a clear, structured, concept-driven course based entirely on the content of an uploaded file (PDF, DOCX, or TXT). The file can be from any domain — SOPs, training manuals, tech documentation, HR policies, etc. The user will not provide a manual prompt. You must read the file, understand it, and build a course that explains actual concepts, steps, or knowledge from that file.
 
 🎯 Your Main Goal
-Teach what the file actually contains, regardless of length. Extract maximum educational value from available content.
+Do not describe what the file is about. Instead, teach what the file actually says.
 
-For ANY document (short or long):
-• Extract key concepts, definitions, procedures
-• Explain terminology and frameworks present
-• Expand on brief points with clear explanations
-• Structure content logically for learning
+Use only the file content to explain:
+• Key concepts
+• Definitions
+• Step-by-step procedures
+• Frameworks, models, or flows
+• Lists, rules, examples, or use cases
 
 ✅ Content Structure
-For each topic in the file, create sections like this:
+For each major topic in the file, generate a structured section like this:
 
-Section X: [Descriptive Title]
+Section X: [Descriptive Title of the Topic]
 
 Learning Goal:
-What should the learner understand?
+What should the learner understand after reading this section?
 
 Explanation:
-150–300+ words explaining the topic using file content.
-For brief source material, expand explanations while staying accurate.
-Define terms, walk through steps, explain clearly.
+150–300+ words explaining the actual topic, using real content from the file.
+Define terms, walk through steps, highlight rules, and explain clearly.
+Do not summarize the document — explain what it contains.
 
 Example or Instruction:
-Use actual content from the file (steps, rules, examples).
+Use one checklist item, example, rule, or instruction directly from the file.
 
 Summary:
-Brief takeaway in plain language.
+A brief takeaway in plain language.
 
-⚠️ Short Content Strategy:
-- Extract maximum value from limited content
-- Expand explanations while staying truthful to source
-- Create comprehensive learning from concise material
-- Never fabricate content not in the source
+⚠️ Avoid Meta Phrases Like:
+Do not say:
+• "This section introduces..."
+• "The document covers..."
+• "The content is structured to..."
+• "Foundational elements include..." (unless followed by real explanations)
 
-✅ Error-Safe Logic
-Work with whatever content is available:
-➤ Short files: Create focused, thorough explanations
-➤ Long files: Create comprehensive multi-section courses
-➤ Always generate useful educational content
+Instead:
+• Start directly with the topic or instruction
+• Explain the concept clearly as if teaching a student
 
-🛡️ Fallback only for completely empty files:
-"The uploaded file contains no readable instructional content."
+✅ Content Rules
+• You must use only what is present in the file
+• Do not hallucinate definitions, frameworks, or examples
+• Do not include content unless it's clearly derived from the uploaded file
+• If the file contains domain-specific terms, explain them
+• If it contains checklists or bullet points, include and expand them
+
+🛡️ Error-Safe Logic
+If the file is short or partially readable:
+➤ Still generate a concise course using whatever content is available
+
+If no section titles exist, infer topics based on recurring themes or paragraphs
+
+Do not return fallback error messages unless the file is completely blank or corrupted
+
+Use this fallback only if there is no usable instructional content at all:
+"The uploaded file contains no readable instructional content and appears to be empty."
 
 ✅ Output Expectations
-• Well-structured course regardless of source length
-• Maximum educational value from available content
-• Clear explanations suitable for learners
-• Works with any content length or complexity`
+• A clean, well-structured, multi-section course
+• All sections based on the file content — not assumptions
+• No errors, even with low-content or lightly formatted files
+• Each topic explained clearly for beginner or intermediate learners
+• Must work with any topic area the user uploads`
       },
       {
         role: 'user',
@@ -204,7 +218,7 @@ Work with whatever content is available:
       }
     ];
 
-    const maxTokens = 6000;
+    const maxTokens = 6000; // Increased significantly for comprehensive content
     const model = 'gpt-4.1-2025-04-14';
 
     // VALIDATE: Ensure payload is properly structured
@@ -223,13 +237,13 @@ Work with whatever content is available:
       model,
       messages: payloadValidation.messages,
       max_tokens: maxTokens,
-      temperature: 0.1
+      temperature: 0.1 // Lower temperature for more accurate extraction
     };
 
     try {
       const content = await ApiCallService.makeApiCall(requestBody, 'ENHANCED COURSE CONTENT GENERATION');
       
-      // UPDATED: More lenient validation for short but valid content
+      // ENHANCED VALIDATION LOGIC
       if (!content) {
         console.error('❌ API returned no content');
         throw new Error('No course content generated from OpenAI API');
@@ -249,25 +263,25 @@ Work with whatever content is available:
         preview: content.substring(0, 300) + '...'
       });
       
-      // LENIENT: Reduced minimum thresholds to support short source materials
-      if (contentLength < 200) {
-        console.error('❌ Content too short for meaningful course:', contentLength, 'characters');
+      // COMPREHENSIVE CONTENT VALIDATION
+      if (contentLength < 500) {
+        console.error('❌ Content too short for comprehensive course:', contentLength, 'characters');
         console.error('📄 ACTUAL CONTENT:', content);
-        throw new Error(`Generated course content is insufficient (${contentLength} characters). Source material may be too brief for course generation.`);
+        throw new Error(`Generated course content is insufficient (${contentLength} characters). Expected comprehensive extraction and expansion of source material.`);
       }
       
-      if (wordCount < 50) {
-        console.error('❌ Content has too few words for meaningful course:', wordCount);
+      if (wordCount < 200) {
+        console.error('❌ Content has too few words for comprehensive course:', wordCount);
         console.error('📄 ACTUAL CONTENT:', content);
-        throw new Error(`Generated course content has insufficient detail (${wordCount} words). Source material may be too brief for comprehensive course generation.`);
+        throw new Error(`Generated course content has insufficient detail (${wordCount} words). Expected comprehensive coverage of all source material.`);
       }
       
-      // More lenient coverage analysis for short source materials
+      // Check for comprehensive coverage indicators
       const sourceWordCount = fileContent.split(/\s+/).length;
       const expansionRatio = wordCount / sourceWordCount;
       
-      if (expansionRatio < 0.5 && sourceWordCount > 100) {
-        console.warn('⚠️ Generated content may be too condensed for longer source:', {
+      if (expansionRatio < 0.8) {
+        console.warn('⚠️ Generated content may be too condensed:', {
           sourceWords: sourceWordCount,
           generatedWords: wordCount,
           expansionRatio: expansionRatio.toFixed(2)
@@ -280,7 +294,7 @@ Work with whatever content is available:
         sectionCount,
         sourceWordCount,
         expansionRatio: expansionRatio.toFixed(2),
-        adequateCoverage: expansionRatio >= 0.5 || sourceWordCount <= 100
+        comprehensiveCoverage: expansionRatio >= 0.8
       });
       
       return content;
@@ -292,7 +306,7 @@ Work with whatever content is available:
         throw error; // Re-throw with existing debugging info
       }
       
-      throw new Error(`Failed to generate course content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to generate comprehensive course content: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
