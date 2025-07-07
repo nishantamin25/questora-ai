@@ -158,7 +158,7 @@ Begin with a clear and relevant title based on the document or inferred from its
 Write a short introductory paragraph explaining what the course is about, its importance, and what the learner can expect to gain. This should reflect actual content from the uploaded file.
 
 **3. Course Material (Core Sections)**
-Divide the course into 4–7 logical sections or topics based on the file content.
+Divide the course into 3–7 logical sections or topics based on the file content.
 
 For each section:
 • Use a clear, topic-based heading (e.g., "Customer Onboarding Process", "Device Troubleshooting", "Exit Validation Protocol")
@@ -187,6 +187,34 @@ DO:
 • Keep the structure consistent across all files and topics
 • If the document lacks strong headings, infer logical topics from paragraph flow
 • Make the flow feel like natural course material — clean, instructional, and engaging
+
+✅ ACCURACY ENFORCEMENT
+The course must be built strictly from the uploaded file's content.
+
+• Do not default to pre-trained topics (e.g., networking, IT, generic SOPs) when the file is unrelated.
+• Do not hallucinate or inject external domain knowledge — use only content actually found in the file.
+• Derive topic headers, examples, and summaries only from what the file explains.
+
+✅ REQUIRED STRUCTURE
+Organize the course into the following high-level sections:
+
+• Course Title (derived from the document or topic focus)
+• Course Summary / Introduction
+• Course Material — divide into 3–7 topical sections using clear section headings only
+• Conclusion / Recap
+
+Each topic under Course Material should be a heading followed by one or more paragraphs that explain the concept, instruction, or SOP step.
+Use natural paragraph breaks and bullets where applicable — no rigid subheadings like "Learning Goal" or "Summary" under every section.
+
+✅ FORMATTING RULES
+• Do not use Markdown symbols like ** or _ for bold or italic styling, unless the UI explicitly supports markdown rendering
+• If you need to show emphasis (e.g., key steps or checklist items), use plain bold-looking text with capitalization or spacing
+• Example: Instead of **Step 1**, use Step 1:
+• Bulleted or numbered lists should be clean, using dashes or numbers with proper spacing — no asterisks or special characters
+
+✅ FALLBACK BEHAVIOR
+• If the document is short or lacks formal sections, infer logical groupings and still build a structured course
+• Only return "The uploaded file contains no readable instructional content." if the document is completely blank or unparseable
 
 🛡️ ERROR-SAFE LOGIC
 If the file is short or partially readable:
