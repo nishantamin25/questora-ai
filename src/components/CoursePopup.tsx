@@ -135,8 +135,8 @@ const CoursePopup = ({
             </DialogTitle>
             
             <div className="flex items-center gap-2">
-              {/* Video buttons */}
-              {hasVideo && !isEditing && (
+              {/* Video buttons - now visible to admins regardless of editing state */}
+              {hasVideo && (
                 <Button 
                   onClick={() => setShowVideo(!showVideo)} 
                   variant="outline" 
@@ -148,7 +148,7 @@ const CoursePopup = ({
                 </Button>
               )}
               
-              {isAdmin && !isEditing && (
+              {isAdmin && (
                 <>
                   <Button 
                     onClick={() => setShowVideoUrlEditor(true)} 
@@ -168,10 +168,12 @@ const CoursePopup = ({
                     <Upload className="h-4 w-4 mr-2" />
                     {currentCourse.videoFile ? 'Change Video File' : 'Upload Video'}
                   </Button>
-                  <Button onClick={handleEdit} variant="outline" size="sm">
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
+                  {!isEditing && (
+                    <Button onClick={handleEdit} variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
                 </>
               )}
               
