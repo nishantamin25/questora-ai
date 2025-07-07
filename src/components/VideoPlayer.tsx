@@ -23,8 +23,7 @@ const VideoPlayer = ({ videoUrl, courseName, isOpen, onClose }: VideoPlayerProps
   };
 
   // Function to convert YouTube URL to embed URL
-  const getEmbedUrl = (url: string) => {
-    // Check if it's a YouTube URL
+  const getYouTubeEmbedUrl = (url: string) => {
     const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
     const match = url.match(youtubeRegex);
     
@@ -33,18 +32,51 @@ const VideoPlayer = ({ videoUrl, courseName, isOpen, onClose }: VideoPlayerProps
       return `https://www.youtube.com/embed/${videoId}`;
     }
     
+    return null;
+  };
+
+  // Function to convert Google Drive URL to embed URL
+  const getGoogleDriveEmbedUrl = (url: string) => {
+    // Handle Google Drive share URLs
+    const driveRegex = /(?:drive\.google\.com\/file\/d\/|drive\.google\.com\/open\?id=)([a-zA-Z0-9-_]+)/;
+    const match = url.match(driveRegex);
+    
+    if (match) {
+      const fileId = match[1];
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    
+    return null;
+  };
+
+  // Function to get the appropriate embed URL
+  const getEmbedUrl = (url: string) => {
+    // Try YouTube first
+    const youtubeEmbed = getYouTubeEmbedUrl(url);
+    if (youtubeEmbed) {
+      return youtubeEmbed;
+    }
+
+    // Try Google Drive
+    const driveEmbed = getGoogleDriveEmbedUrl(url);
+    if (driveEmbed) {
+      return driveEmbed;
+    }
+    
     // For other video URLs, return as is
     return url;
   };
 
-  // Check if it's a YouTube URL
+  // Check video type
   const isYouTubeUrl = /(?:youtube\.com|youtu\.be)/.test(videoUrl);
+  const isGoogleDriveUrl = /drive\.google\.com/.test(videoUrl);
   const embedUrl = getEmbedUrl(videoUrl);
 
   console.log('🎬 VideoPlayer Debug:', {
     originalUrl: videoUrl,
     embedUrl,
-    isYouTubeUrl
+    isYouTubeUrl,
+    isGoogleDriveUrl
   });
 
   return (
@@ -71,7 +103,7 @@ const VideoPlayer = ({ videoUrl, courseName, isOpen, onClose }: VideoPlayerProps
             </div>
           )}
           
-          {isYouTubeUrl ? (
+          {(isYouTubeUrl || isGoogleDriveUrl) ? (
             <iframe
               src={embedUrl}
               className="w-full h-full"

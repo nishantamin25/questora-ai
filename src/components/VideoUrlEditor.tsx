@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Video, Save, X, Plus } from 'lucide-react';
+import { Video, Save, X, Plus, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface VideoUrlEditorProps {
@@ -51,9 +51,21 @@ const VideoUrlEditor = ({ videoUrl = '', onSave, onCancel }: VideoUrlEditorProps
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Enter video URL (e.g., https://example.com/video.mp4)"
+          placeholder="Enter video URL (YouTube or Google Drive)"
           className="w-full"
         />
+        
+        <div className="flex items-start space-x-2 text-xs text-slate-600 bg-blue-50 p-2 rounded">
+          <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="font-medium mb-1">Supported formats:</div>
+            <div>• YouTube: https://www.youtube.com/watch?v=...</div>
+            <div>• Google Drive: https://drive.google.com/file/d/.../view</div>
+            <div className="mt-1 text-amber-600">
+              <strong>Note:</strong> For Google Drive videos, make sure the file is set to "Anyone with the link can view"
+            </div>
+          </div>
+        </div>
         
         <div className="flex items-center space-x-2">
           <Button
