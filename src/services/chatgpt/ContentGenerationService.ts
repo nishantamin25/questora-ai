@@ -158,7 +158,7 @@ Begin with a clear and relevant title based on the document or inferred from its
 Write a short introductory paragraph explaining what the course is about, its importance, and what the learner can expect to gain. This should reflect actual content from the uploaded file.
 
 **3. Course Material (Core Sections)**
-Divide the course into 3–7 logical sections or topics based on the file content.
+Divide the course into logical sections or topics based on the file content.
 
 For each section:
 • Use a clear, topic-based heading (e.g., "Customer Onboarding Process", "Device Troubleshooting", "Exit Validation Protocol")
@@ -169,6 +169,26 @@ For each section:
 **4. Conclusion**
 Close the course with a concise paragraph summarizing the key themes, and optionally encouraging the learner to proceed to the questionnaire (if present).
 
+🔥 CRITICAL REQUIREMENTS FOR LENGTHY DOCUMENTS
+
+If the uploaded file is lengthy or contains extensive content (e.g., a document with dozens or hundreds of pages, multiple chapters, or sectioned modules), you must generate a course that reflects that depth and structure.
+
+The course length, number of sections, and content detail must scale proportionally to the length and complexity of the source file.
+
+Do not condense or generalize multiple in-depth sections into a few high-level summaries. Each major topic or instructional block in the file should appear as a distinct section in the course.
+
+This applies especially to documents that span large systems, multiple features, or layered concepts — all of which must be covered.
+
+You are expected to utilize the full available token capacity. If the file contains rich educational material across many topics, the course must honor that by generating a long-form, detailed instructional output that does justice to the document's scope.
+
+FOR EXTENSIVE DOCUMENTS:
+• Generate 5-15+ sections (not just 3-7) based on the actual content volume
+• Each section should contain 300-500+ words when the source material supports it
+• Create detailed subsections within major topics when the source contains layered information
+• Include all procedural steps, examples, and detailed explanations found in the source
+• Preserve the structural hierarchy and organization of the original document
+• Extract and expand upon technical details, specifications, and comprehensive information
+
 🚫 STRICT CONTENT RULES
 
 DO NOT:
@@ -177,6 +197,8 @@ DO NOT:
 • Fabricate content — only use what exists in the file
 • Include content unless it's clearly derived from the uploaded file
 • Say "This section introduces..." or "The document covers..." or "The content is structured to..."
+• Condense multiple detailed sections into brief summaries
+• Skip over detailed procedures, technical specifications, or comprehensive explanations
 
 DO:
 • Start directly with the topic or instruction in each section
@@ -187,6 +209,9 @@ DO:
 • Keep the structure consistent across all files and topics
 • If the document lacks strong headings, infer logical topics from paragraph flow
 • Make the flow feel like natural course material — clean, instructional, and engaging
+• Scale the number of sections based on the actual content volume
+• Preserve all detailed information and comprehensive coverage from lengthy documents
+• Generate proportionally detailed courses for extensive source material
 
 ✅ ACCURACY ENFORCEMENT
 The course must be built strictly from the uploaded file's content.
@@ -200,7 +225,7 @@ Organize the course into the following high-level sections:
 
 • Course Title (derived from the document or topic focus)
 • Course Summary / Introduction
-• Course Material — divide into 3–7 topical sections using clear section headings only
+• Course Material — divide into logical sections based on content volume (3-15+ sections depending on source material depth)
 • Conclusion / Recap
 
 Each topic under Course Material should be a heading followed by one or more paragraphs that explain the concept, instruction, or SOP step.
@@ -221,7 +246,7 @@ If the file is short or partially readable:
 ➤ Still generate a concise course using whatever content is available
 ➤ If no section titles exist, infer topics based on recurring themes or paragraphs
 
-Do not return fallback error messages unless the file is completely blank or corrupted.
+Do not return fallback error messages unless the file is no usable instructional content at all.
 
 Use this fallback only if there is no usable instructional content at all:
 "The uploaded file contains no readable instructional content and appears to be empty."
@@ -232,7 +257,9 @@ Use this fallback only if there is no usable instructional content at all:
 • No errors, even with low-content or lightly formatted files
 • Each topic explained clearly for beginner or intermediate learners
 • Must work with any topic area the user uploads
-• Natural, engaging flow without repetitive academic structure phrases`
+• Natural, engaging flow without repetitive academic structure phrases
+• Proportional scaling: lengthy documents must generate lengthy, detailed courses
+• Comprehensive coverage: extensive source material must result in extensive course content`
       },
       {
         role: 'user',
