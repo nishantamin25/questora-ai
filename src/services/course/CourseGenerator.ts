@@ -1,4 +1,3 @@
-
 import { Course, CourseMaterial } from './CourseTypes';
 import { CourseContentProcessor } from './CourseContentProcessor';
 import { CourseSectionCreator } from './CourseSectionCreator';
@@ -14,17 +13,17 @@ export class CourseGenerator {
     testName?: string,
     visualContent?: ProcessedVisualContent
   ): Promise<Course> {
-    console.log('🔍 ENHANCED COURSE GENERATION WITH VISUAL INTEGRATION START:', { 
+    console.log('🔍 ENHANCED COURSE GENERATION WITH ADVANCED VISUAL INTEGRATION START:', { 
       prompt: prompt.substring(0, 150) + '...', 
       fileCount: files.length, 
       hasFileContent: !!fileContent,
       fileContentLength: fileContent?.length || 0,
       fileNames: files.map(f => f.name),
       testName,
-      hasVisualContent: !!visualContent,
-      diagramCount: visualContent?.diagrams.length || 0,
+      hasProvidedVisualContent: !!visualContent,
+      providedDiagramCount: visualContent?.diagrams.length || 0,
       timestamp: new Date().toISOString(),
-      usingVisualIntegration: true
+      usingAdvancedVisualIntegration: true
     });
 
     const courseId = CourseNameGenerator.generateId();
@@ -35,23 +34,31 @@ export class CourseGenerator {
         throw new Error('Course generation requires substantial file content (minimum 200 characters). The system prompt mandates content extraction from uploaded files only.');
       }
 
-      console.log('✅ ENHANCED VALIDATION: File content meets requirements, visual content available:', !!visualContent);
-      
-      // ENHANCED PROCESSING: Include visual content in processing
-      const validatedFileContent = await CourseContentProcessor.processAndValidateContent(
+      // ENHANCED PROCESSING: Process content with visual integration
+      const processingResults = await CourseContentProcessor.processAndValidateContent(
         files, 
         fileContent
       );
 
-      // ENHANCED SECTION CREATION: Create sections with visual integration
-      console.log('🎨 GENERATING: Enhanced course sections with visual integration');
+      // Use provided visual content or discovered visual content
+      const finalVisualContent = visualContent || processingResults.visualContent;
+
+      console.log('✅ ENHANCED VALIDATION AND PROCESSING COMPLETE:', {
+        contentLength: processingResults.content.length,
+        hasVisualContent: !!finalVisualContent,
+        totalDiagrams: finalVisualContent?.diagrams.length || 0,
+        visualQuality: finalVisualContent?.processingMetadata.processingQuality || 'none'
+      });
+      
+      // ENHANCED SECTION CREATION: Create sections with comprehensive visual integration
+      console.log('🎨 GENERATING: Enhanced course sections with comprehensive visual integration');
       const materials = await CourseSectionCreator.createEnhancedFileBasedSections(
         prompt, 
-        validatedFileContent,
+        processingResults.content,
         { 
           followsSystemPrompt: true,
-          visualContent: visualContent,
-          integrationMode: 'enhanced'
+          visualContent: finalVisualContent,
+          integrationMode: 'comprehensive'
         }
       );
 
@@ -61,12 +68,12 @@ export class CourseGenerator {
       }
 
       // ENHANCED TIME CALCULATION: Account for visual learning elements
-      const estimatedTime = this.calculateEnhancedLearningTime(materials, visualContent);
+      const estimatedTime = this.calculateEnhancedLearningTime(materials, finalVisualContent);
 
       const course: Course = {
         id: courseId,
-        name: testName || this.generateEnhancedCourseName(prompt, fileContent, visualContent),
-        description: this.generateEnhancedDescription(prompt, fileContent, visualContent),
+        name: testName || this.generateEnhancedCourseName(prompt, processingResults.content, finalVisualContent),
+        description: this.generateEnhancedDescription(prompt, processingResults.content, finalVisualContent),
         materials: materials,
         estimatedTime,
         createdAt: new Date().toISOString(),
@@ -83,24 +90,25 @@ export class CourseGenerator {
         console.error('⚠️ PDF generation failed, continuing without PDF:', pdfError);
       }
 
-      console.log('✅ ENHANCED COURSE GENERATION WITH VISUAL INTEGRATION SUCCESS:', {
+      console.log('✅ ENHANCED COURSE GENERATION WITH COMPREHENSIVE VISUAL INTEGRATION SUCCESS:', {
         id: course.id,
         name: course.name,
         materialsCount: course.materials.length,
         totalContentLength: course.materials.reduce((sum, m) => sum + m.content.length, 0),
         estimatedTime: course.estimatedTime,
         hasPDF: !!course.pdfUrl,
-        contentSource: 'ENHANCED_VISUAL_INTEGRATED',
+        contentSource: 'COMPREHENSIVE_VISUAL_INTEGRATED',
         difficulty: course.difficulty,
-        hasVisualElements: !!visualContent,
-        diagramsIntegrated: visualContent?.diagrams.length || 0,
+        hasVisualElements: !!finalVisualContent,
+        diagramsIntegrated: finalVisualContent?.diagrams.length || 0,
+        visualQuality: finalVisualContent?.processingMetadata.processingQuality || 'none',
         isBeginnerFriendly: true,
         timestamp: new Date().toISOString()
       });
 
       return course;
     } catch (error) {
-      console.error('❌ ENHANCED COURSE GENERATION WITH VISUALS FAILURE:', {
+      console.error('❌ ENHANCED COURSE GENERATION WITH COMPREHENSIVE VISUALS FAILURE:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined,
         prompt: prompt.substring(0, 100),
@@ -111,7 +119,7 @@ export class CourseGenerator {
       
       // Enhanced error message for user
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      throw new Error(`Enhanced course generation with visual integration failed: ${errorMessage}. Please ensure your uploaded files contain substantial readable educational content.`);
+      throw new Error(`Enhanced course generation with comprehensive visual integration failed: ${errorMessage}. Please ensure your uploaded files contain substantial readable educational content.`);
     }
   }
 
@@ -184,7 +192,7 @@ export class CourseGenerator {
     const wordCount = fileContent.split(/\s+/).length;
     const estimatedReadingTime = Math.ceil(wordCount / 150);
     
-    let description = `This enhanced beginner-friendly course is generated from uploaded file content with advanced visual integration. The course presents key concepts, practical applications, and important considerations in an accessible format with `;
+    let description = `This enhanced beginner-friendly course is generated from uploaded file content with comprehensive visual integration. The course presents key concepts, practical applications, and important considerations in an accessible format with `;
     
     if (visualContent?.hasVisualElements) {
       description += `${visualContent.diagrams.length} integrated diagrams and visual elements. `;

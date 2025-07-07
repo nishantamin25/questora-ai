@@ -1,27 +1,30 @@
-
 import { CourseMaterial } from './CourseTypes';
 import { ContentProcessor } from './ContentProcessor';
 import { FileProcessingService } from '../FileProcessingService';
+import { ProcessedVisualContent } from '../chatgpt/VisualContentPipeline';
 
 export class CourseContentProcessor {
   static async processAndValidateContent(
     files: File[], 
     fileContent: string = ''
-  ): Promise<string> {
-    console.log('📄 PROCESSING FILES WITH CHATGPT-ENHANCED VALIDATION...');
+  ): Promise<{ content: string; visualContent?: ProcessedVisualContent }> {
+    console.log('📄 PROCESSING FILES WITH ENHANCED VISUAL INTEGRATION...');
     
     let validatedFileContent = '';
+    let combinedVisualContent: ProcessedVisualContent | undefined;
     
     if (files && files.length > 0) {
       for (const file of files) {
         try {
-          console.log(`🔍 Processing file: ${file.name}`);
+          console.log(`🔍 Processing file with visual integration: ${file.name}`);
           const processedFile = await FileProcessingService.processFile(file);
           
-          console.log(`📋 File processing result for ${file.name}:`, {
+          console.log(`📋 Enhanced file processing result for ${file.name}:`, {
             type: processedFile.type,
             contentLength: processedFile.content?.length || 0,
-            extractionMethod: processedFile.metadata.extractionMethod
+            extractionMethod: processedFile.metadata.extractionMethod,
+            hasVisualContent: !!processedFile.visualContent,
+            diagramCount: processedFile.visualContent?.diagrams.length || 0
           });
 
           // ENHANCED: Accept any content over 100 characters (very lenient)
@@ -30,7 +33,18 @@ export class CourseContentProcessor {
           }
 
           validatedFileContent += processedFile.content + '\n\n';
-          console.log(`✅ PROCESSED: Content extracted from ${file.name} (${processedFile.content.length} characters)`);
+          
+          // ENHANCED: Combine visual content from multiple files
+          if (processedFile.visualContent?.hasVisualElements) {
+            if (!combinedVisualContent) {
+              combinedVisualContent = processedFile.visualContent;
+            } else {
+              // Merge visual content from multiple files
+              combinedVisualContent = this.mergeVisualContent(combinedVisualContent, processedFile.visualContent);
+            }
+          }
+          
+          console.log(`✅ PROCESSED WITH VISUAL INTEGRATION: Content extracted from ${file.name} (${processedFile.content.length} characters, ${processedFile.visualContent?.diagrams.length || 0} diagrams)`);
           
         } catch (error) {
           console.error(`❌ File processing error ${file.name}:`, error);
@@ -42,7 +56,7 @@ export class CourseContentProcessor {
       }
     } else if (fileContent && fileContent.trim().length > 20) {
       validatedFileContent = fileContent;
-      console.log('✅ VALIDATED: Content provided via parameter');
+      console.log('✅ VALIDATED: Content provided via parameter (no visual processing)');
     } else {
       console.error('❌ NO VALID CONTENT: Course generation blocked');
       throw new Error('Course generation requires uploaded files with readable content. Please upload files containing text that can be processed.');
@@ -54,12 +68,42 @@ export class CourseContentProcessor {
       validatedFileContent = this.generateComprehensiveFallback(files);
     }
 
-    console.log('✅ CONTENT PROCESSING COMPLETE:', {
+    console.log('✅ ENHANCED CONTENT PROCESSING COMPLETE:', {
       totalContentLength: validatedFileContent.length,
-      wordCount: validatedFileContent.split(/\s+/).length
+      wordCount: validatedFileContent.split(/\s+/).length,
+      hasVisualContent: !!combinedVisualContent,
+      totalDiagrams: combinedVisualContent?.diagrams.length || 0,
+      visualQuality: combinedVisualContent?.processingMetadata.processingQuality || 'none'
     });
 
-    return validatedFileContent;
+    return {
+      content: validatedFileContent,
+      visualContent: combinedVisualContent
+    };
+  }
+
+  private static mergeVisualContent(
+    existing: ProcessedVisualContent, 
+    additional: ProcessedVisualContent
+  ): ProcessedVisualContent {
+    console.log('🔄 MERGING VISUAL CONTENT from multiple files...');
+    
+    return {
+      hasVisualElements: existing.hasVisualElements || additional.hasVisualElements,
+      diagrams: [...existing.diagrams, ...additional.diagrams],
+      visualSummary: `${existing.visualSummary} ${additional.visualSummary}`.trim(),
+      integrationInstructions: [...existing.integrationInstructions, ...additional.integrationInstructions],
+      processingMetadata: {
+        totalDiagrams: existing.processingMetadata.totalDiagrams + additional.processingMetadata.totalDiagrams,
+        processingQuality: this.selectBestQuality(existing.processingMetadata.processingQuality, additional.processingMetadata.processingQuality),
+        recommendedSections: [...existing.processingMetadata.recommendedSections, ...additional.processingMetadata.recommendedSections]
+      }
+    };
+  }
+
+  private static selectBestQuality(quality1: 'high' | 'medium' | 'low', quality2: 'high' | 'medium' | 'low'): 'high' | 'medium' | 'low' {
+    const qualityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+    return qualityOrder[quality1] >= qualityOrder[quality2] ? quality1 : quality2;
   }
 
   static validateContentRequirements(files: File[], fileContent: string): void {
