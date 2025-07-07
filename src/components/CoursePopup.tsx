@@ -42,6 +42,15 @@ const CoursePopup = ({
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [showVideoEditor, setShowVideoEditor] = useState(false);
 
+  // Debug logging
+  console.log('🎯 CoursePopup Debug:', {
+    isAdmin,
+    hasVideoUrl: !!course.videoUrl,
+    videoUrl: course.videoUrl,
+    showVideoEditor,
+    isEditing
+  });
+
   const handleEdit = () => {
     setIsEditing(true);
     setEditedCourse({ ...course });
@@ -114,8 +123,15 @@ const CoursePopup = ({
               </DialogTitle>
               
               <div className="flex items-center space-x-2">
-                {/* Watch Video Button for Guests */}
-                {!isAdmin && hasVideo && (
+                {/* Debug indicator */}
+                {isAdmin && (
+                  <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                    Admin Mode
+                  </div>
+                )}
+
+                {/* Watch Video Button */}
+                {hasVideo && (
                   <Button
                     onClick={() => setShowVideoPlayer(true)}
                     variant="outline"
@@ -130,17 +146,6 @@ const CoursePopup = ({
                 {/* Admin Controls */}
                 {isAdmin && !isEditing && (
                   <>
-                    {hasVideo && (
-                      <Button
-                        onClick={() => setShowVideoPlayer(true)}
-                        variant="outline"
-                        size="sm"
-                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                      >
-                        <Play className="h-4 w-4 mr-2" />
-                        Watch Video
-                      </Button>
-                    )}
                     <Button
                       onClick={() => setShowVideoEditor(true)}
                       variant="outline"
@@ -148,7 +153,7 @@ const CoursePopup = ({
                       className="border-green-300 text-green-700 hover:bg-green-50"
                     >
                       <Video className="h-4 w-4 mr-2" />
-                      Add Video
+                      {hasVideo ? 'Edit Video' : 'Add Video'}
                     </Button>
                     <Button onClick={handleEdit} variant="outline" size="sm">
                       <Edit className="h-4 w-4 mr-2" />
@@ -220,7 +225,7 @@ const CoursePopup = ({
               </div>
             ))}
 
-            {!isEditing && (
+            {!isEditing && !isAdmin && (
               <div className="pt-6 border-t border-slate-200">
                 <Button
                   onClick={handleMarkCourseComplete}
