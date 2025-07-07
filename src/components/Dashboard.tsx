@@ -23,9 +23,10 @@ import CourseCard from '@/components/CourseCard';
 interface DashboardProps {
   user: any;
   onLogout: () => void;
+  onRefresh?: () => void;
 }
 
-const Dashboard = ({ user, onLogout }: DashboardProps) => {
+const Dashboard = ({ user, onLogout, onRefresh }: DashboardProps) => {
   const [prompt, setPrompt] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [processedFileContent, setProcessedFileContent] = useState<string>('');
@@ -632,6 +633,13 @@ Note: File processing failed, but file information is available.
   const validQuestionnaires = filteredQuestionnaires;
   const accessibleQuestionnaires = filteredQuestionnaires;
 
+  const handleQuestionnaireRefresh = () => {
+    loadQuestionnaires();
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50">
       <ConfirmDeleteDialog
@@ -866,6 +874,7 @@ Note: File processing failed, but file information is available.
                     isAdmin={user.role === 'admin'}
                     onUpdate={handleUpdateQuestionnaire}
                     onDelete={(id) => handleDeleteRequest(id, questionnaire.title || questionnaire.testName || 'Test')}
+                    onRefresh={handleQuestionnaireRefresh}
                   />
                 );
               })}
