@@ -1,5 +1,6 @@
 import { ChatGPTService } from './ChatGPTService';
 import { ChatGPTPDFProcessor } from './chatgpt/ChatGPTPDFProcessor';
+import { ProcessedVisualContent } from './chatgpt/VisualContentPipeline';
 import { createWorker } from 'tesseract.js';
 
 interface ProcessedFileContent {
@@ -20,13 +21,14 @@ interface ProcessedFileContent {
       ocrQualificationCheck: any;
     };
   };
+  visualContent?: ProcessedVisualContent;
 }
 
 class FileProcessingServiceClass {
   private ocrWorker: any = null;
 
   async processFile(file: File): Promise<ProcessedFileContent> {
-    console.log(`🔍 SIMPLE FILE PROCESSING: ${file.name} (${file.type}, ${file.size} bytes)`);
+    console.log(`🔍 ENHANCED FILE PROCESSING WITH VISUAL SUPPORT: ${file.name} (${file.type}, ${file.size} bytes)`);
     
     const fileType = this.determineFileType(file);
     const metadata = {
@@ -46,22 +48,26 @@ class FileProcessingServiceClass {
     };
 
     let content = '';
+    let visualContent: ProcessedVisualContent | undefined;
 
     try {
       if (fileType === 'text' && this.isPDFFile(file)) {
-        console.log('🤖 PROCESSING PDF WITH SIMPLE EXTRACTION...');
+        console.log('🤖 PROCESSING PDF WITH ENHANCED VISUAL EXTRACTION...');
         try {
           const chatGPTResult = await ChatGPTPDFProcessor.processPDFWithChatGPT(file);
           content = chatGPTResult.content;
-          metadata.extractionMethod = 'chatgpt-pdf-simple';
+          visualContent = chatGPTResult.visualContent;
+          metadata.extractionMethod = 'chatgpt-pdf-enhanced-visual';
           
-          console.log('✅ PDF PROCESSING SUCCESS:', {
+          console.log('✅ ENHANCED PDF PROCESSING SUCCESS:', {
             contentLength: content.length,
-            wordCount: chatGPTResult.analysis.wordCount
+            wordCount: chatGPTResult.analysis.wordCount,
+            hasVisualContent: !!visualContent,
+            diagramCount: visualContent?.diagrams.length || 0
           });
           
         } catch (chatGPTError) {
-          console.error('❌ PDF processing failed:', chatGPTError);
+          console.error('❌ Enhanced PDF processing failed:', chatGPTError);
           throw new Error(`PDF processing failed: ${chatGPTError instanceof Error ? chatGPTError.message : 'Unknown error'}`);
         }
       } else {
@@ -85,24 +91,29 @@ class FileProcessingServiceClass {
         }
       }
 
-      // SIMPLIFIED: Just check we got some content
-      if (!content || content.length < 20) {
+      // ENHANCED: Check content considering visual elements
+      const totalContentValue = content.length + (visualContent?.diagrams.length || 0) * 100; // Give visual content some weight
+      if (!content || totalContentValue < 20) {
         console.error('❌ INSUFFICIENT CONTENT:', {
           fileName: file.name,
           contentLength: content?.length || 0,
+          diagramCount: visualContent?.diagrams.length || 0,
+          totalContentValue,
           extractionMethod: metadata.extractionMethod
         });
-        throw new Error(`Could not extract readable content from "${file.name}". Please ensure the file contains readable text.`);
+        throw new Error(`Could not extract readable content from "${file.name}". Please ensure the file contains readable text or diagrams.`);
       }
 
       metadata.diagnostics!.initialContentLength = content.length;
       metadata.diagnostics!.contentPreview = content.substring(0, 200) + '...';
       metadata.diagnostics!.validationStage = 'final';
 
-      console.log('✅ FILE PROCESSING SUCCESSFUL:', {
+      console.log('✅ ENHANCED FILE PROCESSING SUCCESSFUL:', {
         fileName: file.name,
         contentLength: content.length,
-        extractionMethod: metadata.extractionMethod
+        extractionMethod: metadata.extractionMethod,
+        hasVisualContent: !!visualContent,
+        diagramCount: visualContent?.diagrams.length || 0
       });
 
     } catch (error) {
@@ -113,7 +124,8 @@ class FileProcessingServiceClass {
     return {
       content,
       type: fileType,
-      metadata
+      metadata,
+      visualContent
     };
   }
 
@@ -151,7 +163,7 @@ class FileProcessingServiceClass {
   }
 
   private async processAdvancedPdfFile(file: File): Promise<{ content: string; method: string }> {
-    console.log('⚠️ Using legacy PDF processing - should use ChatGPT instead');
+    console.log('⚠️ Using legacy PDF processing - should use enhanced ChatGPT instead');
     throw new Error('Legacy PDF processing not supported - use enhanced PDF processor');
   }
 
