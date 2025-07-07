@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } from '../supabase/SupabaseResponseService';
 import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
@@ -55,6 +56,33 @@ export class HybridResponseStorage {
       userId: 'anonymous',
       username: guestUsername
     };
+  }
+
+  // Track completed questionnaires for guest users
+  private static markQuestionnaireCompleted(questionnaireId: string, username: string): void {
+    try {
+      const completedKey = `completed_questionnaires_${username}`;
+      const existingCompleted = JSON.parse(sessionStorage.getItem(completedKey) || '[]');
+      
+      if (!existingCompleted.includes(questionnaireId)) {
+        existingCompleted.push(questionnaireId);
+        sessionStorage.setItem(completedKey, JSON.stringify(existingCompleted));
+        console.log(`✅ Marked questionnaire ${questionnaireId} as completed for ${username}`);
+      }
+    } catch (error) {
+      console.error('Error marking questionnaire as completed:', error);
+    }
+  }
+
+  static isQuestionnaireCompletedByGuest(questionnaireId: string, username: string): boolean {
+    try {
+      const completedKey = `completed_questionnaires_${username}`;
+      const existingCompleted = JSON.parse(sessionStorage.getItem(completedKey) || '[]');
+      return existingCompleted.includes(questionnaireId);
+    } catch (error) {
+      console.error('Error checking completed questionnaires:', error);
+      return false;
+    }
   }
 
   static async saveResponse(response: QuestionnaireResponse): Promise<void> {
@@ -179,6 +207,12 @@ export class HybridResponseStorage {
 
       // Save to both localStorage and Supabase
       await this.saveResponse(response);
+      
+      // Mark questionnaire as completed for guest users
+      if (userId === 'anonymous') {
+        this.markQuestionnaireCompleted(responseData.questionnaireId, username);
+      }
+      
       console.log('✅ Response submitted successfully with calculated score:', scoringResult.score);
     } catch (error) {
       console.error('❌ Failed to submit response:', error);

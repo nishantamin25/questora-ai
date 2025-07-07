@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { ResponseService } from '@/services/ResponseService';
 import { LanguageService } from '@/services/LanguageService';
+import { AuthService } from '@/services/AuthService';
 import CourseDisplay from './CourseDisplay';
 import QuestionnaireHeader from './QuestionnaireHeader';
 import QuestionsSection from './QuestionsSection';
@@ -298,6 +299,14 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         description: "Responses submitted successfully!",
       });
       setResponses({});
+      
+      // For guest users, trigger a page reload to refresh the questionnaire list
+      // This will hide the completed questionnaire from their view
+      const currentUser = AuthService.getCurrentUser();
+      if (currentUser?.role === 'guest') {
+        console.log('🔄 Guest user completed questionnaire, reloading page...');
+        window.location.reload();
+      }
     } catch (error) {
       console.error('Error submitting responses:', error);
       toast({
