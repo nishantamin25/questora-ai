@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -38,12 +39,16 @@ const CoursePopup = ({
   isCompleted = false,
   isAdmin = false 
 }: CoursePopupProps) => {
-  // Debug logging
-  console.log('🔍 CoursePopup Debug Info:');
+  // Enhanced debug logging
+  console.log('🔍 CoursePopup ENHANCED Debug Info:');
+  console.log('- Component rendered at:', new Date().toISOString());
+  console.log('- isOpen:', isOpen);
   console.log('- isAdmin prop:', isAdmin);
   console.log('- course.id:', course.id);
+  console.log('- course.name:', course.name);
   console.log('- course.videoUrl:', course.videoUrl);
   console.log('- course.videoFile:', course.videoFile);
+  console.log('- isCompleted:', isCompleted);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedCourse, setEditedCourse] = useState(course);
@@ -122,6 +127,17 @@ const CoursePopup = ({
 
   const currentCourse = isEditing ? editedCourse : course;
   const hasVideo = currentCourse.videoUrl || currentCourse.videoFile;
+
+  // Log render info
+  console.log('🎨 CoursePopup Render Info:');
+  console.log('- hasVideo:', hasVideo);
+  console.log('- isEditing:', isEditing);
+  console.log('- Dialog isOpen:', isOpen);
+  
+  if (!isOpen) {
+    console.log('⚠️ Dialog is not open, component will not render content');
+    return null;
+  }
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -141,10 +157,14 @@ const CoursePopup = ({
             </DialogTitle>
             
             <div className="flex items-center gap-2">
-              {/* Debug info - temporarily visible */}
-              <div className="text-xs bg-yellow-100 p-2 rounded border mr-2">
-                <div>Admin: {isAdmin ? 'YES' : 'NO'}</div>
-                <div>Video: {hasVideo ? 'YES' : 'NO'}</div>
+              {/* ENHANCED DEBUG PANEL - Much more visible */}
+              <div className="fixed top-4 right-4 z-50 text-xs bg-red-500 text-white p-4 rounded-lg border-2 border-red-700 shadow-lg">
+                <div className="font-bold mb-2">🚨 DEBUG PANEL 🚨</div>
+                <div>Dialog Open: {isOpen ? 'YES' : 'NO'}</div>
+                <div>Admin Status: {isAdmin ? 'YES' : 'NO'}</div>
+                <div>Has Video: {hasVideo ? 'YES' : 'NO'}</div>
+                <div>Course ID: {course.id}</div>
+                <div>Is Editing: {isEditing ? 'YES' : 'NO'}</div>
               </div>
 
               {/* Video buttons - now visible to admins regardless of editing state */}
