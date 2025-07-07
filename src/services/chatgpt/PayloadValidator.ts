@@ -248,7 +248,7 @@ ${cleanFileContent}
 INSTRUCTIONS: Use the document content above to fulfill the user's request. Base all generated content strictly on the provided document while following the user's specific requirements.`;
   }
 
-  // FIXED: Validate only total word count (prompt + file), not individual components
+  // UPDATED: Significantly reduced minimum word count requirements for short but valid documents
   static validateWordCount(content: string, maxWords: number = 2000): { isValid: boolean; wordCount: number; error?: string; debugInfo?: any } {
     if (!content || typeof content !== 'string') {
       return {
@@ -280,16 +280,18 @@ INSTRUCTIONS: Use the document content above to fulfill the user's request. Base
       };
     }
 
-    if (wordCount === 0) {
+    // REDUCED: Allow processing even with very low word counts (minimum 3 words instead of high thresholds)
+    // This enables question generation from short but valid instructional content like SOPs, bullet points, etc.
+    if (wordCount < 3) {
       return {
         isValid: false,
         wordCount: 0,
-        error: 'No valid words found in content',
-        debugInfo: { ...debugInfo, issue: 'NO_WORDS' }
+        error: 'Content must contain at least 3 words to generate meaningful questions',
+        debugInfo: { ...debugInfo, issue: 'INSUFFICIENT_CONTENT' }
       };
     }
 
-    console.log('✅ Word count validation passed:', debugInfo);
+    console.log('✅ Word count validation passed (lenient threshold):', debugInfo);
 
     return {
       isValid: true,
