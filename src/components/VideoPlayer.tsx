@@ -22,6 +22,31 @@ const VideoPlayer = ({ videoUrl, courseName, isOpen, onClose }: VideoPlayerProps
     setIsLoading(false);
   };
 
+  // Function to convert YouTube URL to embed URL
+  const getEmbedUrl = (url: string) => {
+    // Check if it's a YouTube URL
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
+    const match = url.match(youtubeRegex);
+    
+    if (match) {
+      const videoId = match[1];
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    
+    // For other video URLs, return as is
+    return url;
+  };
+
+  // Check if it's a YouTube URL
+  const isYouTubeUrl = /(?:youtube\.com|youtu\.be)/.test(videoUrl);
+  const embedUrl = getEmbedUrl(videoUrl);
+
+  console.log('🎬 VideoPlayer Debug:', {
+    originalUrl: videoUrl,
+    embedUrl,
+    isYouTubeUrl
+  });
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -45,16 +70,28 @@ const VideoPlayer = ({ videoUrl, courseName, isOpen, onClose }: VideoPlayerProps
               <div className="text-slate-600">Loading video...</div>
             </div>
           )}
-          <video
-            src={videoUrl}
-            controls
-            className="w-full h-full object-contain"
-            onLoadedData={handleVideoLoad}
-            onError={handleVideoError}
-            style={{ display: isLoading ? 'none' : 'block' }}
-          >
-            Your browser does not support the video tag.
-          </video>
+          
+          {isYouTubeUrl ? (
+            <iframe
+              src={embedUrl}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              onLoad={handleVideoLoad}
+              style={{ display: isLoading ? 'none' : 'block' }}
+            />
+          ) : (
+            <video
+              src={videoUrl}
+              controls
+              className="w-full h-full object-contain"
+              onLoadedData={handleVideoLoad}
+              onError={handleVideoError}
+              style={{ display: isLoading ? 'none' : 'block' }}
+            >
+              Your browser does not support the video tag.
+            </video>
+          )}
         </div>
       </DialogContent>
     </Dialog>
