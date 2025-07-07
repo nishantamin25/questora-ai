@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -39,6 +38,13 @@ const CoursePopup = ({
   isCompleted = false,
   isAdmin = false 
 }: CoursePopupProps) => {
+  // Debug logging
+  console.log('🔍 CoursePopup Debug Info:');
+  console.log('- isAdmin prop:', isAdmin);
+  console.log('- course.id:', course.id);
+  console.log('- course.videoUrl:', course.videoUrl);
+  console.log('- course.videoFile:', course.videoFile);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedCourse, setEditedCourse] = useState(course);
   const [showVideoUrlEditor, setShowVideoUrlEditor] = useState(false);
@@ -135,6 +141,12 @@ const CoursePopup = ({
             </DialogTitle>
             
             <div className="flex items-center gap-2">
+              {/* Debug info - temporarily visible */}
+              <div className="text-xs bg-yellow-100 p-2 rounded border mr-2">
+                <div>Admin: {isAdmin ? 'YES' : 'NO'}</div>
+                <div>Video: {hasVideo ? 'YES' : 'NO'}</div>
+              </div>
+
               {/* Video buttons - now visible to admins regardless of editing state */}
               {hasVideo && (
                 <Button 
