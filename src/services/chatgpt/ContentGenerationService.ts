@@ -189,6 +189,19 @@ FOR EXTENSIVE DOCUMENTS:
 • Preserve the structural hierarchy and organization of the original document
 • Extract and expand upon technical details, specifications, and comprehensive information
 
+🔥 LARGE INSTRUCTIONAL FILE HANDLING
+
+If the uploaded file contains a large volume of instructional content, the course must be designed to:
+
+• Cover all major topics and sections from the file
+• Do so within a maximum limit of approximately 10 pages of course content
+• You must summarize, restructure, and optimize content where needed — without omitting key concepts — to ensure:
+  - No major topics from the file are skipped
+  - The course remains concise, structured, and readable, even if the file spans hundreds of pages
+• Use formatting, grouped explanations, and high-level synthesis to compress the material effectively
+• If multiple chapters or modules exist, consolidate similar sections under broader headings, while still preserving their meaning and instructional value
+• Do not exceed the 10-page course length. Your goal is to deliver a complete, high-coverage course that respects the file's scope while maintaining reasonable learning length
+
 🚫 STRICT CONTENT RULES
 
 DO NOT:
@@ -212,6 +225,7 @@ DO:
 • Scale the number of sections based on the actual content volume
 • Preserve all detailed information and comprehensive coverage from lengthy documents
 • Generate proportionally detailed courses for extensive source material
+• For large files, intelligently compress and consolidate content while maintaining comprehensive coverage
 
 ✅ ACCURACY ENFORCEMENT
 The course must be built strictly from the uploaded file's content.
@@ -259,7 +273,8 @@ Use this fallback only if there is no usable instructional content at all:
 • Must work with any topic area the user uploads
 • Natural, engaging flow without repetitive academic structure phrases
 • Proportional scaling: lengthy documents must generate lengthy, detailed courses
-• Comprehensive coverage: extensive source material must result in extensive course content`
+• Comprehensive coverage: extensive source material must result in extensive course content
+• For large files: intelligent compression and consolidation within 10-page limit while maintaining full topic coverage`
       },
       {
         role: 'user',
