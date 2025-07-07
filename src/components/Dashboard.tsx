@@ -45,8 +45,8 @@ const Dashboard = () => {
     if (user.role === 'admin') return;
 
     try {
-      const courses = await CourseService.getCourses();
-      const completed = new Set(courses.filter(course => course.isCompleted).map(course => course.id));
+      const courses = await CourseService.getAllCourses();
+      const completed = new Set<string>(courses.filter(course => course.isCompleted).map(course => course.id));
       setCompletedCourses(completed);
       console.log('✅ Completed courses loaded:', completed.size);
     } catch (error) {
