@@ -14,6 +14,7 @@ export class SupabaseCourseService {
           title: course.name, // Use course.name for title
           description: course.description,
           content: JSON.stringify(course.materials), // Use course.materials for content
+          video_url: course.videoUrl || null, // Save video URL
           created_by: (await supabase.auth.getUser()).data.user?.id
         });
 
@@ -49,7 +50,8 @@ export class SupabaseCourseService {
         estimatedTime: 60, // Default estimated time
         createdAt: c.created_at || new Date().toISOString(),
         difficulty: 'medium' as const, // Default difficulty
-        isActive: true
+        isActive: true,
+        videoUrl: c.video_url || undefined // Map video_url to videoUrl
       }));
 
       console.log('✅ Loaded courses from Supabase:', courses.length);
@@ -81,7 +83,8 @@ export class SupabaseCourseService {
         estimatedTime: 60, // Default estimated time
         createdAt: courseData.created_at || new Date().toISOString(),
         difficulty: 'medium' as const, // Default difficulty
-        isActive: true
+        isActive: true,
+        videoUrl: courseData.video_url || undefined // Map video_url to videoUrl
       };
 
       console.log('✅ Course loaded from Supabase:', course.id);

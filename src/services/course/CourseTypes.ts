@@ -17,4 +17,5 @@ export interface Course {
   difficulty: 'easy' | 'medium' | 'hard';
   pdfUrl?: string;
   isActive?: boolean;
+  videoUrl?: string;
 }
