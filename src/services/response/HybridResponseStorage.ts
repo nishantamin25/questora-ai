@@ -3,6 +3,7 @@ import { SupabaseResponseService, QuestionnaireResponse, SubmitResponseData } fr
 import { QuestionnaireManager } from '../questionnaire/QuestionnaireManager';
 import { ResponseScoring } from './ResponseScoring';
 import { AuthService } from '../AuthService';
+import { GuestFilterService } from '../GuestFilterService';
 
 export class HybridResponseStorage {
   private static isOnline(): boolean {
@@ -179,6 +180,13 @@ export class HybridResponseStorage {
 
       // Save to both localStorage and Supabase
       await this.saveResponse(response);
+      
+      // Mark questionnaire as completed for guest users
+      const currentUser = AuthService.getCurrentUser();
+      if (currentUser && currentUser.role === 'guest') {
+        GuestFilterService.markQuestionnaireAsCompleted(responseData.questionnaireId, currentUser.username);
+      }
+      
       console.log('✅ Response submitted successfully with calculated score:', scoringResult.score);
     } catch (error) {
       console.error('❌ Failed to submit response:', error);

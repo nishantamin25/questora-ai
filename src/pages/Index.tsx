@@ -7,6 +7,7 @@ import { AuthService } from '@/services/AuthService';
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const currentUser = AuthService.getCurrentUser();
@@ -27,12 +28,21 @@ const Index = () => {
     setUser(null);
   };
 
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
   return (
     <div className="min-h-screen bg-black">
       {!isAuthenticated ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
-        <Dashboard user={user} onLogout={handleLogout} />
+        <Dashboard 
+          user={user} 
+          onLogout={handleLogout} 
+          key={refreshKey}
+          onRefresh={handleRefresh}
+        />
       )}
     </div>
   );

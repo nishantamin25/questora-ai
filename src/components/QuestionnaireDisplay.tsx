@@ -37,9 +37,17 @@ interface QuestionnaireDisplayProps {
   onUpdate: (questionnaire: Questionnaire) => void;
   onDelete: (questionnaireId: string) => void;
   isPartOfSet?: boolean;
+  onRefresh?: () => void;
 }
 
-const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPartOfSet = false }: QuestionnaireDisplayProps) => {
+const QuestionnaireDisplay = ({ 
+  questionnaire, 
+  isAdmin, 
+  onUpdate, 
+  onDelete, 
+  isPartOfSet = false,
+  onRefresh 
+}: QuestionnaireDisplayProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedQuestionnaire, setEditedQuestionnaire] = useState<Questionnaire>(questionnaire);
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -298,6 +306,13 @@ const QuestionnaireDisplay = ({ questionnaire, isAdmin, onUpdate, onDelete, isPa
         description: "Responses submitted successfully!",
       });
       setResponses({});
+      
+      // Trigger refresh for guest users to hide completed questionnaire
+      if (onRefresh) {
+        setTimeout(() => {
+          onRefresh();
+        }, 500);
+      }
     } catch (error) {
       console.error('Error submitting responses:', error);
       toast({
