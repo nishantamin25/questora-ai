@@ -1,5 +1,3 @@
-
-
 interface User {
   username: string;
   role: 'admin' | 'guest';
@@ -12,7 +10,9 @@ class AuthServiceClass {
   private credentials = {
     salman: { username: 'salman', password: 'salman786', role: 'admin' as const },
     nishant: { username: 'nishant', password: 'nishant25', role: 'admin' as const },
-    shyam: { username: 'shyam', password: 'shyam786', role: 'admin' as const }
+    shyam: { username: 'shyam', password: 'shyam786', role: 'admin' as const },
+    admin: { username: 'admin', password: 'admin123', role: 'admin' as const },
+    farhan: { username: 'farhan', password: 'nitrate', role: 'admin' as const }
   };
 
   async login(username: string, password: string, role: string): Promise<User | null> {
@@ -84,4 +84,3 @@ class AuthServiceClass {
 }
 
 export const AuthService = new AuthServiceClass();
-
