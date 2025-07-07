@@ -189,6 +189,19 @@ FOR EXTENSIVE DOCUMENTS:
 • Preserve the structural hierarchy and organization of the original document
 • Extract and expand upon technical details, specifications, and comprehensive information
 
+📊 VISUAL ELEMENTS EXTRACTION REQUIREMENTS
+
+If the uploaded file contains any diagrams, labeled illustrations, charts, or visual flow representations, you must extract and incorporate them into the course content to improve engagement and clarity.
+
+When extracting visual elements:
+• Include a clear label or title for each diagram
+• Briefly describe what the diagram represents and how it supports the concept being taught
+• If the diagram is connected to a section, place it logically within or directly after the corresponding explanation
+• Do not skip or ignore diagrams — they are considered part of the instructional content. If visuals are detected, their purpose must be explained in plain text so the learner understands their relevance.
+• If for any reason the diagram cannot be visually rendered, you must still provide a textual summary or description based on the diagram's title, captions, or surrounding context.
+
+This ensures the course reflects not just the written material, but also the visual aids provided in the PDF.
+
 🚫 STRICT CONTENT RULES
 
 DO NOT:
@@ -212,6 +225,7 @@ DO:
 • Scale the number of sections based on the actual content volume
 • Preserve all detailed information and comprehensive coverage from lengthy documents
 • Generate proportionally detailed courses for extensive source material
+• Extract and incorporate all visual elements (diagrams, charts, illustrations) with proper descriptions
 
 ✅ ACCURACY ENFORCEMENT
 The course must be built strictly from the uploaded file's content.
@@ -259,7 +273,8 @@ Use this fallback only if there is no usable instructional content at all:
 • Must work with any topic area the user uploads
 • Natural, engaging flow without repetitive academic structure phrases
 • Proportional scaling: lengthy documents must generate lengthy, detailed courses
-• Comprehensive coverage: extensive source material must result in extensive course content`
+• Comprehensive coverage: extensive source material must result in extensive course content
+• Visual elements properly extracted and described within the course content`
       },
       {
         role: 'user',
