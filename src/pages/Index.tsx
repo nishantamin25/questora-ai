@@ -32,7 +32,7 @@ const Index = () => {
       {!isAuthenticated ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
-        <Dashboard />
+        <Dashboard user={user} onLogout={handleLogout} />
       )}
     </div>
   );
