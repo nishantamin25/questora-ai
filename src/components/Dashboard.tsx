@@ -608,12 +608,18 @@ Note: File processing failed, but file information is available.
       const filtered = await filterQuestionnairesForGuest(allQuestionnaires);
       const validQuestionnaires = filtered.filter(q => q && typeof q === 'object');
       
+      // For guest users, filter out questionnaires that have associated courses which haven't been completed
       const accessibleQuestionnaires = user.role === 'admin' 
         ? validQuestionnaires 
         : validQuestionnaires.filter(q => {
-            if (q.course && q.course.id) {
-              return completedCourses.has(q.course.id);
+            // If questionnaire has an associated course, check if it's completed
+            if (q.courseContent || q.course) {
+              const courseId = q.courseContent?.id || q.course?.id;
+              if (courseId) {
+                return completedCourses.has(courseId);
+              }
             }
+            // If no associated course, questionnaire is accessible
             return true;
           });
 
@@ -864,19 +870,35 @@ Note: File processing failed, but file information is available.
                 );
               })}
               
-              {user.role === 'guest' && validQuestionnaires.length > accessibleQuestionnaires.length && (
-                <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
-                  <CardContent className="p-6">
-                    <div className="text-center">
-                      <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
-                        <h4 className="font-medium text-orange-800 mb-2">🔒 Additional Tests Available</h4>
-                        <p className="text-orange-700 text-sm">
-                          Complete the course above to unlock additional tests.
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+              {user.role === 'guest' && (
+                (() => {
+                  // Calculate how many questionnaires are locked due to incomplete courses
+                  const allQuestionnaires = questionnaires.filter(q => q && typeof q === 'object');
+                  const lockedCount = allQuestionnaires.filter(q => {
+                    if (q.courseContent || q.course) {
+                      const courseId = q.courseContent?.id || q.course?.id;
+                      if (courseId) {
+                        return !completedCourses.has(courseId);
+                      }
+                    }
+                    return false;
+                  }).length;
+
+                  return lockedCount > 0 ? (
+                    <Card className="bg-white/80 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl">
+                      <CardContent className="p-6">
+                        <div className="text-center">
+                          <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
+                            <h4 className="font-medium text-orange-800 mb-2">🔒 Additional Tests Available</h4>
+                            <p className="text-orange-700 text-sm">
+                              Complete the course above to unlock additional tests.
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null;
+                })()
               )}
               
               {validQuestionnaires.length === 0 && courses.length === 0 && (
