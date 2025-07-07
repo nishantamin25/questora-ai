@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +16,7 @@ import SettingsDialog from '@/components/SettingsDialog';
 import { QuestionnaireService } from '@/services/QuestionnaireService';
 import { CourseService } from '@/services/CourseService';
 import { GuestAssignmentService } from '@/services/GuestAssignmentService';
+import { GuestFilterService } from '@/services/GuestFilterService';
 import { FileProcessingService } from '@/services/FileProcessingService';
 import { LanguageService } from '@/services/LanguageService';
 import { toast } from '@/hooks/use-toast';
@@ -570,8 +572,11 @@ Note: File processing failed, but file information is available.
       return questionnaires;
     }
 
+    // First, filter out completed questionnaires for guest users
+    const uncompletedQuestionnaires = GuestFilterService.filterCompletedQuestionnaires(questionnaires, user);
+
     const testGroups: Record<string, any[]> = {};
-    questionnaires.forEach(q => {
+    uncompletedQuestionnaires.forEach(q => {
       const testKey = q.testName || q.title;
       if (!testGroups[testKey]) {
         testGroups[testKey] = [];
