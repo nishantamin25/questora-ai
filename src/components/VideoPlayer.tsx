@@ -4,9 +4,10 @@ import React from 'react';
 interface VideoPlayerProps {
   videoUrl: string;
   title: string;
+  isLocalFile?: boolean;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, title }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, title, isLocalFile = false }) => {
   const getEmbedUrl = (url: string): string => {
     // Handle YouTube URLs
     if (url.includes('youtube.com/watch?v=')) {
@@ -29,6 +30,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, title }) => {
     return url;
   };
 
+  // If it's a local file (blob URL), render HTML5 video element
+  if (isLocalFile || videoUrl.startsWith('blob:')) {
+    return (
+      <div className="w-full">
+        <div className="relative w-full h-0 pb-[56.25%]"> {/* 16:9 aspect ratio */}
+          <video
+            src={videoUrl}
+            title={title}
+            className="absolute top-0 left-0 w-full h-full rounded-lg"
+            controls
+            style={{ objectFit: 'contain' }}
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </div>
+    );
+  }
+
+  // For external URLs (YouTube, Google Drive), use iframe
   const embedUrl = getEmbedUrl(videoUrl);
 
   return (

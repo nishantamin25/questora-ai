@@ -4,10 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Edit, Save, X, Play, Link } from 'lucide-react';
+import { CheckCircle, Edit, Save, X, Play, Link, Upload } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import VideoPlayer from './VideoPlayer';
 import VideoUrlEditor from './VideoUrlEditor';
+import VideoUploadEditor from './VideoUploadEditor';
 
 interface CoursePopupProps {
   course: {
@@ -19,6 +20,7 @@ interface CoursePopupProps {
       title: string;
     }>;
     videoUrl?: string;
+    videoFile?: File;
   };
   isOpen: boolean;
   onClose: () => void;
@@ -39,7 +41,8 @@ const CoursePopup = ({
 }: CoursePopupProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCourse, setEditedCourse] = useState(course);
-  const [showVideoEditor, setShowVideoEditor] = useState(false);
+  const [showVideoUrlEditor, setShowVideoUrlEditor] = useState(false);
+  const [showVideoUploadEditor, setShowVideoUploadEditor] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
 
   const handleEdit = () => {
@@ -56,13 +59,15 @@ const CoursePopup = ({
       });
     }
     setIsEditing(false);
-    setShowVideoEditor(false);
+    setShowVideoUrlEditor(false);
+    setShowVideoUploadEditor(false);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setEditedCourse({ ...course });
-    setShowVideoEditor(false);
+    setShowVideoUrlEditor(false);
+    setShowVideoUploadEditor(false);
   };
 
   const handleMaterialChange = (index: number, field: string, value: string) => {
@@ -81,11 +86,11 @@ const CoursePopup = ({
   };
 
   const handleVideoUrlSave = (url: string) => {
-    setEditedCourse({ ...editedCourse, videoUrl: url });
-    setShowVideoEditor(false);
+    const updatedCourse = { ...editedCourse, videoUrl: url, videoFile: undefined };
+    setEditedCourse(updatedCourse);
+    setShowVideoUrlEditor(false);
     
     if (onUpdate) {
-      const updatedCourse = { ...editedCourse, videoUrl: url };
       onUpdate(updatedCourse);
       toast({
         title: "Video URL Updated",
@@ -94,7 +99,23 @@ const CoursePopup = ({
     }
   };
 
+  const handleVideoFileSave = (file: File) => {
+    const videoObjectUrl = URL.createObjectURL(file);
+    const updatedCourse = { ...editedCourse, videoFile: file, videoUrl: videoObjectUrl };
+    setEditedCourse(updatedCourse);
+    setShowVideoUploadEditor(false);
+    
+    if (onUpdate) {
+      onUpdate(updatedCourse);
+      toast({
+        title: "Video File Uploaded",
+        description: "Video file has been added to the course.",
+      });
+    }
+  };
+
   const currentCourse = isEditing ? editedCourse : course;
+  const hasVideo = currentCourse.videoUrl || currentCourse.videoFile;
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -115,7 +136,7 @@ const CoursePopup = ({
             
             <div className="flex items-center gap-2">
               {/* Video buttons */}
-              {currentCourse.videoUrl && !isEditing && (
+              {hasVideo && !isEditing && (
                 <Button 
                   onClick={() => setShowVideo(!showVideo)} 
                   variant="outline" 
@@ -130,13 +151,22 @@ const CoursePopup = ({
               {isAdmin && !isEditing && (
                 <>
                   <Button 
-                    onClick={() => setShowVideoEditor(true)} 
+                    onClick={() => setShowVideoUrlEditor(true)} 
                     variant="outline" 
                     size="sm"
                     className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
                   >
                     <Link className="h-4 w-4 mr-2" />
-                    {currentCourse.videoUrl ? 'Edit Video' : 'Add Video'}
+                    {currentCourse.videoUrl ? 'Edit Video URL' : 'Add Video URL'}
+                  </Button>
+                  <Button 
+                    onClick={() => setShowVideoUploadEditor(true)} 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {currentCourse.videoFile ? 'Change Video File' : 'Upload Video'}
                   </Button>
                   <Button onClick={handleEdit} variant="outline" size="sm">
                     <Edit className="h-4 w-4 mr-2" />
@@ -162,20 +192,28 @@ const CoursePopup = ({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          {/* Video Editor */}
-          {showVideoEditor && isAdmin && (
+          {/* Video URL Editor */}
+          {showVideoUrlEditor && isAdmin && (
             <VideoUrlEditor
               videoUrl={editedCourse.videoUrl}
               onSave={handleVideoUrlSave}
-              onCancel={() => setShowVideoEditor(false)}
+              onCancel={() => setShowVideoUrlEditor(false)}
+            />
+          )}
+          
+          {/* Video Upload Editor */}
+          {showVideoUploadEditor && isAdmin && (
+            <VideoUploadEditor
+              onSave={handleVideoFileSave}
+              onCancel={() => setShowVideoUploadEditor(false)}
             />
           )}
           
           {/* Video Player */}
-          {showVideo && currentCourse.videoUrl && (
+          {showVideo && hasVideo && (
             <div className="mb-6">
               <VideoPlayer 
-                videoUrl={currentCourse.videoUrl} 
+                videoUrl={currentCourse.videoUrl || ''} 
                 title={currentCourse.name}
               />
             </div>

@@ -18,4 +18,5 @@ export interface Course {
   pdfUrl?: string;
   isActive?: boolean;
   videoUrl?: string;
+  videoFile?: File;
 }
