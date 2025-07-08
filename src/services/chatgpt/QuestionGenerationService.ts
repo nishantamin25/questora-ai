@@ -99,6 +99,8 @@ Your task:
 - Use the terminology and structure of the document appropriately
 - Avoid yes/no or single-word-answer questions unless contextually necessary
 
+IMPORTANT: Each set of questions generated must have its questions presented in random order, regardless of whether the questions are unique or partially repeated across sets. Avoid placing questions in a fixed or sequential flow based on how they appear in the course or source content. This random order should be applied to every set including single-set and multi-set configurations to reduce predictability, prevent copying among guests, and enhance test integrity. The shuffling of question order should be done after the questions are generated and just before final output formatting.
+
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
 - Use ${difficulty} difficulty level
@@ -106,6 +108,7 @@ Requirements:
 - Base questions on the file content provided
 - Format each question as a numbered list
 - Return valid JSON format
+- Present questions in random order within the set
 
 Response format:
 {
@@ -119,7 +122,7 @@ Response format:
   ]
 }`;
 
-    const questionText = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from the uploaded document content. Focus on helping learners understand and reflect on the key ideas and processes presented.`;
+    const questionText = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from the uploaded document content. Focus on helping learners understand and reflect on the key ideas and processes presented. Present the questions in random order within this set.`;
 
     // Use the correct structured format for file uploads
     const messages = [
@@ -176,6 +179,8 @@ Your task:
 - Use the terminology and structure of the document appropriately
 - Avoid yes/no or single-word-answer questions unless contextually necessary
 
+IMPORTANT: Each set of questions generated must have its questions presented in random order, regardless of whether the questions are unique or partially repeated across sets. Avoid placing questions in a fixed or sequential flow based on how they appear in the course or source content. This random order should be applied to every set including single-set and multi-set configurations to reduce predictability, prevent copying among guests, and enhance test integrity. The shuffling of question order should be done after the questions are generated and just before final output formatting.
+
 Requirements:
 - Generate exactly ${numberOfQuestions} questions
 - Use ${difficulty} difficulty level
@@ -183,6 +188,7 @@ Requirements:
 - Base questions on the provided content
 - Format each question as a numbered list
 - Return valid JSON format
+- Present questions in random order within the set
 
 Response format:
 {
@@ -196,11 +202,11 @@ Response format:
   ]
 }`;
 
-    const userPrompt = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from this document content. Focus on helping learners understand and reflect on the key ideas and processes presented:
+    const userPrompt = `Create ${numberOfQuestions} ${difficulty} thoughtful, context-aware questions from this document content. Focus on helping learners understand and reflect on the key ideas and processes presented. Present the questions in random order within this set:
 
 ${fileContent}
 
-Generate exactly ${numberOfQuestions} questions in JSON format.`;
+Generate exactly ${numberOfQuestions} questions in JSON format with questions presented in random order.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -279,7 +285,21 @@ Generate exactly ${numberOfQuestions} questions in JSON format.`;
       }))
       .slice(0, numberOfQuestions);
 
-    console.log(`✅ Processed ${validQuestions.length} valid questions from response`);
-    return validQuestions;
+    // Additional client-side shuffling to ensure random order
+    console.log('🔀 Applying additional question shuffling for enhanced randomization...');
+    const shuffledQuestions = this.shuffleArray([...validQuestions]);
+
+    console.log(`✅ Processed ${shuffledQuestions.length} valid questions from response with random order applied`);
+    return shuffledQuestions;
+  }
+
+  // Utility method for shuffling array (Fisher-Yates algorithm)
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }
 }
